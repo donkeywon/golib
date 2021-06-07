@@ -61,10 +61,6 @@ func (r *Reader) Read(p []byte) (int, error) {
 	}
 	nr, err := r.retryRead(r.Pos, p)
 	r.Pos += nr
-	if errors.Is(err, io.EOF) {
-		r.eof = true
-		return nr, err
-	}
 	if err != nil {
 		return nr, errs.Wrap(err, "retry read oss object fail")
 	}
@@ -116,7 +112,9 @@ func (r *Reader) read(start int, p []byte) (int, error) {
 		return 0, errs.Wrap(err, "sign oss req fail")
 	}
 
-	resp, err := httpc.DoTimeout(req, time.Second*time.Duration(r.Timeout))
+	ctx, cancel := context.WithTimeout(r.ctx, time.Second*time.Duration(r.Timeout))
+	defer cancel()
+	resp, err := httpc.DoCtx(ctx, req)
 	if err != nil {
 		return 0, errs.Wrap(err, "do http request fail")
 	}
@@ -159,7 +157,8 @@ func (r *Reader) read(start int, p []byte) (int, error) {
 	}
 
 	if respContentEnd == contentTotal-1 {
-		return nr, io.EOF
+		r.eof = true
+		return nr, nil
 	}
 
 	return nr, nil

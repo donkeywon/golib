@@ -65,6 +65,7 @@ func (cp *CopyRW) Start() error {
 
 	_, err := io.CopyBuffer(cp.Writer(), cp, buf.B())
 	if errors.Is(err, ErrStoppedManually) {
+		cp.Info("stopped manually", "err", err)
 		err = nil
 	}
 

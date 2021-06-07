@@ -57,6 +57,7 @@ func AmzSign(req *http.Request, ak string, sk string, region string) error {
 	nowFormat := now.UTC().Format("20060102T150405Z")
 
 	headers.Set(HeaderAmzDate, nowFormat)
+	headers.Set(HeaderAmzContentSHA256, S3UnsignedPayloadHash)
 
 	for key := range query {
 		sort.Strings(query[key])
