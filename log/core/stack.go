@@ -30,9 +30,9 @@ func (c *errStackExtractCore) Write(ent zapcore.Entry, fields []zapcore.Field) e
 	fields = extractFieldsStacksToBuff(buf, fields)
 
 	if ent.Stack == "" {
-		ent.Stack = buf.String()
+		ent.Stack = "error: " + buf.String()
 	} else {
-		ent.Stack = ent.Stack + "\n" + buf.String()
+		ent.Stack = ent.Stack + "\nerror: " + buf.String()
 	}
 	return c.Core.Write(ent, fields)
 }
