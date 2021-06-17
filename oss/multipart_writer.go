@@ -208,6 +208,9 @@ func (w *MultiPartWriter) do(req *http.Request, ignoreCode ...int) ([]byte, *htt
 	if errors.Is(err, context.Canceled) {
 		return nil, nil, nil
 	}
+	if err != nil {
+		return nil, nil, errs.Wrap(err, "do write http request fail")
+	}
 
 	if oss.IsAzblob(w.URL) {
 		if resp.StatusCode != http.StatusCreated && !slices.Contains(ignoreCode, resp.StatusCode) {

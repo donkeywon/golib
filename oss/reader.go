@@ -26,11 +26,14 @@ type Reader struct {
 	*Cfg
 	Pos int
 
-	eof    bool
-	closed chan struct{}
-	ctx    context.Context
-	cancel context.CancelFunc
-	once   sync.Once
+	eof       bool
+	closed    chan struct{}
+	ctx       context.Context
+	cancel    context.CancelFunc
+	closeOnce sync.Once
+	headOnce  sync.Once
+	headErr   error
+	total     int
 }
 
 func NewReader() *Reader {
@@ -52,6 +55,29 @@ func (r *Reader) Read(p []byte) (int, error) {
 		return 0, io.EOF
 	}
 
+	r.headOnce.Do(func() {
+		resp, err := retry.DoWithData(
+			func() (*http.Response, error) {
+				return oss.Head(r.ctx, r.URL, r.Ak, r.Sk, r.Region)
+			},
+			retry.Attempts(uint(r.Retry)),
+			retry.Delay(time.Second),
+		)
+		if err != nil {
+			r.headErr = errs.Wrap(err, "oss head fail")
+			return
+		}
+		r.total, err = strconv.Atoi(resp.Header.Get("Content-Length"))
+		if err != nil {
+			r.headErr = errs.Errorf("oss head response Content-Length is invalid: %+v", resp.Header)
+			return
+		}
+	})
+
+	if r.headErr != nil {
+		return 0, r.headErr
+	}
+
 	if len(p) == 0 {
 		return 0, errs.New("dst buf is empty")
 	}
@@ -69,7 +95,7 @@ func (r *Reader) Read(p []byte) (int, error) {
 }
 
 func (r *Reader) Close() error {
-	r.once.Do(func() {
+	r.closeOnce.Do(func() {
 		close(r.closed)
 		r.cancel()
 	})
@@ -104,7 +130,11 @@ func (r *Reader) read(start int, p []byte) (int, error) {
 		return 0, errs.Wrap(err, "new read request fail")
 	}
 
-	reqRange := fmt.Sprintf("bytes=%d-%d", start, len(p)+start-1)
+	end := len(p) + start - 1
+	if end >= r.total-1 {
+		end = r.total - 1
+	}
+	reqRange := fmt.Sprintf("bytes=%d-%d", start, end)
 	req.Header.Set("Range", reqRange)
 
 	err = r.addAuth(req)

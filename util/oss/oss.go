@@ -19,18 +19,17 @@ func Which(url string) Type {
 	if IsAmzS3(url) {
 		return OssTypeAmz
 	}
+	if IsAliOss(url) {
+		return OssTypeAliOss
+	}
 	return OssTypeUnknown
 }
 
 func IsSupportAppend(url string) bool {
 	switch Which(url) {
-	case OssTypeBlob:
+	case OssTypeBlob, OssTypeObs, OssTypeAliOss:
 		return true
-	case OssTypeObs:
-		return true
-	case OssTypeAmz:
-		return false
-	case OssTypeUnknown:
+	case OssTypeAmz, OssTypeUnknown:
 		return false
 	default:
 		return false
@@ -45,6 +44,9 @@ func GetNextPositionFromResponse(resp *http.Response) (int, bool, error) {
 	nextPositionHeader := resp.Header.Get(HeaderOssAppendNextPositionHeader)
 	if nextPositionHeader == "" {
 		nextPositionHeader = resp.Header.Get(HeaderObsAppendNextPositionHeader)
+	}
+	if nextPositionHeader == "" {
+		nextPositionHeader = resp.Header.Get(HeaderAliOssAppendNextPositionHeader)
 	}
 	if nextPositionHeader == "" {
 		return 0, false, nil
@@ -62,6 +64,9 @@ func Sign(req *http.Request, ak string, sk string, region string) error {
 	}
 	if IsAzblob(req.URL.String()) {
 		return AzblobSign(req, ak, sk)
+	}
+	if IsAliOss(req.URL.String()) {
+		return AliSign(req, ak, sk, region)
 	}
 	if IsAmzS3(req.URL.String()) {
 		return AmzSign(req, ak, sk, region)
@@ -96,4 +101,27 @@ func Delete(ctx context.Context, url string, ak string, sk string, region string
 	}
 
 	return nil
+}
+
+func Head(ctx context.Context, url string, ak string, sk string, region string) (*http.Response, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodHead, url, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	err = Sign(req, ak, sk, region)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := httpc.Do(req)
+	if err != nil {
+		return resp, err
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, errs.Errorf("http resp status code is not ok: %d, resp: %+v", resp.StatusCode, resp)
+	}
+
+	return resp, nil
 }
