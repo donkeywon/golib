@@ -58,6 +58,7 @@ type MultiPartWriter struct {
 
 func NewMultiPartWriter() *MultiPartWriter {
 	w := &MultiPartWriter{
+		Cfg:    NewCfg(),
 		closed: make(chan struct{}),
 	}
 	w.ctx, w.cancel = context.WithCancel(context.Background())

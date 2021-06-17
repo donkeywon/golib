@@ -38,6 +38,7 @@ type Reader struct {
 
 func NewReader() *Reader {
 	r := &Reader{
+		Cfg:    NewCfg(),
 		closed: make(chan struct{}),
 	}
 	r.ctx, r.cancel = context.WithCancel(context.Background())

@@ -35,6 +35,7 @@ type AppendWriter struct {
 
 func NewAppendWriter() *AppendWriter {
 	w := &AppendWriter{
+		Cfg:    NewCfg(),
 		closed: make(chan struct{}),
 	}
 	w.ctx, w.cancel = context.WithCancel(context.Background())

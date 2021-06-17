@@ -87,6 +87,7 @@ type Task struct {
 func New() *Task {
 	return &Task{
 		Runner: runner.NewBase("task"),
+		Cfg:    NewCfg(),
 	}
 }
 

@@ -48,6 +48,7 @@ type Client struct {
 
 func NewClient() *Client {
 	return &Client{
+		Cfg:    NewCfg(),
 		closed: make(chan struct{}),
 	}
 }
