@@ -7,6 +7,7 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/donkeywon/golib/errs"
 	"github.com/fsnotify/fsnotify"
 )
 
@@ -39,18 +40,18 @@ func NewReader(filepath string, pos int64) (*Reader, error) {
 	if r.pos > 0 {
 		_, err = r.file.Seek(r.pos, io.SeekStart)
 		if err != nil {
-			return nil, r.close(err)
+			return nil, r.close(errs.Wrap(err, "file seek fail"))
 		}
 	}
 
 	r.fi, err = r.file.Stat()
 	if err != nil {
-		return nil, err
+		return nil, r.close(errs.Wrap(err, "get file stat fail"))
 	}
 
 	r.watcher, err = fsnotify.NewWatcher()
 	if err != nil {
-		return nil, err
+		return nil, r.close(errs.Wrap(err, "create notify watcher fail"))
 	}
 	_ = r.watcher.Add(filepath)
 

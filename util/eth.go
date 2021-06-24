@@ -31,6 +31,9 @@ func GetNicSpeed(nic string) (int, error) {
 	return speed, nil
 }
 
+// NetDevStats
+// get statistics about nic
+// 根据网卡名获取网卡运行状态，用途之一是用来计算RX和TX速度，支持获取多个nic状态.
 func NetDevStats(nic ...string) (map[string]map[string]uint64, error) {
 	fs, err := procfs.NewFS(procfs.DefaultMountPoint)
 	if err != nil {
