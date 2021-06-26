@@ -22,6 +22,11 @@ import (
 
 type SvcType string
 
+type Svc interface {
+	runner.Runner
+	plugin.Plugin
+}
+
 const pluginLog SvcType = "log"
 
 func init() {
@@ -100,9 +105,9 @@ func (b *Boot) Init() error {
 	}
 
 	for _, svcType := range _svcs {
-		svc, ok := plugin.CreateWithCfg(svcType, b.cfgMap[svcType]).(runner.Runner)
+		svc, ok := plugin.CreateWithCfg(svcType, b.cfgMap[svcType]).(Svc)
 		if !ok {
-			return errs.Errorf("svc is not a Runner: %+v", svcType)
+			return errs.Errorf("svc %+v is not a Svc", svcType)
 		}
 		b.AppendRunner(svc)
 	}
