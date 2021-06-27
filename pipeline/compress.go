@@ -56,7 +56,7 @@ func NewCompressRW() *CompressRW {
 }
 
 func (c *CompressRW) Init() error {
-	c.RW.WithLoggerNoName(c.Logger(), "type", c.CompressRWCfg.Type)
+	c.RW.WithLoggerFields("type", c.CompressRWCfg.Type)
 	return c.RW.Init()
 }
 

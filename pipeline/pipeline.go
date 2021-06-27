@@ -73,8 +73,7 @@ func (p *Pipeline) Init() error {
 	p.rwGroups = createRWGroups(rwCfgGroups)
 
 	for i, rwGroup := range p.rwGroups {
-		rwGroup.SetCtx(p.Ctx())
-		rwGroup.WithLogger(p.Logger(), "rwg", i)
+		runner.Inherit(rwGroup, p)
 		err = runner.Init(rwGroup)
 		if err != nil {
 			return errs.Wrapf(err, "init rw group fail: %d", i)

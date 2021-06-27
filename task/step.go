@@ -12,6 +12,7 @@ type Step interface {
 	plugin.Plugin
 	GetTask() *Task
 	SetTask(*Task)
+	CollectAsString() map[string]string
 }
 
 type BaseStep struct {
@@ -24,6 +25,10 @@ func NewBase(name string) Step {
 	return &BaseStep{
 		Runner: runner.NewBase(name),
 	}
+}
+
+func (b *BaseStep) Store(k string, v any) {
+	b.Runner.StoreAsString(k, v)
 }
 
 func (b *BaseStep) GetTask() *Task {

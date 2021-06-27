@@ -6,14 +6,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/donkeywon/golib/log"
 	"github.com/stretchr/testify/require"
 )
 
-var l, _ = log.NewCfg().Build()
-
 type runA struct {
-	*BaseRunner
+	Runner
 }
 
 func (ra *runA) Init() error {
@@ -39,7 +36,7 @@ func (ra *runA) Stop() error {
 }
 
 type runB struct {
-	*BaseRunner
+	Runner
 }
 
 func (rb *runB) Init() error {
@@ -65,7 +62,7 @@ func (rb *runB) Stop() error {
 }
 
 type runC struct {
-	*BaseRunner
+	Runner
 }
 
 func (rc *runC) Init() error {
@@ -91,19 +88,19 @@ func (rc *runC) Stop() error {
 }
 
 var ra = &runA{
-	BaseRunner: NewBase("runA"),
+	Runner: NewBase("runA"),
 }
 
 var rb = &runB{
-	BaseRunner: NewBase("runB"),
+	Runner: NewBase("runB"),
 }
 
 var rc = &runC{
-	BaseRunner: NewBase("runC"),
+	Runner: NewBase("runC"),
 }
 
 func init() {
-	ra.WithLogger(l)
+	DebugInherit(ra)
 }
 
 func TestSimpleRun(_ *testing.T) {
@@ -121,8 +118,8 @@ func TestSimpleRunBG(t *testing.T) {
 
 	StartBG(ra)
 
-	// time.Sleep(time.Second * 2)
-	// Stop(ra)
+	time.Sleep(time.Second * 2)
+	Stop(ra)
 	<-ra.Done()
 }
 

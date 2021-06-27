@@ -166,8 +166,7 @@ func (g *RWGroup) FirstReader() RW {
 
 func (g *RWGroup) createRW(rwCfg *RWCfg) RW {
 	rw := Create(rwCfg.Role, rwCfg.Type, rwCfg.Cfg, rwCfg.CommonCfg)
-	rw.WithLogger(g.Logger())
-	rw.SetCtx(g.Ctx())
+	runner.Inherit(rw, g)
 	return rw
 }
 

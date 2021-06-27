@@ -75,6 +75,7 @@ type Snapshot struct {
 
 type Task struct {
 	runner.Runner
+	plugin.Plugin
 	*Cfg
 
 	stepDoneHooks      []StepDoneHook
@@ -100,16 +101,16 @@ func (t *Task) Init() error {
 	for i, cfg := range t.Cfg.Steps {
 		step := plugin.CreateWithCfg(cfg.Type, cfg.Cfg).(Step)
 		step.SetTask(t)
-		step.SetCtx(t.Ctx())
-		step.WithLogger(t.Logger(), "step", i, "step_type", step.Type())
+		runner.Inherit(step, t)
+		step.WithLoggerFields("step", i, "step_type", step.Type())
 		t.steps = append(t.steps, step)
 	}
 
 	for i, cfg := range t.Cfg.DeferSteps {
 		step := plugin.CreateWithCfg(cfg.Type, cfg.Cfg).(Step)
 		step.SetTask(t)
-		step.SetCtx(t.Ctx())
-		step.WithLogger(t.Logger(), "defer_step", i, "defer_step_type", step.Type())
+		runner.Inherit(step, t)
+		step.WithLoggerFields("defer_step", i, "defer_step_type", step.Type())
 		t.deferSteps = append(t.deferSteps, step)
 	}
 
@@ -167,10 +168,10 @@ func (t *Task) Snapshot() *Snapshot {
 		Cfg: t.Cfg,
 	}
 	for _, step := range t.Steps() {
-		s.StepsResult = append(s.StepsResult, step.Collect())
+		s.StepsResult = append(s.StepsResult, step.CollectAsString())
 	}
 	for _, deferStep := range t.DeferSteps() {
-		s.DeferStepsResult = append(s.DeferStepsResult, deferStep.Collect())
+		s.DeferStepsResult = append(s.DeferStepsResult, deferStep.CollectAsString())
 	}
 	return s
 }
@@ -189,6 +190,18 @@ func (t *Task) DeferSteps() []Step {
 
 func (t *Task) CurDeferStep() Step {
 	return t.DeferSteps()[t.CurDeferStepIdx]
+}
+
+func (t *Task) Store(k string, v any) {
+	t.Runner.StoreAsString(k, v)
+}
+
+func (t *Task) Type() interface{} {
+	return PluginTypeTask
+}
+
+func (t *Task) GetCfg() interface{} {
+	return t.Cfg
 }
 
 func (t *Task) recoverStepPanic() {

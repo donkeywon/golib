@@ -3,7 +3,6 @@ package task
 import (
 	"testing"
 
-	"github.com/donkeywon/golib/log"
 	"github.com/donkeywon/golib/runner"
 	"github.com/donkeywon/golib/util/cmd"
 	"github.com/stretchr/testify/require"
@@ -25,7 +24,7 @@ func TestTask(t *testing.T) {
 
 	task := New()
 	task.Cfg = cfg
-	task.WithLogger(log.Debug())
+	runner.DebugInherit(task)
 
 	require.NoError(t, runner.Init(task))
 
