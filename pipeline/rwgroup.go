@@ -126,7 +126,7 @@ func (g *RWGroup) Start() error {
 
 	runner.Start(g.starter)
 
-	return g.starter.Error()
+	return g.starter.Err()
 }
 
 func (g *RWGroup) Stop() error {

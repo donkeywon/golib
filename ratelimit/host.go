@@ -144,13 +144,13 @@ func (h *HostRateLimiter) monitor() {
 			stats, err := util.NetDevStats(nic)
 			if err != nil {
 				h.setRxTxLimit(h.minMBps, h.minMBps)
-				h.Err("get net dev stats fail, use min limit", err, "min_limit", i2MBps(h.MinMBps))
+				h.Error("get net dev stats fail, use min limit", err, "min_limit", i2MBps(h.MinMBps))
 				continue
 			}
 
 			if stats[nic] == nil {
 				h.setRxTxLimit(h.minMBps, h.minMBps)
-				h.Err("nic stats is empty, use min limit", nil, "min_limit", i2MBps(h.MinMBps), "stats", stats)
+				h.Error("nic stats is empty, use min limit", nil, "min_limit", i2MBps(h.MinMBps), "stats", stats)
 				continue
 			}
 

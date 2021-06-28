@@ -78,5 +78,5 @@ func TestMultiGroupPipeline(t *testing.T) {
 	}()
 
 	runner.Start(p)
-	require.NoError(t, p.Error())
+	require.NoError(t, p.Err())
 }

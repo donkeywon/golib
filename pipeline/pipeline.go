@@ -117,7 +117,7 @@ func (p *Pipeline) Start() error {
 			defer wg.Done()
 			runner.Start(rwGroup)
 			errMu.Lock()
-			err = errors.Join(err, rwGroup.Error())
+			err = errors.Join(err, rwGroup.Err())
 			errMu.Unlock()
 		}(rwGroup)
 	}

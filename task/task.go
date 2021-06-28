@@ -228,7 +228,7 @@ func (t *Task) runSteps() {
 			for _, hook := range t.stepDoneHooks {
 				hook(t, t.CurStepIdx, step)
 			}
-			err := step.Error()
+			err := step.Err()
 			if err != nil {
 				t.AppendError(errs.Wrapf(err, "run step %s(%d) fail", step.Type(), t.CurStepIdx))
 				return
@@ -258,7 +258,7 @@ func (t *Task) runDeferSteps() {
 				for _, hook := range t.deferStepDoneHooks {
 					hook(t, t.CurDeferStepIdx, deferStep)
 				}
-				err := deferStep.Error()
+				err := deferStep.Err()
 				if err != nil {
 					t.AppendError(errs.Wrapf(err, "run defer step %s(%d) fail", deferStep.Type(), t.CurDeferStepIdx))
 				}
