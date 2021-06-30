@@ -6,6 +6,7 @@ import (
 
 	"github.com/donkeywon/golib/runner"
 	"github.com/donkeywon/golib/util/cmd"
+	"github.com/donkeywon/golib/util/test"
 	"github.com/stretchr/testify/require"
 )
 
@@ -63,7 +64,7 @@ func TestMultiGroupPipeline(t *testing.T) {
 
 	p := New()
 	p.Cfg = cfg
-	runner.DebugInherit(p)
+	test.DebugInherit(p)
 	err := runner.Init(p)
 	require.NoError(t, err)
 

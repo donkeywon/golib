@@ -5,6 +5,7 @@ import (
 
 	"github.com/donkeywon/golib/runner"
 	"github.com/donkeywon/golib/util/cmd"
+	"github.com/donkeywon/golib/util/test"
 	"github.com/stretchr/testify/require"
 )
 
@@ -24,7 +25,7 @@ func TestTask(t *testing.T) {
 
 	task := New()
 	task.Cfg = cfg
-	runner.DebugInherit(task)
+	test.DebugInherit(task)
 
 	require.NoError(t, runner.Init(task))
 

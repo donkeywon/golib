@@ -11,20 +11,6 @@ import (
 	"go.uber.org/zap"
 )
 
-var (
-	l           = log.Debug()
-	debugRunner = &struct {
-		*baseRunner
-	}{
-		baseRunner: NewBase("").(*baseRunner),
-	}
-)
-
-func init() {
-	debugRunner.Logger = l
-	debugRunner.SetCtx(context.Background())
-}
-
 type Runner interface {
 	kvs
 
@@ -66,12 +52,6 @@ type Runner interface {
 	Info(msg string, kvs ...any)
 	Warn(msg string, kvs ...any)
 	Error(msg string, err error, kvs ...any)
-}
-
-// DebugInherit for test only.
-func DebugInherit(to Runner) {
-	to.WithLoggerFrom(debugRunner)
-	to.SetCtx(debugRunner.Ctx())
 }
 
 func Inherit(to Runner, from Runner) {
