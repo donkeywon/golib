@@ -46,8 +46,8 @@ func init() {
 	}
 }
 
-func Boot(cfgPath string) {
-	b := New(cfgPath)
+func Boot() {
+	b := New(flagCfgPath)
 	err := runner.Init(b)
 	if err != nil {
 		b.Error("boot init fail", err)
@@ -184,10 +184,7 @@ func (b *Booter) loadCfgFromEnv() error {
 }
 
 func (b *Booter) loadCfgFromFile() error {
-	var path = flagCfgPath
-	if path == "" {
-		path = b.cfgPath
-	}
+	path := b.cfgPath
 	if path == "" {
 		path = common.CfgPath
 		if !util.FileExist(path) {
