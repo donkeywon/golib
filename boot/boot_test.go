@@ -15,7 +15,7 @@ func TestBoot(_ *testing.T) {
 		time.Sleep(time.Second * 3)
 		_ = syscall.Kill(os.Getpid(), syscall.SIGINT)
 	}()
-	Boot("")
+	Boot()
 }
 
 func TestLoadCfg(t *testing.T) {
