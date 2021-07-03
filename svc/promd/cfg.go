@@ -6,8 +6,8 @@ const (
 )
 
 type Cfg struct {
-	EnableGoCollector   bool `env:"PROMETHEUS_ENABLE_GO_COLLECTOR"   json:"enableGoCollector"   yaml:"enableGoCollector"`
-	EnableProcCollector bool `env:"PROMETHEUS_ENABLE_PROC_COLLECTOR" json:"enableProcCollector" yaml:"enableProcCollector"`
+	EnableGoCollector   bool `env:"PROMETHEUS_ENABLE_GO_COLLECTOR"   yaml:"enableGoCollector"`
+	EnableProcCollector bool `env:"PROMETHEUS_ENABLE_PROC_COLLECTOR" yaml:"enableProcCollector"`
 }
 
 func NewCfg() *Cfg {
