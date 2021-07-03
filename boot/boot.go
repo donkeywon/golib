@@ -26,6 +26,8 @@ import (
 var (
 	flagPrintVersion bool
 	flagCfgPath      string
+
+	logCfg = log.NewCfg()
 )
 
 type SvcType string
@@ -35,14 +37,14 @@ type Svc interface {
 	plugin.Plugin
 }
 
-const pluginLog SvcType = "log"
-
 func init() {
-	plugin.RegisterCfg(pluginLog, func() interface{} { return log.NewCfg() })
+	RegisterCfg("log", logCfg)
 
 	parseFlag()
 	if flagPrintVersion {
-		fmt.Printf("version:%s\ngithash:%s\nbuildstamp:%s\n", buildinfo.Version, buildinfo.GitHash, buildinfo.BuildStamp)
+		fmt.Println("version:" + buildinfo.Version)
+		fmt.Println("githash:" + buildinfo.GitHash)
+		fmt.Println("buildstamp:" + buildinfo.BuildStamp)
 		os.Exit(0)
 	}
 }
@@ -69,7 +71,8 @@ func Boot() {
 }
 
 var (
-	_svcs []SvcType // dependencies in order
+	_svcs   []SvcType // dependencies in order
+	_cfgMap = make(map[string]interface{})
 )
 
 func RegisterSvc(typ SvcType, creator plugin.Creator, cfgCreator plugin.CfgCreator) {
@@ -79,6 +82,14 @@ func RegisterSvc(typ SvcType, creator plugin.Creator, cfgCreator plugin.CfgCreat
 	plugin.Register(typ, creator)
 	plugin.RegisterCfg(typ, cfgCreator)
 	_svcs = append(_svcs, typ)
+}
+
+// RegisterCfg register additional config, cfg type must be struct pointer.
+func RegisterCfg(name string, cfg interface{}) {
+	if _, exists := _cfgMap[name]; exists {
+		return
+	}
+	_cfgMap[name] = cfg
 }
 
 type Booter struct {
@@ -93,7 +104,9 @@ func New(cfgPath string) *Booter {
 	for _, svcType := range _svcs {
 		cfgMap[svcType] = plugin.CreateCfg(svcType)
 	}
-	cfgMap[pluginLog] = plugin.CreateCfg(pluginLog)
+	for k, cfg := range _cfgMap {
+		cfgMap[SvcType(k)] = cfg
+	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -243,11 +256,7 @@ func (b *Booter) validateCfg() error {
 }
 
 func (b *Booter) buildLogger() (*zap.Logger, error) {
-	lc, ok := b.cfgMap[pluginLog].(*log.Cfg)
-	if !ok {
-		return nil, errs.Errorf("unexpected log Cfg type")
-	}
-	return lc.Build()
+	return logCfg.Build()
 }
 
 func durationUnmarshaler(d *time.Duration, b []byte) error {
