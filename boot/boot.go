@@ -10,7 +10,8 @@ import (
 	"slices"
 	"time"
 
-	"github.com/donkeywon/golib/common"
+	"github.com/donkeywon/golib/buildinfo"
+	"github.com/donkeywon/golib/consts"
 	"github.com/donkeywon/golib/errs"
 	"github.com/donkeywon/golib/log"
 	"github.com/donkeywon/golib/plugin"
@@ -41,7 +42,7 @@ func init() {
 
 	parseFlag()
 	if flagPrintVersion {
-		fmt.Printf("version:%s\ngithash:%s\nbuildstamp:%s\n", common.Version, common.GitHash, common.BuildStamp)
+		fmt.Printf("version:%s\ngithash:%s\nbuildstamp:%s\n", buildinfo.Version, buildinfo.GitHash, buildinfo.BuildStamp)
 		os.Exit(0)
 	}
 }
@@ -191,7 +192,7 @@ func (b *Booter) loadCfgFromEnv() error {
 func (b *Booter) loadCfgFromFile() error {
 	path := b.cfgPath
 	if path == "" {
-		path = common.CfgPath
+		path = consts.CfgPath
 		if !util.FileExist(path) {
 			return nil
 		}

@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/avast/retry-go/v4"
-	"github.com/donkeywon/golib/common"
 	"github.com/donkeywon/golib/errs"
 	"github.com/donkeywon/golib/util/httpc"
 	"github.com/donkeywon/golib/util/oss"
@@ -48,7 +47,7 @@ func NewReader() *Reader {
 func (r *Reader) Read(p []byte) (int, error) {
 	select {
 	case <-r.closed:
-		return 0, common.ErrReadFromClosedReader
+		return 0, errs.ErrReadFromClosedReader
 	default:
 	}
 

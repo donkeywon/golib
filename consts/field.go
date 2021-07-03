@@ -1,4 +1,4 @@
-package common
+package consts
 
 const (
 	FieldStartTimeNano = "start_time_nano"
