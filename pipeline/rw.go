@@ -1,9 +1,14 @@
 package pipeline
 
 import (
+	"crypto/md5"
+	"crypto/sha1"
+	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"hash"
+	"hash/crc32"
 	"io"
 	"sync"
 	"sync/atomic"
@@ -25,6 +30,8 @@ const (
 	RWRoleStarter RWRole = "starter"
 	RWRoleReader  RWRole = "reader"
 	RWRoleWriter  RWRole = "writer"
+
+	defaultHashAlgo = "xxh3"
 )
 
 type RWCommonCfg struct {
@@ -37,6 +44,7 @@ type RWCommonCfg struct {
 	EnableRateLimit    bool                      `json:"enableRateLimit"    yaml:"enableRateLimit"`
 	EnableAsync        bool                      `json:"enableAsync"        yaml:"enableAsync"`
 	Checksum           string                    `json:"checksum"           yaml:"checksum"`
+	HashAlgo           string                    `json:"hashAlgo"           yaml:"hashAlgo"`
 }
 
 type RWType string
@@ -86,6 +94,8 @@ type RW interface {
 	Reader() io.ReadCloser
 	Writer() io.WriteCloser
 
+	Flush() error
+
 	RegisterReadHook(...ReadHook)
 	RegisterWriteHook(...WriteHook)
 
@@ -93,11 +103,10 @@ type RW interface {
 	Nread() uint64
 
 	Hash() string
-	Flush() error
 
 	EnableMonitorSpeed()
-	EnableCalcHash()
-	EnableChecksum(string)
+	EnableCalcHash(hashAlgo string)
+	EnableChecksum(checksum string, hashAlgo string)
 	EnableRateLimit(ratelimit.RxTxRateLimiter)
 	EnableWriteBuf(bufSize int, deadline int, async bool, asyncChanBufSize int)
 	EnableReadBuf(bufSize int, async bool, asyncChanBufSize int)
@@ -126,7 +135,8 @@ type BaseRW struct {
 	w                  io.WriteCloser
 	r                  io.ReadCloser
 	buf                *bytespool.Bytes
-	hs                 *xxh3.Hasher
+	hashAlgo           string
+	hash               hash.Hash
 	closed             chan struct{}
 	asyncDone          chan struct{}
 	asyncChan          chan *bytespool.Bytes
@@ -177,12 +187,15 @@ func (b *BaseRW) Init() (err error) {
 	b.RegisterReadHook(b.hookIncReadn, b.hookDebugLogRead)
 
 	if b.checksum != "" {
-		b.EnableCalcHash()
+		b.EnableCalcHash(b.hashAlgo)
 		b.RegisterReadHook(b.hookChecksum)
 	}
 
 	if b.enableCalcHash {
-		b.hs = xxh3.New()
+		if b.hashAlgo == "" {
+			b.hashAlgo = defaultHashAlgo
+		}
+		b.initHash()
 		b.RegisterWriteHook(b.hookHash)
 		b.RegisterReadHook(b.hookHash)
 	}
@@ -416,8 +429,9 @@ func (b *BaseRW) EnableMonitorSpeed() {
 	b.enableMonitorSpeed = true
 }
 
-func (b *BaseRW) EnableCalcHash() {
+func (b *BaseRW) EnableCalcHash(algo string) {
 	b.enableCalcHash = true
+	b.hashAlgo = algo
 }
 
 func (b *BaseRW) EnableRateLimit(rl ratelimit.RxTxRateLimiter) {
@@ -442,8 +456,9 @@ func (b *BaseRW) EnableReadBuf(bufSize int, async bool, asyncChanBufSize int) {
 	}
 }
 
-func (b *BaseRW) EnableChecksum(checksum string) {
+func (b *BaseRW) EnableChecksum(checksum string, algo string) {
 	b.checksum = checksum
+	b.hashAlgo = algo
 }
 
 func (b *BaseRW) Nwrite() uint64 {
@@ -463,11 +478,18 @@ func (b *BaseRW) AsyncChanCap() int {
 }
 
 func (b *BaseRW) Hash() string {
-	if !b.enableCalcHash || b.hs == nil {
+	if !b.enableCalcHash || b.hash == nil {
 		return ""
 	}
-	bs := b.hs.Sum128().Bytes()
-	return hex.EncodeToString(bs[:])
+	var bs []byte
+	switch b.hashAlgo {
+	case "xxh3":
+		bbs := b.hash.(*xxh3.Hasher).Sum128().Bytes()
+		bs = bbs[:]
+	default:
+		bs = b.hash.Sum(nil)
+	}
+	return hex.EncodeToString(bs)
 }
 
 func (b *BaseRW) Flush() error {
@@ -478,6 +500,21 @@ func (b *BaseRW) Flush() error {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	return b.flushNoLock()
+}
+
+func (b *BaseRW) initHash() {
+	switch b.hashAlgo {
+	case "sha1":
+		b.hash = sha1.New()
+	case "md5":
+		b.hash = md5.New()
+	case "sha256":
+		b.hash = sha256.New()
+	case "crc32":
+		b.hash = crc32.New(crc32.IEEETable)
+	case "xxh3":
+		b.hash = xxh3.New()
+	}
 }
 
 func (b *BaseRW) hookManuallyStop(_ int, _ []byte, _ error, _ int64, _ ...interface{}) error {
@@ -853,7 +890,7 @@ func (b *BaseRW) hookIncReadn(n int, _ []byte, _ error, _ int64, _ ...interface{
 }
 
 func (b *BaseRW) hookHash(n int, bs []byte, _ error, _ int64, _ ...interface{}) error {
-	_, _ = b.hs.Write(bs[:n])
+	_, _ = b.hash.Write(bs[:n])
 	return nil
 }
 
@@ -948,14 +985,13 @@ func ApplyCommonCfgToRW(rw RW, cfg *RWCommonCfg) {
 		rw.EnableMonitorSpeed()
 	}
 	if cfg.EnableCalcHash {
-		rw.EnableCalcHash()
+		rw.EnableCalcHash(cfg.HashAlgo)
 	}
 	if cfg.EnableRateLimit {
 		rw.EnableRateLimit(plugin.CreateWithCfg(cfg.RateLimiterCfg.Type, cfg.RateLimiterCfg.Cfg).(ratelimit.RxTxRateLimiter))
 	}
 	if cfg.Checksum != "" {
-		rw.EnableChecksum(cfg.Checksum)
-		rw.EnableCalcHash()
+		rw.EnableChecksum(cfg.Checksum, cfg.HashAlgo)
 	}
 	if cfg.BufSize > 0 {
 		switch rw.Role() {
