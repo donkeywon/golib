@@ -250,7 +250,7 @@ func (c *Client) MkdirRecur(path string) error {
 		return nil
 	}
 
-	for i := range len(paths) {
+	for i := 0; i < len(paths); i++ {
 		if path == "." || path == ".." {
 			continue
 		}

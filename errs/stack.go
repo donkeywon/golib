@@ -218,13 +218,13 @@ func deduplicateWithStackErr(err error, s *stack) int {
 		}
 		minIdx := deduplicateWithStackErr(errs[0], s)
 		for i := 1; i < len(errs); i++ {
-			minIdx = min(minIdx, deduplicateWithStackErr(errs[i], s))
+			minIdx = minInt(minIdx, deduplicateWithStackErr(errs[i], s))
 		}
 		return minIdx
 	case wrappedErr:
 		switch wterr := terr.(type) {
 		case stackTracer:
-			return min(deduplicateWithStackTracer(wterr, s), deduplicateWithStackErr(terr.Unwrap(), s))
+			return minInt(deduplicateWithStackTracer(wterr, s), deduplicateWithStackErr(terr.Unwrap(), s))
 		default:
 			return deduplicateWithStackErr(wterr.Unwrap(), s)
 		}
@@ -232,6 +232,13 @@ func deduplicateWithStackErr(err error, s *stack) int {
 		return deduplicateWithStackTracer(terr, s)
 	}
 	return len(*s)
+}
+
+func minInt(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 func deduplicateWithStackTracer(stErr stackTracer, s *stack) int {

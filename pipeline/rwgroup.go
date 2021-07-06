@@ -172,7 +172,7 @@ func (g *RWGroup) createRW(rwCfg *RWCfg) RW {
 
 func (g *RWGroup) initReaders() error {
 	var err error
-	for i := range len(g.readers) {
+	for i := 0; i < len(g.readers); i++ {
 		if i > 0 {
 			err = g.readers[i].NestReader(g.readers[i-1])
 			if err != nil {

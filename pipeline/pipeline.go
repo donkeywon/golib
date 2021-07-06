@@ -80,7 +80,7 @@ func (p *Pipeline) Init() error {
 		}
 	}
 
-	for i := range len(p.rwGroups) - 1 {
+	for i := 0; i < len(p.rwGroups)-1; i++ {
 		pr, pw := io.Pipe()
 		if len(p.rwGroups[i].Writers()) > 0 {
 			err = p.rwGroups[i].LastWriter().NestWriter(pw)
