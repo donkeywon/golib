@@ -103,13 +103,16 @@ func (r *Reader) Close() error {
 }
 
 func (r *Reader) addAuth(req *http.Request) error {
+	if r.Ak == "" && r.Sk == "" {
+		return nil
+	}
 	return oss.Sign(req, r.Ak, r.Sk, r.Region)
 }
 
 func (r *Reader) retryRead(start int, p []byte) (int, error) {
 	nr, err := retry.DoWithData(
 		func() (int, error) {
-			return r.read(start, p)
+			return r.readPart(start, p)
 		},
 		retry.Attempts(uint(r.Retry)),
 		retry.RetryIf(func(err error) bool {
@@ -124,7 +127,7 @@ func (r *Reader) retryRead(start int, p []byte) (int, error) {
 	return nr, nil
 }
 
-func (r *Reader) read(start int, p []byte) (int, error) {
+func (r *Reader) readPart(start int, p []byte) (int, error) {
 	req, err := http.NewRequestWithContext(r.ctx, http.MethodGet, r.URL, nil)
 	if err != nil {
 		return 0, errs.Wrap(err, "new read request fail")

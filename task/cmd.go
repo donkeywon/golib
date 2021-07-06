@@ -55,7 +55,7 @@ func (c *Cmd) Start() error {
 		return errs.Wrap(err, "create cmd fail")
 	}
 
-	result, err := cmd.RunCmd(c.Ctx(), nil, c.cmd)
+	result, err := cmd.RunCmd(c.Ctx(), c.cmd)
 	c.Info("cmd exit", "result", result)
 
 	if result != nil {
