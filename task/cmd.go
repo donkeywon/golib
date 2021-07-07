@@ -50,12 +50,9 @@ func (c *Cmd) Init() error {
 func (c *Cmd) Start() error {
 	var err error
 
-	c.cmd, err = cmd.Create(c.Cfg)
-	if err != nil {
-		return errs.Wrap(err, "create cmd fail")
-	}
+	c.cmd = exec.Command(c.Cfg.Command[0], c.Cfg.Command[1:]...)
 
-	result, err := cmd.RunCmd(c.Ctx(), c.cmd)
+	result, err := cmd.RunCmd(c.Ctx(), c.cmd, c.Cfg)
 	c.Info("cmd exit", "result", result)
 
 	if result != nil {

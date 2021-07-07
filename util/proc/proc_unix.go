@@ -14,6 +14,10 @@ func Stop(pid int) error {
 }
 
 func MustStop(ctx context.Context, pid int) error {
+	if !Exists(pid) {
+		return nil
+	}
+
 	err := Stop(pid)
 	if err != nil {
 		return err

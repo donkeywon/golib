@@ -6,6 +6,9 @@ import (
 )
 
 func Stop(pid int) error {
+	if !Exists(pid) {
+		return nil
+	}
 	p, err := os.FindProcess(pid)
 	if err != nil {
 		return err
