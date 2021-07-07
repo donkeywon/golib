@@ -45,7 +45,9 @@ func RunRaw(ctx context.Context, cfg *Cfg, beforeRun ...func(cmd *exec.Cmd) erro
 }
 
 func RunCmd(ctx context.Context, cmd *exec.Cmd, cfg *Cfg, beforeRun ...func(cmd *exec.Cmd) error) (*Result, error) {
-	return WaitCmd(ctx, cmd, StartCmd(cmd, append(beforeRunFromCfg(cfg), beforeRun...)...))
+	r := StartCmd(cmd, append(beforeRunFromCfg(cfg), beforeRun...)...)
+	err := WaitCmd(ctx, cmd, r)
+	return r, err
 }
 
 // StartCmd start a command
