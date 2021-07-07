@@ -83,7 +83,7 @@ func StartCmd(cmd *exec.Cmd, beforeRun ...func(cmd *exec.Cmd) error) *Result {
 
 // WaitCmd wait command exit
 // Must called after StartCmd
-func WaitCmd(ctx context.Context, cmd *exec.Cmd, startResult *Result) (*Result, error) {
+func WaitCmd(ctx context.Context, cmd *exec.Cmd, startResult *Result) error {
 	if startResult.stdoutBuf != nil {
 		defer func() {
 			startResult.stdoutBuf.Free()
@@ -127,7 +127,7 @@ func WaitCmd(ctx context.Context, cmd *exec.Cmd, startResult *Result) (*Result, 
 	if startResult.stderrBuf != nil {
 		startResult.Stderr = startResult.stderrBuf.Lines()
 	}
-	return startResult, waitErr
+	return waitErr
 }
 
 // IsSignaled err is Cmd.Wait() or Cmd.Run() result error.
