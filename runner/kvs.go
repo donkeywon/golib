@@ -12,91 +12,65 @@ import (
 type kvs interface {
 	Store(k string, v any)
 	StoreAsString(k string, v any)
-	GetValue(k string) any
+	Load(k string) (any, bool)
+	LoadOrStore(k string, v any) (any, bool)
+	LoadAndDelete(k string) (any, bool)
 	DelKey(k string)
-	HasKey(k string) bool
-	GetBoolValue(k string) bool
-	GetStringValue(k string) string
-	GetStringValueOr(k string, d string) string
-	GetIntValue(k string) int
-	GetIntValueOr(k string, d int) int
-	GetUintValue(k string) uint
-	GetUintValueOr(k string, d uint) uint
-	GetFloatValue(k string) float64
-	GetFloatValueOr(k string, d float64) float64
-	GetValueTo(k string, to any) error
+	LoadAsBool(k string) bool
+	LoadAsString(k string) string
+	LoadAsStringOr(k string, d string) string
+	LoadAsInt(k string) int
+	LoadAsIntOr(k string, d int) int
+	LoadAsUint(k string) uint
+	LoadAsUintOr(k string, d uint) uint
+	LoadAsFloat(k string) float64
+	LoadAsFloatOr(k string, d float64) float64
+	LoadTo(k string, to any) error
 	Collect() map[string]any
-	CollectBy(func(map[string]any))
 	CollectAsString() map[string]string
+	Range(func(k string, v any) bool)
 	StoreValues(map[string]any)
 }
 
 type simpleInMemKvs struct {
-	m  map[string]any
-	mu sync.Mutex
+	m sync.Map
 }
 
 func newSimpleInMemKvs() kvs {
 	return &simpleInMemKvs{
-		m: make(map[string]any),
+		m: sync.Map{},
 	}
 }
 
 func (b *simpleInMemKvs) Store(k string, v any) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	b.store(k, v)
-}
-
-func (b *simpleInMemKvs) store(k string, v any) {
-	b.m[k] = v
+	b.m.Store(k, v)
 }
 
 func (b *simpleInMemKvs) StoreAsString(k string, v any) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	b.storeAsString(k, v)
+	b.m.Store(k, convertToString(v))
 }
 
-func (b *simpleInMemKvs) storeAsString(k string, v any) {
-	b.store(k, convertToString(v))
+func (b *simpleInMemKvs) Load(k string) (any, bool) {
+	return b.m.Load(k)
 }
 
-func (b *simpleInMemKvs) GetValue(k string) any {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	return b.m[k]
+func (b *simpleInMemKvs) LoadOrStore(k string, v any) (any, bool) {
+	return b.m.LoadOrStore(k, v)
 }
 
-func (b *simpleInMemKvs) HasKey(k string) bool {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	_, exists := b.m[k]
-	return exists
+func (b *simpleInMemKvs) LoadAndDelete(k string) (any, bool) {
+	return b.m.LoadAndDelete(k)
 }
 
 func (b *simpleInMemKvs) DelKey(k string) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	delete(b.m, k)
+	b.m.Delete(k)
 }
 
-func (b *simpleInMemKvs) GetStringValue(k string) string {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	return b.m[k].(string)
-}
-
-func (b *simpleInMemKvs) GetStringValueOr(k string, d string) string {
-	v := b.GetStringValue(k)
-	if v == "" {
-		return d
+func (b *simpleInMemKvs) LoadAsBool(k string) bool {
+	v, exists := b.Load(k)
+	if !exists {
+		return false
 	}
-	return v
-}
-
-func (b *simpleInMemKvs) GetBoolValue(k string) bool {
-	v := b.GetValue(k)
 	switch vt := v.(type) {
 	case string:
 		return vt == "true"
@@ -111,12 +85,31 @@ func (b *simpleInMemKvs) GetBoolValue(k string) bool {
 	}
 }
 
-func (b *simpleInMemKvs) GetIntValue(k string) int {
-	return b.GetIntValueOr(k, 0)
+func (b *simpleInMemKvs) LoadAsString(k string) string {
+	v, exists := b.Load(k)
+	if !exists {
+		return ""
+	}
+	return convertToString(v)
 }
 
-func (b *simpleInMemKvs) GetIntValueOr(k string, d int) int {
-	v := b.GetValue(k)
+func (b *simpleInMemKvs) LoadAsStringOr(k string, d string) string {
+	v := b.LoadAsString(k)
+	if v == "" {
+		return d
+	}
+	return v
+}
+
+func (b *simpleInMemKvs) LoadAsInt(k string) int {
+	return b.LoadAsIntOr(k, 0)
+}
+
+func (b *simpleInMemKvs) LoadAsIntOr(k string, d int) int {
+	v, exists := b.Load(k)
+	if !exists {
+		return d
+	}
 	if v == nil {
 		return d
 	}
@@ -158,12 +151,15 @@ func (b *simpleInMemKvs) GetIntValueOr(k string, d int) int {
 	}
 }
 
-func (b *simpleInMemKvs) GetUintValue(k string) uint {
-	return b.GetUintValueOr(k, 0)
+func (b *simpleInMemKvs) LoadAsUint(k string) uint {
+	return b.LoadAsUintOr(k, 0)
 }
 
-func (b *simpleInMemKvs) GetUintValueOr(k string, d uint) uint {
-	v := b.GetValue(k)
+func (b *simpleInMemKvs) LoadAsUintOr(k string, d uint) uint {
+	v, exists := b.Load(k)
+	if !exists {
+		return d
+	}
 	if v == nil {
 		return d
 	}
@@ -205,12 +201,15 @@ func (b *simpleInMemKvs) GetUintValueOr(k string, d uint) uint {
 	}
 }
 
-func (b *simpleInMemKvs) GetFloatValue(k string) float64 {
-	return b.GetFloatValueOr(k, 0.0)
+func (b *simpleInMemKvs) LoadAsFloat(k string) float64 {
+	return b.LoadAsFloatOr(k, 0.0)
 }
 
-func (b *simpleInMemKvs) GetFloatValueOr(k string, d float64) float64 {
-	v := b.GetValue(k)
+func (b *simpleInMemKvs) LoadAsFloatOr(k string, d float64) float64 {
+	v, exists := b.Load(k)
+	if !exists {
+		return d
+	}
 	if v == nil {
 		return d
 	}
@@ -240,8 +239,8 @@ func (b *simpleInMemKvs) GetFloatValueOr(k string, d float64) float64 {
 	}
 }
 
-func (b *simpleInMemKvs) GetValueTo(k string, to any) error {
-	v := b.GetStringValue(k)
+func (b *simpleInMemKvs) LoadTo(k string, to any) error {
+	v := b.LoadAsString(k)
 	if v == "" {
 		return nil
 	}
@@ -251,26 +250,24 @@ func (b *simpleInMemKvs) GetValueTo(k string, to any) error {
 
 func (b *simpleInMemKvs) Collect() map[string]any {
 	c := make(map[string]any)
-	b.CollectBy(func(m map[string]any) {
-		for k, v := range m {
-			c[k] = v
-		}
+	b.Range(func(k string, v any) bool {
+		c[k] = v
+		return true
 	})
 	return c
 }
 
-func (b *simpleInMemKvs) CollectBy(f func(map[string]any)) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	f(b.m)
+func (b *simpleInMemKvs) Range(f func(k string, v any) bool) {
+	b.m.Range(func(key, value any) bool {
+		return f(key.(string), value)
+	})
 }
 
 func (b *simpleInMemKvs) CollectAsString() map[string]string {
 	result := make(map[string]string)
-	b.CollectBy(func(m map[string]any) {
-		for k, v := range m {
-			result[k] = convertToString(v)
-		}
+	b.Range(func(k string, v any) bool {
+		result[k] = convertToString(v)
+		return true
 	})
 	return result
 }
@@ -279,10 +276,9 @@ func (b *simpleInMemKvs) StoreValues(m map[string]any) {
 	if m == nil {
 		return
 	}
-	b.mu.Lock()
-	defer b.mu.Unlock()
+
 	for k, v := range m {
-		b.store(k, v)
+		b.Store(k, v)
 	}
 }
 
