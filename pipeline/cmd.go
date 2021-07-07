@@ -1,7 +1,6 @@
 package pipeline
 
 import (
-	"context"
 	"errors"
 	"os/exec"
 
@@ -25,9 +24,6 @@ func NewCmdRWCfg() *cmd.Cfg {
 type CmdRW struct {
 	RW
 	*cmd.Cfg
-
-	cmdCtx context.Context
-	cancel context.CancelFunc
 }
 
 func NewCmdRW() *CmdRW {
@@ -45,9 +41,7 @@ func (c *CmdRW) Init() error {
 }
 
 func (c *CmdRW) Start() error {
-	c.cmdCtx, c.cancel = context.WithCancel(c.Ctx())
-
-	result, err := cmd.RunRaw(c.cmdCtx, c.Cfg, func(cmd *exec.Cmd) error {
+	result, err := cmd.RunRaw(c.Ctx(), c.Cfg, func(cmd *exec.Cmd) error {
 		if c.Writer() != nil {
 			cmd.Stdout = c.Writer()
 		}
@@ -82,9 +76,7 @@ func (c *CmdRW) Start() error {
 }
 
 func (c *CmdRW) Stop() error {
-	if c.cancel != nil {
-		c.cancel()
-	}
+	c.Cancel()
 	return nil
 }
 
