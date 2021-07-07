@@ -47,6 +47,12 @@ func init() {
 	}
 }
 
+func parseFlag() {
+	flag.BoolVar(&flagPrintVersion, "v", false, "print version info")
+	flag.StringVar(&flagCfgPath, "c", "", "config file path")
+	flag.Parse()
+}
+
 func Boot(opts ...Option) {
 	b := New(flagCfgPath, opts...)
 	err := runner.Init(b)
@@ -73,6 +79,7 @@ var (
 	_cfgMap = make(map[string]interface{})
 )
 
+// RegisterSvc register a Svc creator and its config creator.
 func RegisterSvc(typ SvcType, creator plugin.Creator, cfgCreator plugin.CfgCreator) {
 	if slices.Contains(_svcs, typ) {
 		return
@@ -82,7 +89,7 @@ func RegisterSvc(typ SvcType, creator plugin.Creator, cfgCreator plugin.CfgCreat
 	_svcs = append(_svcs, typ)
 }
 
-// RegisterCfg register additional config, cfg type must be struct pointer.
+// RegisterCfg register additional config, cfg type must be pointer.
 func RegisterCfg(name string, cfg interface{}) {
 	if _, exists := _cfgMap[name]; exists {
 		return
@@ -188,6 +195,9 @@ func (b *Booter) OnChildDone(child runner.Runner) error {
 
 func (b *Booter) loadCfgFromEnv() error {
 	for _, cfg := range b.cfgMap {
+		if !util.IsStructPointer(cfg) {
+			continue
+		}
 		err := env.ParseWithOptions(cfg, env.Options{
 			Prefix: b.envPrefix,
 		})
@@ -243,6 +253,9 @@ func (b *Booter) loadCfg() error {
 
 func (b *Booter) validateCfg() error {
 	for s, cfg := range b.cfgMap {
+		if !util.IsStructPointer(cfg) {
+			continue
+		}
 		err := util.V.Struct(cfg)
 		if err != nil {
 			return errs.Wrapf(err, "invalid svc(%s) cfg", s)
@@ -263,10 +276,4 @@ func durationUnmarshaler(d *time.Duration, b []byte) error {
 
 	*d = tmp
 	return nil
-}
-
-func parseFlag() {
-	flag.BoolVar(&flagPrintVersion, "v", false, "print version info")
-	flag.StringVar(&flagCfgPath, "c", "", "specify config file path")
-	flag.Parse()
 }

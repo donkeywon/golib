@@ -97,7 +97,15 @@ func Start(r Runner) {
 		r.markDone()
 		r.Cancel()
 		if r.Parent() != nil {
-			r.Parent().AppendError(r.Parent().OnChildDone(r))
+			func() {
+				defer func() {
+					err = recover()
+					if err != nil {
+						r.Parent().AppendError(errs.Errorf("panic when OnChildDone: %+v", err))
+					}
+				}()
+				r.Parent().AppendError(r.Parent().OnChildDone(r))
+			}()
 		}
 	}()
 	go func() {
