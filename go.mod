@@ -1,6 +1,6 @@
 module github.com/donkeywon/golib
 
-go 1.18
+go 1.20
 
 require (
 	github.com/avast/retry-go/v4 v4.6.0
