@@ -1,7 +1,6 @@
 package boot
 
 import (
-	"context"
 	"errors"
 	"flag"
 	"fmt"
@@ -10,6 +9,7 @@ import (
 	"slices"
 	"time"
 
+	"github.com/caarlos0/env/v11"
 	"github.com/donkeywon/golib/buildinfo"
 	"github.com/donkeywon/golib/consts"
 	"github.com/donkeywon/golib/errs"
@@ -17,8 +17,6 @@ import (
 	"github.com/donkeywon/golib/plugin"
 	"github.com/donkeywon/golib/runner"
 	"github.com/donkeywon/golib/util"
-
-	"github.com/caarlos0/env/v6"
 	"github.com/goccy/go-yaml"
 	"go.uber.org/zap"
 )
@@ -49,8 +47,8 @@ func init() {
 	}
 }
 
-func Boot() {
-	b := New(flagCfgPath)
+func Boot(opts ...Option) {
+	b := New(flagCfgPath, opts...)
 	err := runner.Init(b)
 	if err != nil {
 		b.Error("boot init fail", err)
@@ -94,12 +92,12 @@ func RegisterCfg(name string, cfg interface{}) {
 
 type Booter struct {
 	runner.Runner
-	cfgMap  map[SvcType]interface{}
-	cancel  context.CancelFunc
-	cfgPath string
+	cfgMap    map[SvcType]interface{}
+	cfgPath   string
+	envPrefix string
 }
 
-func New(cfgPath string) *Booter {
+func New(cfgPath string, opts ...Option) *Booter {
 	cfgMap := make(map[SvcType]interface{})
 	for _, svcType := range _svcs {
 		cfgMap[svcType] = plugin.CreateCfg(svcType)
@@ -108,19 +106,19 @@ func New(cfgPath string) *Booter {
 		cfgMap[SvcType(k)] = cfg
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-
 	b := &Booter{
 		Runner:  runner.NewBase("boot"),
 		cfgPath: cfgPath,
 		cfgMap:  cfgMap,
-		cancel:  cancel,
+	}
+
+	for _, opt := range opts {
+		opt.apply(b)
 	}
 
 	// use default logger as temp logger
 	util.ReflectSet(b.Runner, log.Default())
 
-	b.SetCtx(ctx)
 	return b
 }
 
@@ -175,10 +173,6 @@ func (b *Booter) Start() error {
 	return nil
 }
 
-func (b *Booter) Cancel() {
-	b.cancel()
-}
-
 func (b *Booter) OnChildDone(child runner.Runner) error {
 	b.Info("on svc done", "svc", child.Name())
 	select {
@@ -194,7 +188,9 @@ func (b *Booter) OnChildDone(child runner.Runner) error {
 
 func (b *Booter) loadCfgFromEnv() error {
 	for _, cfg := range b.cfgMap {
-		err := env.Parse(cfg)
+		err := env.ParseWithOptions(cfg, env.Options{
+			Prefix: b.envPrefix,
+		})
 		if err != nil {
 			return err
 		}
