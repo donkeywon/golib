@@ -7,8 +7,8 @@ import (
 	"encoding/xml"
 	"errors"
 	"fmt"
+	"github.com/donkeywon/golib/util"
 	"net/http"
-	"slices"
 	"sync"
 	"time"
 
@@ -213,11 +213,11 @@ func (w *MultiPartWriter) do(req *http.Request, ignoreCode ...int) ([]byte, *htt
 	}
 
 	if oss.IsAzblob(w.URL) {
-		if resp.StatusCode != http.StatusCreated && !slices.Contains(ignoreCode, resp.StatusCode) {
+		if resp.StatusCode != http.StatusCreated && !util.Contains(ignoreCode, resp.StatusCode) {
 			return body, resp, errs.Errorf("http resp status code is not created: %d, body: %s", resp.StatusCode, string(body))
 		}
 	} else {
-		if resp.StatusCode != http.StatusOK && !slices.Contains(ignoreCode, resp.StatusCode) {
+		if resp.StatusCode != http.StatusOK && !util.Contains(ignoreCode, resp.StatusCode) {
 			return body, resp, errs.Errorf("http resp status code is not ok: %d, body: %s", resp.StatusCode, string(body))
 		}
 	}
