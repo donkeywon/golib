@@ -1,8 +1,10 @@
 package log
 
 import (
+	"io"
 	"time"
 
+	"github.com/bytedance/sonic/encoder"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
@@ -137,10 +139,14 @@ func DefaultEncoderConfig() zapcore.EncoderConfig {
 		EncodeCaller:        ce,
 		EncodeName:          ne,
 		ConsoleSeparator:    DefaultEncoderConsoleSeparator,
-		NewReflectedEncoder: nil,
+		NewReflectedEncoder: sonicReflectEncoder,
 	}
 
 	return config
+}
+
+func sonicReflectEncoder(w io.Writer) zapcore.ReflectedEncoder {
+	return encoder.NewStreamEncoder(w)
 }
 
 func DefaultConfig() *zap.Config {
