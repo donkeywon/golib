@@ -23,7 +23,7 @@ type BaseStep struct {
 
 func NewBase(name string) Step {
 	return &BaseStep{
-		Runner: runner.NewBase(name),
+		Runner: runner.Create(name),
 	}
 }
 

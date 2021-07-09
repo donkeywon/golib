@@ -114,7 +114,7 @@ func New(cfgPath string, opts ...Option) *Booter {
 	}
 
 	b := &Booter{
-		Runner:  runner.NewBase("boot"),
+		Runner:  runner.Create("boot"),
 		cfgPath: cfgPath,
 		cfgMap:  cfgMap,
 	}

@@ -34,7 +34,7 @@ type FixedRateLimiter struct {
 
 func NewFixedRateLimiter() *FixedRateLimiter {
 	return &FixedRateLimiter{
-		Runner:              runner.NewBase("fixedRateLimiter"),
+		Runner:              runner.Create("fixedRateLimiter"),
 		FixedRateLimiterCfg: NewFixedRateLimiterCfg(),
 	}
 }
