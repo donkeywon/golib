@@ -15,12 +15,6 @@ func init() {
 	plugin.RegisterCfg(PluginTypeTask, func() interface{} { return NewCfg() })
 }
 
-func RegisterCollector(typ Type, c Collector) {
-	_collectors[typ] = c
-}
-
-var _collectors = make(map[Type]Collector)
-
 const PluginTypeTask plugin.Type = "task"
 
 type Type string
@@ -83,6 +77,8 @@ type Task struct {
 
 	steps      []Step
 	deferSteps []Step
+
+	collector Collector
 }
 
 func New() *Task {
@@ -155,12 +151,15 @@ func (t *Task) RegisterDeferStepDoneHook(hook ...StepDoneHook) {
 	t.deferStepDoneHooks = append(t.deferStepDoneHooks, hook...)
 }
 
+func (t *Task) RegisterCollector(c Collector) {
+	t.collector = c
+}
+
 func (t *Task) Result() interface{} {
-	c := _collectors[t.Cfg.Type]
-	if c == nil {
+	if t.collector == nil {
 		return t.Snapshot()
 	}
-	return c(t)
+	return t.collector(t)
 }
 
 func (t *Task) Snapshot() *Snapshot {
