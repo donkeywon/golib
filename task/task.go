@@ -36,7 +36,7 @@ type StepCfg struct {
 
 type Cfg struct {
 	ID              string     `json:"id"              validate:"required,min=1" yaml:"id"`
-	Type            Type       `json:"type"            yaml:"type"`
+	Type            Type       `json:"type"            validate:"required"       yaml:"type"`
 	Steps           []*StepCfg `json:"steps"           validate:"required,min=1" yaml:"steps"`
 	DeferSteps      []*StepCfg `json:"deferSteps"      yaml:"deferSteps"`
 	CurStepIdx      int        `json:"curStepIdx"      yaml:"curStepIdx"`

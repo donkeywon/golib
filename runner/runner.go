@@ -10,7 +10,7 @@ import (
 	"go.uber.org/zap"
 )
 
-var Create = NewBase // allow to override
+var Create = newBase // allow to override
 
 type Runner interface {
 	kvs
@@ -206,7 +206,7 @@ type baseRunner struct {
 	errMu        sync.Mutex
 }
 
-func NewBase(name string) Runner {
+func newBase(name string) Runner {
 	br := &baseRunner{
 		Logger:      zap.NewNop(),
 		name:        name,

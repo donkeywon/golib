@@ -89,15 +89,15 @@ func (rc *runC) Stop() error {
 }
 
 var ra = &runA{
-	Runner: NewBase("runA"),
+	Runner: newBase("runA"),
 }
 
 var rb = &runB{
-	Runner: NewBase("runB"),
+	Runner: newBase("runB"),
 }
 
 var rc = &runC{
-	Runner: NewBase("runC"),
+	Runner: newBase("runC"),
 }
 
 func init() {
