@@ -24,8 +24,6 @@ import (
 var (
 	flagPrintVersion bool
 	flagCfgPath      string
-
-	logCfg = log.NewCfg()
 )
 
 type SvcType string
@@ -35,18 +33,6 @@ type Svc interface {
 	plugin.Plugin
 }
 
-func init() {
-	RegisterCfg("log", logCfg)
-
-	parseFlag()
-	if flagPrintVersion {
-		fmt.Println("version:" + buildinfo.Version)
-		fmt.Println("githash:" + buildinfo.GitHash)
-		fmt.Println("buildstamp:" + buildinfo.BuildStamp)
-		os.Exit(0)
-	}
-}
-
 func parseFlag() {
 	flag.BoolVar(&flagPrintVersion, "v", false, "print version info")
 	flag.StringVar(&flagCfgPath, "c", "", "config file path")
@@ -54,6 +40,14 @@ func parseFlag() {
 }
 
 func Boot(opts ...Option) {
+	parseFlag()
+	if flagPrintVersion {
+		fmt.Println("version:" + buildinfo.Version)
+		fmt.Println("githash:" + buildinfo.GitHash)
+		fmt.Println("buildstamp:" + buildinfo.BuildStamp)
+		os.Exit(0)
+	}
+
 	b := New(flagCfgPath, opts...)
 	err := runner.Init(b)
 	if err != nil {
@@ -102,9 +96,16 @@ type Booter struct {
 	cfgMap    map[SvcType]interface{}
 	cfgPath   string
 	envPrefix string
+	logCfg    *log.Cfg
 }
 
 func New(cfgPath string, opts ...Option) *Booter {
+	b := &Booter{
+		Runner:  runner.Create("boot"),
+		cfgPath: cfgPath,
+		logCfg:  log.NewCfg(),
+	}
+
 	cfgMap := make(map[SvcType]interface{})
 	for _, svcType := range _svcs {
 		cfgMap[svcType] = plugin.CreateCfg(svcType)
@@ -112,24 +113,20 @@ func New(cfgPath string, opts ...Option) *Booter {
 	for k, cfg := range _cfgMap {
 		cfgMap[SvcType(k)] = cfg
 	}
+	cfgMap["log"] = b.logCfg
 
-	b := &Booter{
-		Runner:  runner.Create("boot"),
-		cfgPath: cfgPath,
-		cfgMap:  cfgMap,
-	}
-
+	b.cfgMap = cfgMap
 	for _, opt := range opts {
 		opt.apply(b)
 	}
-
-	// use default logger as temp logger
-	util.ReflectSet(b.Runner, log.Default())
 
 	return b
 }
 
 func (b *Booter) Init() error {
+	// use default logger as temp logger
+	util.ReflectSet(b.Runner, log.Default())
+
 	err := b.loadCfg()
 	if err != nil {
 		return err
@@ -265,7 +262,7 @@ func (b *Booter) validateCfg() error {
 }
 
 func (b *Booter) buildLogger() (*zap.Logger, error) {
-	return logCfg.Build()
+	return b.logCfg.Build()
 }
 
 func durationUnmarshaler(d *time.Duration, b []byte) error {

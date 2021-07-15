@@ -23,7 +23,8 @@ import (
 )
 
 var (
-	ErrStoppedManually = errors.New("RW stopped manually")
+	ErrStoppedManually  = errors.New("RW stopped manually")
+	ErrChecksumNotMatch = errors.New("checksum not match")
 )
 
 const (
@@ -205,6 +206,11 @@ func (b *BaseRW) Init() (err error) {
 	}
 
 	if b.enableRateLimit {
+		b.rl.Inherit(b)
+		err = runner.Init(b.rl)
+		if err != nil {
+			return errs.Wrap(err, "init rate limiter fail")
+		}
 		b.RegisterWriteHook(b.hookWriteRateLimit)
 		b.RegisterReadHook(b.hookReadRateLimit)
 	}
@@ -933,7 +939,7 @@ func (b *BaseRW) hookChecksum(_ int, _ []byte, err error, _ int64, _ ...interfac
 
 	checksum := b.Hash()
 	if b.checksum != checksum {
-		return errs.Errorf("checksum not match, expect: %s, actual: %s", b.checksum, checksum)
+		return errs.Wrapf(err, "checksum expected: %s, actual: %s", b.checksum, checksum)
 	}
 
 	return nil

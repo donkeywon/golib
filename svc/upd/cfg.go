@@ -6,6 +6,7 @@ const (
 	DefaultExtractDir              = "golib-upgrade-svc-tmp"
 	DefaultUpgradeDeployScriptPath = "bin/upgrade_deploy.sh"
 	DefaultUpgradeStartScriptPath  = "bin/upgrade_start.sh"
+	DefaultHashAlgo                = "xxh3"
 )
 
 type Cfg struct {
@@ -14,6 +15,7 @@ type Cfg struct {
 	ExtractDir              string `env:"UPD_EXTRACT_DIR"               validate:"required"            yaml:"extractDir"`       // starting with / means absolute path, otherwise means filepath.Join(DownloadDir, ExtractDir)
 	UpgradeDeployScriptPath string `env:"UPD_DEPLOY_SCRIPT_PATH"        validate:"required"            yaml:"deployScriptPath"` // starting with / means absolute path, otherwise means filepath.Join(ExtractDir, DeployScriptPath)
 	UpgradeStartScriptPath  string `env:"UPD_UPGRADE_START_SCRIPT_PATH" yaml:"upgradeStartScriptPath"`                          // not exec when empty, starting with / means absolute path, otherwise means filepath.Join(ExtractDir, UpgradeStartScriptPath)
+	HashAlgo                string `env:"UPD_HASH_ALGO"                 yaml:"hashAlgo"`
 }
 
 func NewCfg() *Cfg {
@@ -23,5 +25,6 @@ func NewCfg() *Cfg {
 		ExtractDir:              DefaultExtractDir,
 		UpgradeDeployScriptPath: DefaultUpgradeDeployScriptPath,
 		UpgradeStartScriptPath:  DefaultUpgradeStartScriptPath,
+		HashAlgo:                DefaultHashAlgo,
 	}
 }

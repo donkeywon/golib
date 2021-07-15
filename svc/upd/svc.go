@@ -20,18 +20,28 @@ import (
 const SvcTypeUpd boot.SvcType = "upd"
 
 var _u = &Upd{
-	Runner: runner.Create(string(SvcTypeUpd)),
+	Runner:             runner.Create(string(SvcTypeUpd)),
+	upgradingBlockChan: make(chan struct{}),
 }
 
 type Upd struct {
 	runner.Runner
 	*Cfg
 
-	upgrading atomic.Bool
+	upgrading          atomic.Bool
+	upgradingBlockChan chan struct{}
 }
 
 func New() *Upd {
 	return _u
+}
+
+func (u *Upd) Stop() error {
+	u.Cancel()
+	if u.isUpgrading() {
+		<-u.upgradingBlockChan
+	}
+	return u.Runner.Stop()
 }
 
 func (u *Upd) Type() interface{} {
@@ -50,11 +60,22 @@ func (u *Upd) unmarkUpgrading() {
 	u.upgrading.Store(false)
 }
 
+func (u *Upd) isUpgrading() bool {
+	return u.upgrading.Load()
+}
+
 func (u *Upd) Upgrade(vi *VerInfo) {
 	go func() {
 		err := u.upgrade(vi)
 		if err != nil {
 			u.Error("upgrade fail", err)
+		}
+
+		select {
+		case <-u.Stopping():
+			u.Info("upgrade stopped due to stopping")
+			close(u.upgradingBlockChan)
+		default:
 		}
 	}()
 }
@@ -77,7 +98,7 @@ func (u *Upd) upgrade(vi *VerInfo) error {
 		}
 	}
 
-	err = downloadPackage(u.DownloadDir, vi.Filename, u.DownloadRateLimit, vi.StoreCfg)
+	err = downloadPackage(u.DownloadDir, vi.Filename, u.DownloadRateLimit, vi.StoreCfg, u.Cfg.HashAlgo)
 	if err != nil {
 		return errs.Wrap(err, "download package fail")
 	}
@@ -97,7 +118,6 @@ func (u *Upd) upgrade(vi *VerInfo) error {
 	go func() {
 		u.Info("close all svc")
 		runner.Stop(u.Parent())
-		<-u.Done()
 		if u.Parent().ChildrenErr() != nil {
 			u.Error("close all svc error occurred", u.Parent().ChildrenErr())
 		}
@@ -144,7 +164,7 @@ func (u *Upd) upgrade(vi *VerInfo) error {
 	return nil
 }
 
-func downloadPackage(downloadDir string, filename string, ratelimitN int, storeCfg *pipeline.StoreCfg) error {
+func downloadPackage(downloadDir string, filename string, ratelimitN int, storeCfg *pipeline.StoreCfg, hashAlgo string) error {
 	cfg := pipeline.NewCfg().
 		Add(
 			pipeline.RWRoleReader,
@@ -158,6 +178,8 @@ func downloadPackage(downloadDir string, filename string, ratelimitN int, storeC
 						N: ratelimitN,
 					},
 				},
+				HashAlgo: hashAlgo,
+				Checksum: storeCfg.Checksum,
 			},
 		).
 		Add(

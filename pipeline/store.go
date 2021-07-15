@@ -55,6 +55,7 @@ type StoreCfg struct {
 	Cfg      interface{} `json:"cfg"      validate:"required" yaml:"cfg"`
 	URL      string      `json:"url"      validate:"min=1"    yaml:"url"`
 	Checksum string      `json:"checksum" yaml:"checksum"`
+	HashAlgo string      `json:"hashAlgo" yaml:"hashAlgo"`
 	Retry    int         `json:"retry"    validate:"gte=1"    yaml:"retry"`
 	Timeout  int         `json:"timeout"  validate:"gte=1"    yaml:"timeout"`
 }
@@ -106,11 +107,11 @@ func (s *StoreRW) Init() error {
 
 	if s.IsReader() {
 		_ = s.NestReader(s.r)
-		s.EnableChecksum(s.StoreCfg.Checksum, "")
+		s.EnableChecksum(s.StoreCfg.Checksum, s.StoreCfg.HashAlgo)
 	} else if s.IsWriter() {
 		_ = s.NestWriter(s.w)
 	}
-	s.EnableCalcHash("")
+	s.EnableCalcHash(s.StoreCfg.HashAlgo)
 
 	s.WithLoggerFields("store", s.StoreCfg.Type)
 	s.RegisterReadHook(s.hookLogRead)
@@ -144,11 +145,13 @@ func (s *StoreRW) Start() error {
 
 func (s *StoreRW) Close() error {
 	if s.StoreCfg.Type == StoreTypeSSH {
+		rwCloseErr := s.RW.Close()
+
 		closeErr := s.closeSSHSessionAndCli()
 		if errors.Is(closeErr, io.EOF) {
 			closeErr = nil
 		}
-		return errors.Join(closeErr, s.RW.Close())
+		return errors.Join(rwCloseErr, closeErr)
 	}
 	return s.RW.Close()
 }
@@ -159,6 +162,19 @@ func (s *StoreRW) Type() interface{} {
 
 func (s *StoreRW) GetCfg() interface{} {
 	return s.StoreCfg
+}
+
+func (s *StoreRW) EnableChecksum(checksum string, hashAlgo string) {
+	if s.StoreCfg.Checksum == "" {
+		s.RW.EnableChecksum(checksum, hashAlgo)
+	}
+	s.EnableCalcHash(hashAlgo)
+}
+
+func (s *StoreRW) EnableCalcHash(hashAlgo string) {
+	if s.StoreCfg.HashAlgo == "" {
+		s.RW.EnableCalcHash(hashAlgo)
+	}
 }
 
 func (s *StoreRW) initFtp() error {
