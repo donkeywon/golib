@@ -11,7 +11,7 @@ import (
 )
 
 func init() {
-	// lumberjack:///var/log/xxx.log?{"maxsize":100,"maxage":30,"maxbackups":30,"compress":true,"localtime",false}
+	// lumberjack:///var/log/xxx.log?{"maxsize":100,"maxage":30,"maxbackups":30,"compress":true,"localtime":false}
 	_ = zap.RegisterSink("lumberjack", sink.NewLumberJackSinkFromURL)
 }
 
@@ -145,14 +145,10 @@ func DefaultEncoderConfig() zapcore.EncoderConfig {
 		EncodeCaller:        ce,
 		EncodeName:          ne,
 		ConsoleSeparator:    DefaultEncoderConsoleSeparator,
-		NewReflectedEncoder: sonicReflectEncoder,
+		NewReflectedEncoder: func(w io.Writer) zapcore.ReflectedEncoder { return encoder.NewStreamEncoder(w) },
 	}
 
 	return config
-}
-
-func sonicReflectEncoder(w io.Writer) zapcore.ReflectedEncoder {
-	return encoder.NewStreamEncoder(w)
 }
 
 func DefaultConfig() *zap.Config {

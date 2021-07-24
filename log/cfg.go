@@ -1,11 +1,11 @@
 package log
 
 import (
+	"encoding/json"
 	"errors"
 	"path/filepath"
 	"strings"
 
-	"github.com/bytedance/sonic"
 	"github.com/donkeywon/golib/log/core"
 	"github.com/donkeywon/golib/util"
 
@@ -80,11 +80,11 @@ func (c *Cfg) buildOutputs() ([]string, error) {
 				Compress:   c.Compress,
 				LocalTime:  true,
 			}
-			ljStr, err := sonic.MarshalString(lj)
+			bs, err := json.Marshal(lj)
 			if err != nil {
 				return nil, errors.New("lumberjack config invalid")
 			}
-			outputs = append(outputs, "lumberjack://"+fp+"?"+ljStr)
+			outputs = append(outputs, "lumberjack://"+fp+"?"+string(bs))
 		}
 	}
 	return outputs, nil

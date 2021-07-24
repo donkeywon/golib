@@ -1,7 +1,8 @@
-package multicloud
+package cloud
 
 import (
-	"github.com/bytedance/sonic"
+	"encoding/json"
+
 	"github.com/donkeywon/golib/util/httpc"
 )
 
@@ -34,7 +35,7 @@ func GetHuaweiEcsNetworkData() (*HuaweiEcsNetworkData, error) {
 	}
 
 	networkData := &HuaweiEcsNetworkData{}
-	err = sonic.Unmarshal(data, networkData)
+	err = json.Unmarshal(data, networkData)
 	if err != nil {
 		return nil, err
 	}
