@@ -21,6 +21,8 @@ import (
 	"go.uber.org/zap"
 )
 
+const ENV_CFG_PATH = "CFG_PATH"
+
 var (
 	flagPrintVersion bool
 	flagCfgPath      string
@@ -48,7 +50,7 @@ func Boot(opts ...Option) {
 		os.Exit(0)
 	}
 
-	b := New(flagCfgPath, opts...)
+	b := New(opts...)
 	err := runner.Init(b)
 	if err != nil {
 		b.Error("boot init fail", err)
@@ -93,17 +95,17 @@ func RegisterCfg(name string, cfg interface{}) {
 
 type Booter struct {
 	runner.Runner
-	cfgMap    map[SvcType]interface{}
-	cfgPath   string
-	envPrefix string
-	logCfg    *log.Cfg
+	cfgMap     map[SvcType]interface{}
+	cfgPath    string
+	envCfgPath string
+	envPrefix  string
+	logCfg     *log.Cfg
 }
 
-func New(cfgPath string, opts ...Option) *Booter {
+func New(opts ...Option) *Booter {
 	b := &Booter{
-		Runner:  runner.Create("boot"),
-		cfgPath: cfgPath,
-		logCfg:  log.NewCfg(),
+		Runner: runner.Create("boot"),
+		logCfg: log.NewCfg(),
 	}
 
 	cfgMap := make(map[SvcType]interface{})
@@ -119,6 +121,8 @@ func New(cfgPath string, opts ...Option) *Booter {
 	for _, opt := range opts {
 		opt.apply(b)
 	}
+
+	b.envCfgPath = os.Getenv(b.envPrefix + ENV_CFG_PATH)
 
 	return b
 }
@@ -206,17 +210,23 @@ func (b *Booter) loadCfgFromEnv() error {
 }
 
 func (b *Booter) loadCfgFromFile() error {
-	path := b.cfgPath
-	if path == "" {
-		path = consts.CfgPath
-		if !util.FileExist(path) {
+	cfgPath := b.cfgPath
+	if flagCfgPath != "" {
+		cfgPath = flagCfgPath
+	}
+	if b.envCfgPath != "" {
+		cfgPath = b.envCfgPath
+	}
+	if cfgPath == "" {
+		cfgPath = consts.CfgPath
+		if !util.FileExist(cfgPath) {
 			return nil
 		}
-	} else if !util.FileExist(path) {
-		return errs.Errorf("config file not exists: %s", path)
+	} else if !util.FileExist(cfgPath) {
+		return errs.Errorf("config file not exists: %s", cfgPath)
 	}
 
-	f, err := os.ReadFile(path)
+	f, err := os.ReadFile(cfgPath)
 	if err != nil {
 		return errs.Wrap(err, "read config file fail")
 	}
