@@ -5,6 +5,7 @@ import (
 	"sync"
 
 	"github.com/alitto/pond"
+	"github.com/donkeywon/golib/boot"
 	"github.com/donkeywon/golib/errs"
 	"github.com/donkeywon/golib/plugin"
 	"github.com/donkeywon/golib/runner"
@@ -12,13 +13,15 @@ import (
 	"github.com/donkeywon/golib/util"
 )
 
+const SvcTypeTaskd boot.SvcType = "taskd"
+
 var (
 	ErrStopping          = errors.New("stopping, reject")
 	ErrTaskAlreadyExists = errors.New("task already exists")
 )
 
 var _t = &Taskd{
-	Runner:      runner.Create("taskd"),
+	Runner:      runner.Create(string(SvcTypeTaskd)),
 	taskMap:     &sync.Map{},
 	taskMarkMap: &sync.Map{},
 }
@@ -51,6 +54,14 @@ func (td *Taskd) Start() error {
 func (td *Taskd) Stop() error {
 	td.Cancel()
 	return nil
+}
+
+func (td *Taskd) Type() interface{} {
+	return SvcTypeTaskd
+}
+
+func (td *Taskd) GetCfg() interface{} {
+	return td.Cfg
 }
 
 func (td *Taskd) Submit(taskCfg *task.Cfg) (*task.Task, error) {

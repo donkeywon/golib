@@ -24,13 +24,13 @@ const (
 )
 
 type Cfg struct {
-	Filepath    string        `env:"LOG_PATH"          yaml:"filepath"`
-	Encoding    string        `env:"LOG_ENCODING"      yaml:"encoding"`
-	MaxFileSize int           `env:"LOG_MAX_FILE_SIZE" yaml:"maxFileSize"`
-	MaxBackups  int           `env:"LOG_MAX_BACKUPS"   yaml:"maxBackups"`
-	MaxAge      int           `env:"LOG_MAX_AGE"       yaml:"maxAge"`
-	Level       zapcore.Level `env:"LOG_LEVEL"         yaml:"level"`
-	Compress    bool          `env:"LOG_COMPRESS"      yaml:"compress"`
+	Filepath    string        `env:"LOG_PATH"          flag-long:"log-path"          yaml:"filepath"    flag-description:"log file path"`
+	Format      string        `env:"LOG_FORMAT"        flag-long:"log-format"        yaml:"format"      flag-description:"log line format, console or json"`
+	MaxFileSize int           `env:"LOG_MAX_FILE_SIZE" flag-long:"log-max-file-size" yaml:"maxFileSize" flag-description:"maximum size in megabytes of the log file before it gets rotated"`
+	MaxBackups  int           `env:"LOG_MAX_BACKUPS"   flag-long:"log-max-backups"   yaml:"maxBackups"  flag-description:"maximum number of old log files to retain"`
+	MaxAge      int           `env:"LOG_MAX_AGE"       flag-long:"log-max-age"       yaml:"maxAge"      flag-description:"maximum number of days to retain old log files based on the timestamp encoded in their filename"`
+	Level       zapcore.Level `env:"LOG_LEVEL"         flag-long:"log-level"         yaml:"level"       flag-description:"minimum enabled logging level"`
+	Compress    bool          `env:"LOG_COMPRESS"      flag-long:"log-compress"      yaml:"compress"    flag-description:"determines if the rotated log files should be compressed using gzip"`
 }
 
 func NewCfg() *Cfg {
@@ -41,7 +41,7 @@ func NewCfg() *Cfg {
 		MaxBackups:  DefaultMaxBackups,
 		MaxAge:      DefaultMaxAge,
 		Compress:    DefaultCompress,
-		Encoding:    DefaultEncoding,
+		Format:      DefaultFormat,
 	}
 }
 
@@ -49,7 +49,7 @@ func (c *Cfg) Build(opts ...zap.Option) (*zap.Logger, error) {
 	var err error
 	cfg := DefaultConfig()
 	cfg.Level = zap.NewAtomicLevelAt(c.Level)
-	cfg.Encoding = c.Encoding
+	cfg.Encoding = c.Format
 	cfg.OutputPaths, err = c.buildOutputs()
 	if err != nil {
 		return nil, err

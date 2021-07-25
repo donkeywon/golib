@@ -12,13 +12,13 @@ func (f optionFunc) apply(b *Booter) {
 
 func CfgPath(cfgPath string) Option {
 	return optionFunc(func(b *Booter) {
-		b.cfgPath = cfgPath
+		b.options.CfgPath = cfgPath
 	})
 }
 
 func EnvPrefix(envPrefix string) Option {
 	return optionFunc(func(b *Booter) {
-		b.envPrefix = envPrefix
+		b.options.EnvPrefix = envPrefix
 	})
 }
 
@@ -54,6 +54,6 @@ func DefaultLogCompress(compress bool) Option {
 
 func DefaultLogEncoding(encoding string) Option {
 	return optionFunc(func(b *Booter) {
-		b.logCfg.Encoding = encoding
+		b.logCfg.Format = encoding
 	})
 }

@@ -16,8 +16,8 @@ func init() {
 }
 
 const (
-	JSONEncoding    = "json"
-	ConsoleEncoding = "console"
+	JSONFormat    = "json"
+	ConsoleFormat = "console"
 
 	LevelEncoderCapital      = "capital"
 	LevelEncoderCapitalColor = "capitalColor"
@@ -47,7 +47,7 @@ const (
 	DefaultDisableCaller     = false
 	DefaultDisableStacktrace = true // stack core will extract error stack, so zap's stack is useless
 
-	DefaultEncoding                = ConsoleEncoding
+	DefaultFormat                  = ConsoleFormat
 	DefaultEncoderMessageKey       = "msg"
 	DefaultEncoderLevelKey         = "lvl"
 	DefaultEncoderNameKey          = "logger"
@@ -158,7 +158,7 @@ func DefaultConfig() *zap.Config {
 		DisableCaller:     DefaultDisableCaller,
 		DisableStacktrace: DefaultDisableStacktrace,
 		Sampling:          nil,
-		Encoding:          DefaultEncoding,
+		Encoding:          DefaultFormat,
 		EncoderConfig:     DefaultEncoderConfig(),
 		OutputPaths:       DefaultOutputPath,
 		ErrorOutputPaths:  DefaultErrorOutputPath,

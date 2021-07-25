@@ -294,7 +294,6 @@ linters:
     - wastedassign # finds wasted assignment statements
     - whitespace # detects leading and trailing whitespace
     - decorder # checks declaration order and count of types, constants, variables and functions
-    - tagalign # checks that struct tags are well aligned
 
     ## you may want to enable
     #- exhaustruct # [highly recommend to enable] checks if all structure fields are initialized
@@ -309,6 +308,7 @@ linters:
     #- varnamelen # [great idea, but too many false positives] checks that the length of a variable's name matches its scope
     #- wrapcheck # checks that errors returned from external packages are wrapped
     #- zerologlint # detects the wrong usage of zerolog that a user forgets to dispatch zerolog.Event
+    #- tagalign # checks that struct tags are well aligned
 
     ## disabled
     #- containedctx # detects struct contained context.Context field
