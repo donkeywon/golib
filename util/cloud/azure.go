@@ -1,6 +1,10 @@
 package cloud
 
-import "github.com/donkeywon/golib/util/httpc"
+import (
+	"time"
+
+	"github.com/donkeywon/golib/util/httpc"
+)
 
 func IsAzure() bool {
 	metadata, err := GetAzureVMInstanceMetadata()
@@ -11,6 +15,10 @@ func IsAzure() bool {
 }
 
 func GetAzureVMInstanceMetadata() ([]byte, error) {
-	body, _, err := httpc.G("http://169.254.169.254/metadata/instance?api-version=2021-02-01", "Metadata", "true")
+	body, _, err := httpc.Gtimeout(
+		time.Second,
+		"http://169.254.169.254/metadata/instance?api-version=2021-02-01",
+		"Metadata",
+		"true")
 	return body, err
 }

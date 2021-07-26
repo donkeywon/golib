@@ -18,13 +18,6 @@ func init() {
 
 const PluginTypePipeline plugin.Type = "pipeline"
 
-type RWCfg struct {
-	Type      RWType       `json:"rwType"    validate:"required" yaml:"rwType"`
-	Cfg       interface{}  `json:"cfg"       validate:"required" yaml:"cfg"`
-	CommonCfg *RWCommonCfg `json:"commonCfg" yaml:"commonCfg"`
-	Role      RWRole       `json:"role"      validate:"required" yaml:"role"`
-}
-
 type Cfg struct {
 	RWs []*RWCfg `json:"rws" validate:"min=1" yaml:"rws"`
 }

@@ -87,7 +87,6 @@ func (w *MultiPartWriter) Write(p []byte) (int, error) {
 				return w.initMultiPart()
 			},
 			retry.Attempts(uint(w.Retry)),
-			retry.Delay(time.Second),
 		)
 		if err != nil {
 			return 0, errs.Wrap(err, "init multi part fail")
@@ -261,7 +260,6 @@ func (w *MultiPartWriter) uploadPart(body []byte) error {
 			return w.upload(w.curPartNo, w.uploadID, body)
 		},
 		retry.Attempts(uint(w.Retry)),
-		retry.Delay(time.Second),
 		retry.RetryIf(func(_ error) bool {
 			select {
 			case <-w.closed:

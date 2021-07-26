@@ -14,16 +14,16 @@ const (
 	HeaderIfUnmodifiedSince = "If-Unmodified-Since"
 	HeaderRange             = "Range"
 
-	HeaderXmsDate      = "x-ms-date"
-	HeaderXmsVersion   = "x-ms-version"
-	HeaderXmsRequestID = "x-ms-request-id"
-	HeaderXmsBlobType  = "x-ms-blob-type"
+	HeaderXmsDate      = "X-Ms-Date"
+	HeaderXmsVersion   = "X-Ms-Version"
+	HeaderXmsRequestID = "X-Ms-Request-Id"
+	HeaderXmsBlobType  = "X-Ms-Blob-Type"
 
 	HeaderOssAppendNextPositionHeader    = "X-Rgw-Next-Append-Position"
 	HeaderObsAppendNextPositionHeader    = "X-Obs-Next-Append-Position"
 	HeaderAliOssAppendNextPositionHeader = "X-Oss-Next-Append-Position"
-	HeaderAzblobAppendOffsetHeader       = "x-ms-blob-append-offset"
-	HeaderAzblobAppendPositionHeader     = "x-ms-blob-condition-appendpos"
+	HeaderAzblobAppendOffsetHeader       = "X-Ms-Blob-Append-Offset"
+	HeaderAzblobAppendPositionHeader     = "X-Ms-Blob-Condition-Appendpos"
 
 	HeaderAmzDate          = "X-Amz-Date"
 	HeaderAmzContentSHA256 = "X-Amz-Content-Sha256"

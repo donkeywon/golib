@@ -64,7 +64,6 @@ func (w *AppendWriter) Write(p []byte) (int, error) {
 				return w.delete()
 			},
 			retry.Attempts(uint(w.Retry)),
-			retry.Delay(time.Second),
 		)
 		if err != nil {
 			return 0, errs.Wrap(err, "delete oss object fail")
@@ -78,7 +77,6 @@ func (w *AppendWriter) Write(p []byte) (int, error) {
 				return oss.CreateAppendBlob(w.ctx, w.URL, w.Ak, w.Sk)
 			},
 			retry.Attempts(uint(w.Retry)),
-			retry.Delay(time.Second),
 		)
 		if err != nil {
 			return 0, errs.Wrap(err, "create append blob fail")
@@ -127,7 +125,6 @@ func (w *AppendWriter) retryAppend(payload []byte) ([]byte, error) {
 			return e
 		},
 		retry.Attempts(uint(w.Retry)),
-		retry.Delay(time.Second),
 		retry.RetryIf(func(_ error) bool {
 			select {
 			case <-w.closed:

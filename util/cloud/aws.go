@@ -2,6 +2,7 @@ package cloud
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/donkeywon/golib/errs"
 	"github.com/donkeywon/golib/util/httpc"
@@ -232,7 +233,8 @@ func GetEC2InstanceType() ([]byte, error) {
 		return nil, err
 	}
 
-	body, _, err := httpc.G(
+	body, _, err := httpc.Gtimeout(
+		time.Second,
 		"http://169.254.169.254/latest/meta-data/instance-type",
 		"X-aws-ec2-metadata-token",
 		string(token))
@@ -255,7 +257,8 @@ func GetAwsEc2NetSpeed() (int, error) {
 }
 
 func GetEC2IMDSv2Token() ([]byte, error) {
-	body, _, err := httpc.D(
+	body, _, err := httpc.Dtimeout(
+		time.Second,
 		http.MethodPut,
 		"http://169.254.169.254/latest/api/token",
 		nil,
