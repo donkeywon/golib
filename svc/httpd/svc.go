@@ -108,3 +108,7 @@ func HandleFunc(pattern string, handler http.HandlerFunc) {
 func HandleAPI(pattern string, handler APIHandler) {
 	_h.mux.Handle(pattern, _h.logHandler(handler))
 }
+
+func ServeMux() *http.ServeMux {
+	return _h.mux
+}
