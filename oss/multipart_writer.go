@@ -270,7 +270,7 @@ func (w *MultiPartWriter) uploadPart(body []byte) error {
 		}),
 	)
 	if err != nil {
-		return err
+		return errs.Wrap(err, "upload fail with max retry")
 	}
 
 	if oss.IsAzblob(w.URL) {

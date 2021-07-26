@@ -69,7 +69,11 @@ func (cp *CopyRW) Start() error {
 		err = nil
 	}
 
-	return err
+	if err != nil {
+		return errs.Wrap(err, "io copy fail")
+	}
+
+	return nil
 }
 
 func (cp *CopyRW) Type() interface{} {

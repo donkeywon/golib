@@ -141,6 +141,6 @@ func (r *Reader) wait() error {
 			return nil
 		}
 	case err := <-r.watcher.Errors:
-		return err
+		return errs.Wrap(err, "watcher error occurred")
 	}
 }

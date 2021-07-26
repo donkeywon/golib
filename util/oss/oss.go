@@ -77,17 +77,17 @@ func Sign(req *http.Request, ak string, sk string, region string) error {
 func Delete(ctx context.Context, url string, ak string, sk string, region string) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, url, nil)
 	if err != nil {
-		return err
+		return errs.Wrap(err, "create http delete request fail")
 	}
 
 	err = Sign(req, ak, sk, region)
 	if err != nil {
-		return err
+		return errs.Wrap(err, "oss sign fail")
 	}
 
 	body, resp, err := httpc.DoBody(req)
 	if err != nil {
-		return err
+		return errs.Wrap(err, "do http delete request fail")
 	}
 
 	if IsAzblob(url) {

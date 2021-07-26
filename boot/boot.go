@@ -83,7 +83,6 @@ type options struct {
 type Booter struct {
 	runner.Runner
 	*options
-	extraOpts  []Option
 	cfgMap     map[SvcType]interface{}
 	logCfg     *log.Cfg
 	flagParser *flags.Parser
@@ -91,10 +90,9 @@ type Booter struct {
 
 func New(opt ...Option) *Booter {
 	b := &Booter{
-		Runner:    runner.Create("boot"),
-		logCfg:    log.NewCfg(),
-		extraOpts: opt,
-		options:   &options{},
+		Runner:  runner.Create("boot"),
+		logCfg:  log.NewCfg(),
+		options: &options{},
 	}
 
 	for _, o := range opt {
@@ -119,7 +117,7 @@ func (b *Booter) Init() error {
 	b.cfgMap["log"] = b.logCfg
 	_, err = b.flagParser.AddGroup("log options", "", b.logCfg)
 	if err != nil {
-		return err
+		return errs.Wrap(err, "add log flags fail")
 	}
 
 	err = b.loadOptions()
@@ -127,7 +125,7 @@ func (b *Booter) Init() error {
 		if e, ok := err.(*flags.Error); ok && e.Type == flags.ErrHelp {
 			os.Exit(0)
 		}
-		return err
+		return errs.Wrap(err, "load options fail")
 	}
 	if b.options.PrintVersion {
 		fmt.Println("version:" + buildinfo.Version)
@@ -138,17 +136,17 @@ func (b *Booter) Init() error {
 
 	err = b.loadCfg()
 	if err != nil {
-		return err
+		return errs.Wrap(err, "load cfg fail")
 	}
 
 	err = b.validateCfg()
 	if err != nil {
-		return err
+		return errs.Wrap(err, "validate cfg fail")
 	}
 
 	l, err := b.buildLogger()
 	if err != nil {
-		return err
+		return errs.Wrap(err, "build logger fail")
 	}
 	ok := util.ReflectSet(b.Runner, l.Named(b.Name()))
 	if !ok {
@@ -209,7 +207,7 @@ func (b *Booter) loadOptions() error {
 		Prefix: b.options.EnvPrefix,
 	})
 	if err != nil {
-		return err
+		return errs.Wrap(err, "parse env to boot options fail")
 	}
 	return nil
 }
@@ -220,7 +218,7 @@ func (b *Booter) loadCfgFromFlag() error {
 }
 
 func (b *Booter) loadCfgFromEnv() error {
-	for _, cfg := range b.cfgMap {
+	for svcType, cfg := range b.cfgMap {
 		if !util.IsStructPointer(cfg) {
 			continue
 		}
@@ -228,7 +226,7 @@ func (b *Booter) loadCfgFromEnv() error {
 			Prefix: b.options.EnvPrefix,
 		})
 		if err != nil {
-			return err
+			return errs.Wrapf(err, "parse env to svc(%s) cfg fail", svcType)
 		}
 	}
 	return nil
@@ -325,7 +323,7 @@ func buildFlagParser(data interface{}, cfgMap map[SvcType]interface{}) (*flags.P
 		}
 		_, err = parser.AddGroup(string(svcType)+" service options", "", cfg)
 		if err != nil {
-			return nil, err
+			return nil, errs.Wrapf(err, "add svc(%s) flags fail", svcType)
 		}
 	}
 	return parser, nil

@@ -9,6 +9,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/donkeywon/golib/errs"
 )
 
 var obsURLRegex = regexp.MustCompile(`([a-z0-9\-\.]{3,63})\.obs\..+\.com(\/.*)`)
@@ -42,7 +44,7 @@ func ObsSign(req *http.Request, ak string, sk string, bucket string, obj string)
 	mac := hmac.New(sha1.New, []byte(sk))
 	_, err := mac.Write([]byte(stringToSign))
 	if err != nil {
-		return err
+		return errs.Wrap(err, "obs hmac write fail")
 	}
 
 	sign := base64.StdEncoding.EncodeToString(mac.Sum(nil))

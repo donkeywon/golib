@@ -199,13 +199,16 @@ func (c *Client) pasv() (string, int, error) {
 
 func (c *Client) Delete(path string) error {
 	_, _, err := c.cmd(StatusRequestedFileActionOK, "DELE %s", path)
-	return err
+	if err != nil {
+		return errs.Wrap(err, "ftp cmd DELE fail")
+	}
+	return nil
 }
 
 func (c *Client) login() error {
 	code, msg, err := c.cmd(-1, "USER %s", c.User)
 	if err != nil {
-		return err
+		return errs.Wrap(err, "ftp cmd USER fail")
 	}
 
 	switch code {
@@ -213,10 +216,10 @@ func (c *Client) login() error {
 	case StatusUserOK:
 		_, _, err = c.cmd(StatusLoggedIn, "PASS %s", c.Pwd)
 		if err != nil {
-			return err
+			return errs.Wrap(err, "ftp cmd PASS fail")
 		}
 	default:
-		return errs.New(msg)
+		return errs.Errorf("ftp cmd USER response code unknown: %d, msg: %s", code, msg)
 	}
 
 	return nil
@@ -239,7 +242,10 @@ func (c *Client) DirExists(path string) (bool, error) {
 
 func (c *Client) Mkdir(name string) error {
 	_, _, err := c.cmd(StatusPathCreated, "MKD %s", name)
-	return err
+	if err != nil {
+		return errs.Wrap(err, "ftp cmd MKD fail")
+	}
+	return nil
 }
 
 func (c *Client) MkdirRecur(path string) error {
@@ -302,12 +308,18 @@ func (c *Client) pathExists(path string, entrys []*Entry) (bool, bool) {
 
 func (c *Client) checkDataShut() error {
 	_, _, err := c.conn.ReadResponse(StatusClosingDataConnection)
-	return err
+	if err != nil {
+		return errs.Wrap(err, "read response StatusClosingDataConnection fail")
+	}
+	return nil
 }
 
 func (c *Client) ChangeDir(path string) error {
 	_, _, err := c.cmd(StatusRequestedFileActionOK, "CWD %s", path)
-	return err
+	if err != nil {
+		return errs.Wrap(err, "ftp cmd CWD fail")
+	}
+	return nil
 }
 
 func (c *Client) CurrentDir() (string, error) {
@@ -387,7 +399,10 @@ func (c *Client) List(path string) ([]*Entry, error) {
 
 func (c *Client) TransType(typ string) error {
 	_, _, err := c.cmd(StatusCommandOK, "TYPE "+typ)
-	return err
+	if err != nil {
+		return errs.Wrap(err, "ftp cmd TYPE fail")
+	}
+	return nil
 }
 
 func (c *Client) Close() error {
@@ -397,6 +412,12 @@ func (c *Client) Close() error {
 func (c *Client) Quit() error {
 	var err error
 	_, err = c.conn.Cmd("QUIT")
-	err = errors.Join(err, c.conn.Close())
+	if err != nil {
+		err = errs.Wrap(err, "ftp cmd QUIT fail")
+	}
+	closeErr := c.conn.Close()
+	if closeErr != nil {
+		err = errors.Join(err, errs.Wrap(closeErr, "close ftp conn fail"))
+	}
 	return err
 }
