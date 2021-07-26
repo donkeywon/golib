@@ -20,7 +20,8 @@ type Promd struct {
 	plugin.Plugin
 	*Cfg
 
-	m   sync.Map
+	mu  sync.Mutex
+	m   map[string]prometheus.Metric
 	reg *prometheus.Registry
 }
 
@@ -85,19 +86,33 @@ func (p *Promd) AddCounter(name string, v float64) {
 	p.opCounter(name, func(c prometheus.Counter) { c.Add(v) })
 }
 
-func (p *Promd) loadOrStore(name string, m prometheus.Metric) prometheus.Metric {
-	v, loaded := p.m.LoadOrStore(name, m)
-	if !loaded {
-		err := p.reg.Register(v.(prometheus.Collector))
-		if err != nil {
-			p.Error("register metrics fail", err, "name", name)
-		}
+func (p *Promd) loadOrStore(name string, creator func() prometheus.Metric) prometheus.Metric {
+	m, exists := p.m[name]
+	if exists {
+		return m
 	}
-	return v.(prometheus.Metric)
+
+	p.mu.Lock()
+	m, exists = p.m[name]
+	if exists {
+		p.mu.Unlock()
+		return m
+	}
+	defer p.mu.Unlock()
+
+	m = creator()
+	err := p.reg.Register(m.(prometheus.Collector))
+	if err != nil {
+		p.Error("register metrics fail", err, "name", name)
+		return m
+	}
+
+	p.m[name] = m
+	return m
 }
 
 func (p *Promd) opGauge(name string, op func(g prometheus.Gauge)) {
-	g := p.loadOrStore(name, prometheus.NewGauge(prometheus.GaugeOpts{Name: name}))
+	g := p.loadOrStore(name, func() prometheus.Metric { return prometheus.NewGauge(prometheus.GaugeOpts{Name: name}) })
 
 	if gg, ok := g.(prometheus.Gauge); ok {
 		op(gg)
@@ -107,7 +122,7 @@ func (p *Promd) opGauge(name string, op func(g prometheus.Gauge)) {
 }
 
 func (p *Promd) opCounter(name string, op func(c prometheus.Counter)) {
-	c := p.loadOrStore(name, prometheus.NewCounter(prometheus.CounterOpts{Name: name}))
+	c := p.loadOrStore(name, func() prometheus.Metric { return prometheus.NewCounter(prometheus.CounterOpts{Name: name}) })
 
 	if cc, ok := c.(prometheus.Counter); ok {
 		op(cc)
