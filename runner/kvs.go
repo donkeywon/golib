@@ -3,9 +3,8 @@ package runner
 import (
 	"strconv"
 	"sync"
-	"time"
 
-	"github.com/donkeywon/golib/util"
+	"github.com/donkeywon/golib/util/convert"
 	"github.com/donkeywon/golib/util/json"
 )
 
@@ -47,7 +46,7 @@ func (b *simpleInMemKvs) Store(k string, v any) {
 }
 
 func (b *simpleInMemKvs) StoreAsString(k string, v any) {
-	b.m.Store(k, convertToString(v))
+	b.m.Store(k, convert.AnyToString(v))
 }
 
 func (b *simpleInMemKvs) Load(k string) (any, bool) {
@@ -90,7 +89,7 @@ func (b *simpleInMemKvs) LoadAsString(k string) string {
 	if !exists {
 		return ""
 	}
-	return convertToString(v)
+	return convert.AnyToString(v)
 }
 
 func (b *simpleInMemKvs) LoadAsStringOr(k string, d string) string {
@@ -245,7 +244,7 @@ func (b *simpleInMemKvs) LoadTo(k string, to any) error {
 		return nil
 	}
 
-	return json.Unmarshal(util.String2Bytes(v), to)
+	return json.UnmarshalString(v, to)
 }
 
 func (b *simpleInMemKvs) Collect() map[string]any {
@@ -266,7 +265,7 @@ func (b *simpleInMemKvs) Range(f func(k string, v any) bool) {
 func (b *simpleInMemKvs) CollectAsString() map[string]string {
 	result := make(map[string]string)
 	b.Range(func(k string, v any) bool {
-		result[k] = convertToString(v)
+		result[k] = convert.AnyToString(v)
 		return true
 	})
 	return result
@@ -280,93 +279,4 @@ func (b *simpleInMemKvs) StoreValues(m map[string]any) {
 	for k, v := range m {
 		b.Store(k, v)
 	}
-}
-
-func convertToString(v any) string {
-	var vs string
-
-	switch vv := v.(type) {
-	case string:
-		vs = vv
-	case *string:
-		vs = *vv
-	case []byte:
-		vs = string(vv)
-	case bool:
-		vs = strconv.FormatBool(vv)
-	case *bool:
-		vs = strconv.FormatBool(*vv)
-	case complex128:
-		vs = strconv.FormatComplex(vv, 'f', 10, 128)
-	case *complex128:
-		vs = strconv.FormatComplex(*vv, 'f', 10, 128)
-	case complex64:
-		vs = strconv.FormatComplex(complex128(vv), 'f', 10, 128)
-	case *complex64:
-		vs = strconv.FormatComplex(complex128(*vv), 'f', 10, 128)
-	case float64:
-		vs = strconv.FormatFloat(vv, 'f', 10, 64)
-	case *float64:
-		vs = strconv.FormatFloat(*vv, 'f', 10, 64)
-	case float32:
-		vs = strconv.FormatFloat(float64(vv), 'f', 10, 64)
-	case *float32:
-		vs = strconv.FormatFloat(float64(*vv), 'f', 10, 64)
-	case int:
-		vs = strconv.FormatInt(int64(vv), 10)
-	case *int:
-		vs = strconv.FormatInt(int64(*vv), 10)
-	case int64:
-		vs = strconv.FormatInt(vv, 10)
-	case *int64:
-		vs = strconv.FormatInt(*vv, 10)
-	case int32:
-		vs = strconv.FormatInt(int64(vv), 10)
-	case *int32:
-		vs = strconv.FormatInt(int64(*vv), 10)
-	case int16:
-		vs = strconv.FormatInt(int64(vv), 10)
-	case *int16:
-		vs = strconv.FormatInt(int64(*vv), 10)
-	case int8:
-		vs = strconv.FormatInt(int64(vv), 10)
-	case *int8:
-		vs = strconv.FormatInt(int64(*vv), 10)
-	case uint:
-		vs = strconv.FormatUint(uint64(vv), 10)
-	case *uint:
-		vs = strconv.FormatUint(uint64(*vv), 10)
-	case uint64:
-		vs = strconv.FormatUint(vv, 10)
-	case *uint64:
-		vs = strconv.FormatUint(*vv, 10)
-	case uint32:
-		vs = strconv.FormatUint(uint64(vv), 10)
-	case *uint32:
-		vs = strconv.FormatUint(uint64(*vv), 10)
-	case uint16:
-		vs = strconv.FormatUint(uint64(vv), 10)
-	case *uint16:
-		vs = strconv.FormatUint(uint64(*vv), 10)
-	case uint8:
-		vs = strconv.FormatUint(uint64(vv), 10)
-	case *uint8:
-		vs = strconv.FormatUint(uint64(*vv), 10)
-	case uintptr:
-		vs = strconv.FormatInt(int64(vv), 16)
-	case *uintptr:
-		vs = strconv.FormatInt(int64(*vv), 16)
-	case time.Time:
-		vs = vv.String()
-	case *time.Time:
-		vs = vv.String()
-	case time.Duration:
-		vs = vv.String()
-	case *time.Duration:
-		vs = vv.String()
-	default:
-		vs, _ = json.MarshalString(vv)
-	}
-
-	return vs
 }
