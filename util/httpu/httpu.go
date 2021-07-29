@@ -5,6 +5,7 @@ import (
 
 	"github.com/donkeywon/golib/errs"
 	"github.com/donkeywon/golib/util/convert"
+	"github.com/donkeywon/golib/util/json"
 )
 
 const (
@@ -64,7 +65,11 @@ func RespJSONFail(data interface{}, w http.ResponseWriter, headersKV ...string) 
 
 func RespJSON(statusCode int, data interface{}, w http.ResponseWriter, headersKV ...string) {
 	setContentTypeHeader(w, ContentTypeJSON)
-	Resp(statusCode, data, w, headersKV...)
+	bs, err := json.Marshal(data)
+	if err != nil {
+		panic(errs.Wrap(err, "data marshal to json fail"))
+	}
+	RespRaw(statusCode, bs, w, headersKV...)
 }
 
 func setHeaders(w http.ResponseWriter, headersKV ...string) {
