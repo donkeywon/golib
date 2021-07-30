@@ -4,7 +4,7 @@ import (
 	"net/http"
 
 	"github.com/donkeywon/golib/errs"
-	"github.com/donkeywon/golib/util/convert"
+	"github.com/donkeywon/golib/util/conv"
 	"github.com/donkeywon/golib/util/jsonu"
 )
 
@@ -31,8 +31,8 @@ func Resp(statusCode int, data interface{}, w http.ResponseWriter, headersKV ...
 		RespRaw(statusCode, nil, w, headersKV...)
 		return
 	}
-	s := convert.AnyToString(data)
-	RespRaw(statusCode, convert.String2Bytes(s), w, headersKV...)
+	s := conv.AnyToString(data)
+	RespRaw(statusCode, conv.String2Bytes(s), w, headersKV...)
 }
 
 func RespRawOk(data []byte, w http.ResponseWriter, headersKV ...string) {
