@@ -5,11 +5,12 @@ import (
 
 	"github.com/donkeywon/golib/errs"
 	"github.com/donkeywon/golib/util/convert"
-	"github.com/donkeywon/golib/util/json"
+	"github.com/donkeywon/golib/util/jsonu"
 )
 
 const (
-	HeaderContentType = "Content-Type"
+	HeaderContentType   = "Content-Type"
+	HeaderContentLength = "Content-Length"
 
 	ContentTypeHTML     = "text/html"
 	ContentTypeHTMLUTF8 = "text/html; charset=utf-8"
@@ -26,6 +27,10 @@ func RespFail(data interface{}, w http.ResponseWriter, headersKV ...string) {
 }
 
 func Resp(statusCode int, data interface{}, w http.ResponseWriter, headersKV ...string) {
+	if data == nil {
+		RespRaw(statusCode, nil, w, headersKV...)
+		return
+	}
 	s := convert.AnyToString(data)
 	RespRaw(statusCode, convert.String2Bytes(s), w, headersKV...)
 }
@@ -39,7 +44,12 @@ func RespRawFail(data []byte, w http.ResponseWriter, headersKV ...string) {
 }
 
 func RespRaw(statusCode int, data []byte, w http.ResponseWriter, headersKV ...string) {
-	sendResponse(statusCode, data, w, headersKV...)
+	setHeaders(w, headersKV...)
+	w.WriteHeader(statusCode)
+	_, err := w.Write(data)
+	if err != nil {
+		panic(errs.Wrap(err, "http write data to response fail"))
+	}
 }
 
 func RespHTMLOk(data []byte, w http.ResponseWriter, headersKV ...string) {
@@ -65,7 +75,12 @@ func RespJSONFail(data interface{}, w http.ResponseWriter, headersKV ...string) 
 
 func RespJSON(statusCode int, data interface{}, w http.ResponseWriter, headersKV ...string) {
 	setContentTypeHeader(w, ContentTypeJSON)
-	bs, err := json.Marshal(data)
+	if data == nil {
+		RespRaw(statusCode, nil, w, headersKV...)
+		return
+	}
+
+	bs, err := jsonu.Marshal(data)
 	if err != nil {
 		panic(errs.Wrap(err, "data marshal to json fail"))
 	}
@@ -75,15 +90,6 @@ func RespJSON(statusCode int, data interface{}, w http.ResponseWriter, headersKV
 func setHeaders(w http.ResponseWriter, headersKV ...string) {
 	for i := 1; i < len(headersKV); i += 2 {
 		w.Header().Add(headersKV[i-1], headersKV[i])
-	}
-}
-
-func sendResponse(statusCode int, data []byte, w http.ResponseWriter, headersKV ...string) {
-	setHeaders(w, headersKV...)
-	w.WriteHeader(statusCode)
-	_, err := w.Write(data)
-	if err != nil {
-		panic(errs.Wrap(err, "http write data to response fail"))
 	}
 }
 

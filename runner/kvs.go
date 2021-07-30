@@ -5,7 +5,7 @@ import (
 	"sync"
 
 	"github.com/donkeywon/golib/util/convert"
-	"github.com/donkeywon/golib/util/json"
+	"github.com/donkeywon/golib/util/jsonu"
 )
 
 type kvs interface {
@@ -244,7 +244,7 @@ func (b *simpleInMemKvs) LoadTo(k string, to any) error {
 		return nil
 	}
 
-	return json.UnmarshalString(v, to)
+	return jsonu.UnmarshalString(v, to)
 }
 
 func (b *simpleInMemKvs) Collect() map[string]any {
