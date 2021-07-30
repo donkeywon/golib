@@ -29,9 +29,9 @@ var (
 )
 
 // 推荐自定义plugin的类型，不要直接使用基础类型，例如
-// type ServiceType string
-// const ServiceTypeHttpd ServiceType = "httpd"
-// Register(ServiceTypeHttpd, func() interface{} { return NewHttpdService() }).
+// type DaemonType string
+// const DaemonTypeHttpd DaemonType = "httpd"
+// Register(DaemonTypeHttpd, func() interface{} { return NewHttpd() }).
 func Register(typ interface{}, creator Creator) {
 	_plugins[typ] = creator
 }

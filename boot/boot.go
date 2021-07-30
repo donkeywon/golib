@@ -109,15 +109,10 @@ func (b *Booter) Init() error {
 	util.ReflectSet(b.Runner, log.Default())
 
 	b.cfgMap = buildCfgMap()
+	b.cfgMap["log"] = b.logCfg
 	b.flagParser, err = buildFlagParser(b.options, b.cfgMap)
 	if err != nil {
 		return errs.Wrap(err, "build flag parser fail")
-	}
-
-	b.cfgMap["log"] = b.logCfg
-	_, err = b.flagParser.AddGroup("log options", "", b.logCfg)
-	if err != nil {
-		return errs.Wrap(err, "add log flags fail")
 	}
 
 	err = b.loadOptions()
@@ -321,9 +316,9 @@ func buildFlagParser(data interface{}, cfgMap map[DaemonType]interface{}) (*flag
 		if !util.IsStructPointer(cfg) {
 			continue
 		}
-		_, err = parser.AddGroup(string(daemonType)+" service options", "", cfg)
+		_, err = parser.AddGroup(string(daemonType)+" options", "", cfg)
 		if err != nil {
-			return nil, errs.Wrapf(err, "add daemon(%s) flags fail", daemonType)
+			return nil, errs.Wrapf(err, "add %s flags fail", daemonType)
 		}
 	}
 	return parser, nil
