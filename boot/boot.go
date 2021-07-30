@@ -23,9 +23,9 @@ import (
 
 const FlagTagPrefix = "flag-"
 
-type SvcType string
+type DaemonType string
 
-type Svc interface {
+type Daemon interface {
 	runner.Runner
 	plugin.Plugin
 }
@@ -52,18 +52,18 @@ func Boot(opt ...Option) {
 }
 
 var (
-	_svcs   []SvcType // dependencies in order
-	_cfgMap = make(map[string]interface{})
+	_daemons []DaemonType // dependencies in order
+	_cfgMap  = make(map[string]interface{})
 )
 
-// RegisterSvc register a Svc creator and its config creator.
-func RegisterSvc(typ SvcType, creator plugin.Creator, cfgCreator plugin.CfgCreator) {
-	if slices.Contains(_svcs, typ) {
+// RegisterDaemon register a Daemon creator and its config creator.
+func RegisterDaemon(typ DaemonType, creator plugin.Creator, cfgCreator plugin.CfgCreator) {
+	if slices.Contains(_daemons, typ) {
 		return
 	}
 	plugin.Register(typ, creator)
 	plugin.RegisterCfg(typ, cfgCreator)
-	_svcs = append(_svcs, typ)
+	_daemons = append(_daemons, typ)
 }
 
 // RegisterCfg register additional config, cfg type must be pointer.
@@ -83,7 +83,7 @@ type options struct {
 type Booter struct {
 	runner.Runner
 	*options
-	cfgMap     map[SvcType]interface{}
+	cfgMap     map[DaemonType]interface{}
 	logCfg     *log.Cfg
 	flagParser *flags.Parser
 }
@@ -157,12 +157,12 @@ func (b *Booter) Init() error {
 		b.Info("load config", "name", name, "cfg", cfg)
 	}
 
-	for _, svcType := range _svcs {
-		svc, isSvc := plugin.CreateWithCfg(svcType, b.cfgMap[svcType]).(Svc)
-		if !isSvc {
-			return errs.Errorf("svc %+v is not a Svc", svcType)
+	for _, daemonType := range _daemons {
+		daemon, isDaemon := plugin.CreateWithCfg(daemonType, b.cfgMap[daemonType]).(Daemon)
+		if !isDaemon {
+			return errs.Errorf("plugin %+v is not a Daemon", daemonType)
 		}
-		b.AppendRunner(svc)
+		b.AppendRunner(daemon)
 	}
 
 	return b.Runner.Init()
@@ -185,7 +185,7 @@ func (b *Booter) Start() error {
 }
 
 func (b *Booter) OnChildDone(child runner.Runner) error {
-	b.Info("on svc done", "svc", child.Name())
+	b.Info("on daemon done", "daemon", child.Name())
 	select {
 	case <-b.Stopping():
 		return nil
@@ -218,7 +218,7 @@ func (b *Booter) loadCfgFromFlag() error {
 }
 
 func (b *Booter) loadCfgFromEnv() error {
-	for svcType, cfg := range b.cfgMap {
+	for daemonType, cfg := range b.cfgMap {
 		if !util.IsStructPointer(cfg) {
 			continue
 		}
@@ -226,7 +226,7 @@ func (b *Booter) loadCfgFromEnv() error {
 			Prefix: b.options.EnvPrefix,
 		})
 		if err != nil {
-			return errs.Wrapf(err, "parse env to svc(%s) cfg fail", svcType)
+			return errs.Wrapf(err, "parse env to daemon(%s) cfg fail", daemonType)
 		}
 	}
 	return nil
@@ -248,14 +248,14 @@ func (b *Booter) loadCfgFromFile() error {
 		return errs.Wrap(err, "read config file fail")
 	}
 
-	fileCfgMap := make(map[SvcType]interface{})
+	fileCfgMap := make(map[DaemonType]interface{})
 	err = yaml.UnmarshalWithOptions(f, &fileCfgMap, yaml.CustomUnmarshaler(durationUnmarshaler))
 	if err != nil {
 		return errs.Wrap(err, "unmarshal config file fail")
 	}
 
-	for svcType, cfg := range b.cfgMap {
-		v, exists := fileCfgMap[svcType]
+	for daemonType, cfg := range b.cfgMap {
+		v, exists := fileCfgMap[daemonType]
 		if !exists {
 			continue
 		}
@@ -264,7 +264,7 @@ func (b *Booter) loadCfgFromFile() error {
 		bs, _ := yaml.Marshal(v)
 		err = yaml.Unmarshal(bs, cfg)
 		if err != nil {
-			return errs.Wrapf(err, "unmarshal svc %s config fail", svcType)
+			return errs.Wrapf(err, "unmarshal daemon %s config fail", daemonType)
 		}
 	}
 
@@ -282,7 +282,7 @@ func (b *Booter) validateCfg() error {
 		}
 		err := util.V.Struct(cfg)
 		if err != nil {
-			return errs.Wrapf(err, "invalid svc(%s) cfg", s)
+			return errs.Wrapf(err, "invalid daemon(%s) cfg", s)
 		}
 	}
 	return nil
@@ -302,28 +302,28 @@ func durationUnmarshaler(d *time.Duration, b []byte) error {
 	return nil
 }
 
-func buildCfgMap() map[SvcType]interface{} {
-	cfgMap := make(map[SvcType]interface{})
-	for _, svcType := range _svcs {
-		cfg := plugin.CreateCfg(svcType)
-		cfgMap[svcType] = cfg
+func buildCfgMap() map[DaemonType]interface{} {
+	cfgMap := make(map[DaemonType]interface{})
+	for _, daemonType := range _daemons {
+		cfg := plugin.CreateCfg(daemonType)
+		cfgMap[daemonType] = cfg
 	}
 	for k, cfg := range _cfgMap {
-		cfgMap[SvcType(k)] = cfg
+		cfgMap[DaemonType(k)] = cfg
 	}
 	return cfgMap
 }
 
-func buildFlagParser(data interface{}, cfgMap map[SvcType]interface{}) (*flags.Parser, error) {
+func buildFlagParser(data interface{}, cfgMap map[DaemonType]interface{}) (*flags.Parser, error) {
 	var err error
 	parser := flags.NewParser(data, flags.Default, flags.FlagTagPrefix(FlagTagPrefix))
-	for svcType, cfg := range cfgMap {
+	for daemonType, cfg := range cfgMap {
 		if !util.IsStructPointer(cfg) {
 			continue
 		}
-		_, err = parser.AddGroup(string(svcType)+" service options", "", cfg)
+		_, err = parser.AddGroup(string(daemonType)+" service options", "", cfg)
 		if err != nil {
-			return nil, errs.Wrapf(err, "add svc(%s) flags fail", svcType)
+			return nil, errs.Wrapf(err, "add daemon(%s) flags fail", daemonType)
 		}
 	}
 	return parser, nil
