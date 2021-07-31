@@ -180,12 +180,12 @@ func (b *Booter) Start() error {
 }
 
 func (b *Booter) OnChildDone(child runner.Runner) error {
-	b.Info("on daemon done", "daemon", child.Name())
 	select {
 	case <-b.Stopping():
 		return nil
 	default:
 		if child.Err() != nil {
+			b.Info("on daemon fail", "daemon", child.Name())
 			runner.Stop(b)
 		}
 	}

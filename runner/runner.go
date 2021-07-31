@@ -3,6 +3,7 @@ package runner
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 
 	"github.com/donkeywon/golib/errs"
@@ -84,10 +85,14 @@ func Start(r Runner) {
 	defer func() {
 		err := recover()
 		if err != nil {
-			r.AppendError(errs.Errorf("panic when %s running: %+v", r.Name(), err))
+			r.AppendError(errs.PanicToErrWithMsg(err, fmt.Sprintf("panic when %s running", r.Name())))
 		}
 
 		if r.markStopping() {
+			// at this point
+			// 1. stopping or canceled before call runner.Start(r)
+			// 2. done before call runner.Stop(r)
+			// both need to markStopDone
 			r.markStopDone()
 		}
 		r.WaitChildrenDone()
@@ -100,13 +105,26 @@ func Start(r Runner) {
 				defer func() {
 					err = recover()
 					if err != nil {
-						r.Parent().AppendError(errs.Errorf("panic when %s OnChildDone: %+v", r.Parent().Name(), err))
+						r.Parent().AppendError(errs.PanicToErrWithMsg(err, fmt.Sprintf("panic when %s OnChildDone", r.Parent().Name())))
 					}
 				}()
 				r.Parent().AppendError(r.Parent().OnChildDone(r))
 			}()
 		}
 	}()
+
+	select {
+	case <-r.Stopping():
+		r.Info("already stopping before start")
+		return
+	case <-r.Ctx().Done():
+		r.Info("already canceled before start")
+		return
+	default:
+	}
+
+	r.Info("start")
+	r.markStarted()
 	go func() {
 		select {
 		case <-r.Stopping():
@@ -116,15 +134,6 @@ func Start(r Runner) {
 			stop(r)
 		}
 	}()
-
-	r.Info("start")
-	r.markStarted()
-	select {
-	case <-r.Stopping():
-		r.Info("already stopping before start")
-		return
-	default:
-	}
 	r.AppendError(r.Start())
 }
 

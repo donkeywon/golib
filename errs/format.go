@@ -141,12 +141,20 @@ func ErrToStack(err error, buf *bufferpool.Buffer, errsDepth int) {
 }
 
 func PanicToErr(p interface{}) error {
+	return PanicToErrWithMsg(p, "panic")
+}
+
+func PanicToErrWithMsg(p interface{}, msg string) error {
 	var err error
 	switch pt := p.(type) {
 	case error:
 		err = pt
 	default:
-		err = Errorf("panic: %+v", p)
+		if msg == "" {
+			err = Errorf("%+v", p)
+		} else {
+			err = Errorf("%s: %+v", msg, p)
+		}
 	}
 	return err
 }
