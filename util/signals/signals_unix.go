@@ -1,6 +1,6 @@
 //go:build linux || darwin || freebsd || solaris
 
-package boot
+package signals
 
 import (
 	"os"
@@ -8,7 +8,7 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-var signals = []os.Signal{
+var ExitSignals = []os.Signal{
 	unix.SIGTERM,
 	unix.SIGINT,
 }

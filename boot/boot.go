@@ -17,6 +17,7 @@ import (
 	"github.com/donkeywon/golib/plugin"
 	"github.com/donkeywon/golib/runner"
 	"github.com/donkeywon/golib/util"
+	"github.com/donkeywon/golib/util/signals"
 	"github.com/goccy/go-yaml"
 	"go.uber.org/zap"
 )
@@ -167,7 +168,7 @@ func (b *Booter) Init() error {
 
 func (b *Booter) Start() error {
 	signalCh := make(chan os.Signal, 1)
-	signal.Notify(signalCh, signals...)
+	signal.Notify(signalCh, signals.ExitSignals...)
 
 	select {
 	case sig := <-signalCh:
