@@ -40,6 +40,11 @@ func RegisterCfg(typ interface{}, creator CfgCreator) {
 	_pluginCfgs[typ] = creator
 }
 
+func RegisterWithCfg(typ interface{}, creator Creator, cfgCreator CfgCreator) {
+	Register(typ, creator)
+	RegisterCfg(typ, cfgCreator)
+}
+
 // 创建一个注册的Plugin
 // 这里不返回错误而是直接panic的原因是：
 // Create函数只是把plugin创建出来，并把cfg设置到plugin中对应的一个字段里。
