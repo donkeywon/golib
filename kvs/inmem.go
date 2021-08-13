@@ -1,7 +1,6 @@
 package kvs
 
 import (
-	"strconv"
 	"sync"
 
 	"github.com/donkeywon/golib/plugin"
@@ -22,8 +21,8 @@ func NewInMemKVSCfg() *InMemKVSCfg {
 }
 
 type InMemKVS struct {
-	Cfg *InMemKVSCfg
-	m   sync.Map
+	*InMemKVSCfg
+	m sync.Map
 }
 
 func NewInMemKVS() *InMemKVS {
@@ -35,7 +34,11 @@ func (b *InMemKVS) Store(k string, v any) {
 }
 
 func (b *InMemKVS) StoreAsString(k string, v any) {
-	b.m.Store(k, conv.AnyToString(v))
+	s, err := conv.AnyToString(v)
+	if err != nil {
+		panic(err)
+	}
+	b.m.Store(k, s)
 }
 
 func (b *InMemKVS) Stores(m map[string]any) {
@@ -69,18 +72,11 @@ func (b *InMemKVS) LoadAsBool(k string) bool {
 	if !exists {
 		return false
 	}
-	switch vt := v.(type) {
-	case string:
-		return vt == "true"
-	case *string:
-		return *vt == "true"
-	case bool:
-		return vt
-	case *bool:
-		return *vt
-	default:
-		panic("unexpected value type")
+	vv, err := conv.ToBool(v)
+	if err != nil {
+		panic(err)
 	}
+	return vv
 }
 
 func (b *InMemKVS) LoadAsString(k string) string {
@@ -88,7 +84,11 @@ func (b *InMemKVS) LoadAsString(k string) string {
 	if !exists {
 		return ""
 	}
-	return conv.AnyToString(v)
+	vv, err := conv.AnyToString(v)
+	if err != nil {
+		panic(err)
+	}
+	return vv
 }
 
 func (b *InMemKVS) LoadAsStringOr(k string, d string) string {
@@ -111,42 +111,11 @@ func (b *InMemKVS) LoadAsIntOr(k string, d int) int {
 	if v == nil {
 		return d
 	}
-	switch vt := v.(type) {
-	case string:
-		i, err := strconv.Atoi(vt)
-		if err != nil {
-			panic(err)
-		}
-		return i
-	case *string:
-		i, err := strconv.Atoi(*vt)
-		if err != nil {
-			panic(err)
-		}
-		return i
-	case int8:
-		return int(vt)
-	case *int8:
-		return int(*vt)
-	case int16:
-		return int(vt)
-	case *int16:
-		return int(*vt)
-	case int32:
-		return int(vt)
-	case *int32:
-		return int(*vt)
-	case int64:
-		return int(vt)
-	case *int64:
-		return int(*vt)
-	case int:
-		return vt
-	case *int:
-		return *vt
-	default:
-		panic("unexpected value type")
+	vv, err := conv.ToInt(v)
+	if err != nil {
+		panic(err)
 	}
+	return vv
 }
 
 func (b *InMemKVS) LoadAsUint(k string) uint {
@@ -161,42 +130,11 @@ func (b *InMemKVS) LoadAsUintOr(k string, d uint) uint {
 	if v == nil {
 		return d
 	}
-	switch vt := v.(type) {
-	case string:
-		i, err := strconv.ParseUint(vt, 10, 0)
-		if err != nil {
-			panic(err)
-		}
-		return uint(i)
-	case *string:
-		i, err := strconv.ParseUint(*vt, 10, 0)
-		if err != nil {
-			panic(err)
-		}
-		return uint(i)
-	case uint8:
-		return uint(vt)
-	case *uint8:
-		return uint(*vt)
-	case uint16:
-		return uint(vt)
-	case *uint16:
-		return uint(*vt)
-	case uint32:
-		return uint(vt)
-	case *uint32:
-		return uint(*vt)
-	case uint64:
-		return uint(vt)
-	case *uint64:
-		return uint(*vt)
-	case uint:
-		return vt
-	case *uint:
-		return *vt
-	default:
-		panic("unexpected value type")
+	vv, err := conv.ToUint(v)
+	if err != nil {
+		panic(err)
 	}
+	return vv
 }
 
 func (b *InMemKVS) LoadAsFloat(k string) float64 {
@@ -211,30 +149,11 @@ func (b *InMemKVS) LoadAsFloatOr(k string, d float64) float64 {
 	if v == nil {
 		return d
 	}
-	switch vt := v.(type) {
-	case string:
-		f, err := strconv.ParseFloat(vt, 64)
-		if err != nil {
-			panic(err)
-		}
-		return f
-	case *string:
-		f, err := strconv.ParseFloat(*vt, 64)
-		if err != nil {
-			panic(err)
-		}
-		return f
-	case float32:
-		return float64(vt)
-	case *float32:
-		return float64(*vt)
-	case float64:
-		return vt
-	case *float64:
-		return *vt
-	default:
-		panic("unexpected value type")
+	vv, err := conv.ToFloat(v)
+	if err != nil {
+		panic(err)
 	}
+	return vv
 }
 
 func (b *InMemKVS) LoadTo(k string, to any) error {
@@ -262,14 +181,14 @@ func (b *InMemKVS) Range(f func(k string, v any) bool) {
 }
 
 func (b *InMemKVS) CollectAsString() map[string]string {
+	var err error
 	result := make(map[string]string)
 	b.Range(func(k string, v any) bool {
-		result[k] = conv.AnyToString(v)
+		result[k], err = conv.AnyToString(v)
+		if err != nil {
+			panic(err)
+		}
 		return true
 	})
 	return result
-}
-
-func (b *InMemKVS) Close() error {
-	return nil
 }
