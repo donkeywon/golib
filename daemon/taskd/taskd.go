@@ -33,6 +33,14 @@ type Taskd struct {
 	pool        *pond.WorkerPool
 	taskMarkMap *sync.Map
 	taskMap     *sync.Map
+
+	createHooks        []task.Hook
+	initHooks          []task.Hook
+	submitHooks        []task.Hook
+	startHooks         []task.Hook
+	doneHooks          []task.Hook
+	stepDoneHooks      []task.StepHook
+	deferStepDoneHooks []task.StepHook
 }
 
 func New() *Taskd {
@@ -111,13 +119,18 @@ func (td *Taskd) submit(taskCfg *task.Cfg, wait bool, must bool) (*task.Task, bo
 	}
 
 	t, err := td.createTask(taskCfg)
+	td.hookCreate(t, err)
 	if err != nil {
 		td.unmarkTaskID(taskCfg.ID)
 		td.Error("create task fail", err, "cfg", taskCfg)
 		return t, false, errs.Wrap(err, "create task fail")
 	}
 
+	t.RegisterStepDoneHook(td.stepDoneHooks...)
+	t.RegisterDeferStepDoneHook(td.deferStepDoneHooks...)
+
 	err = td.initTask(t)
+	td.hookInit(t, err)
 	if err != nil {
 		td.unmarkTaskID(taskCfg.ID)
 		td.Error("init task fail", err, "cfg", taskCfg)
@@ -125,6 +138,7 @@ func (td *Taskd) submit(taskCfg *task.Cfg, wait bool, must bool) (*task.Task, bo
 	}
 
 	f := func() {
+		td.hookStart(t)
 		go td.listenTask(t)
 		runner.Start(t)
 	}
@@ -146,6 +160,7 @@ func (td *Taskd) submit(taskCfg *task.Cfg, wait bool, must bool) (*task.Task, bo
 		}
 		submitted = true
 	}
+	td.hookSubmit(t, submitted, wait)
 
 	return t, submitted, t.Err()
 }
@@ -192,9 +207,40 @@ func (td *Taskd) unmarkTask(t *task.Task) {
 
 func (td *Taskd) listenTask(t *task.Task) {
 	<-t.Done()
+	td.hookDone(t)
 	td.Info("listen done by task done", "task_id", t.Cfg.ID)
 	td.unmarkTaskID(t.Cfg.ID)
 	td.unmarkTask(t)
+}
+
+func (td *Taskd) hookCreate(t *task.Task, err error) {
+	for _, h := range td.createHooks {
+		h(t, err, nil)
+	}
+}
+
+func (td *Taskd) hookInit(t *task.Task, err error) {
+	for _, h := range td.initHooks {
+		h(t, err, nil)
+	}
+}
+
+func (td *Taskd) hookSubmit(t *task.Task, submitted bool, wait bool) {
+	for _, h := range td.submitHooks {
+		h(t, nil, &task.HookExtraData{Submitted: submitted, SubmitWait: wait})
+	}
+}
+
+func (td *Taskd) hookStart(t *task.Task) {
+	for _, h := range td.startHooks {
+		h(t, nil, nil)
+	}
+}
+
+func (td *Taskd) hookDone(t *task.Task) {
+	for _, h := range td.doneHooks {
+		h(t, t.Err(), nil)
+	}
 }
 
 func (td *Taskd) HasTask(taskID string) bool {
@@ -216,4 +262,32 @@ func TrySubmit(cfg *task.Cfg) (*task.Task, bool, error) {
 
 func HasTask(taskID string) bool {
 	return _t.HasTask(taskID)
+}
+
+func OnTaskCreate(hooks ...task.Hook) {
+	_t.createHooks = append(_t.createHooks, hooks...)
+}
+
+func OnTaskInit(hooks ...task.Hook) {
+	_t.initHooks = append(_t.initHooks, hooks...)
+}
+
+func OnTaskSubmit(hooks ...task.Hook) {
+	_t.submitHooks = append(_t.submitHooks, hooks...)
+}
+
+func OnTaskStart(hooks ...task.Hook) {
+	_t.startHooks = append(_t.startHooks, hooks...)
+}
+
+func OnTaskDone(hooks ...task.Hook) {
+	_t.doneHooks = append(_t.doneHooks, hooks...)
+}
+
+func OnTaskStepDone(hooks ...task.StepHook) {
+	_t.stepDoneHooks = append(_t.stepDoneHooks, hooks...)
+}
+
+func OnTaskDeferStepDone(hooks ...task.StepHook) {
+	_t.deferStepDoneHooks = append(_t.deferStepDoneHooks, hooks...)
 }
