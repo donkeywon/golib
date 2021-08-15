@@ -17,6 +17,7 @@ import (
 	"github.com/donkeywon/golib/plugin"
 	"github.com/donkeywon/golib/runner"
 	"github.com/donkeywon/golib/util"
+	"github.com/donkeywon/golib/util/reflects"
 	"github.com/donkeywon/golib/util/signals"
 	"github.com/goccy/go-yaml"
 	"go.uber.org/zap"
@@ -107,7 +108,7 @@ func (b *Booter) Init() error {
 	var err error
 
 	// use default logger as temp logger
-	util.ReflectSet(b.Runner, log.Default())
+	reflects.Set(b.Runner, log.Default())
 
 	b.cfgMap = buildCfgMap()
 	b.cfgMap["log"] = b.logCfg
@@ -146,7 +147,7 @@ func (b *Booter) Init() error {
 	if err != nil {
 		return errs.Wrap(err, "build logger fail")
 	}
-	ok := util.ReflectSet(b.Runner, l.Named(b.Name()))
+	ok := reflects.Set(b.Runner, l.Named(b.Name()))
 	if !ok {
 		return errs.Errorf("boot set logger fail")
 	}
@@ -217,7 +218,7 @@ func (b *Booter) loadCfgFromFlag() error {
 
 func (b *Booter) loadCfgFromEnv() error {
 	for daemonType, cfg := range b.cfgMap {
-		if !util.IsStructPointer(cfg) {
+		if !reflects.IsStructPointer(cfg) {
 			continue
 		}
 		err := env.ParseWithOptions(cfg, env.Options{
@@ -275,7 +276,7 @@ func (b *Booter) loadCfg() error {
 
 func (b *Booter) validateCfg() error {
 	for s, cfg := range b.cfgMap {
-		if !util.IsStructPointer(cfg) {
+		if !reflects.IsStructPointer(cfg) {
 			continue
 		}
 		err := util.V.Struct(cfg)
@@ -316,7 +317,7 @@ func buildFlagParser(data interface{}, cfgMap map[DaemonType]interface{}) (*flag
 	var err error
 	parser := flags.NewParser(data, flags.Default, flags.FlagTagPrefix(FlagTagPrefix))
 	for daemonType, cfg := range cfgMap {
-		if !util.IsStructPointer(cfg) {
+		if !reflects.IsStructPointer(cfg) {
 			continue
 		}
 		_, err = parser.AddGroup(string(daemonType)+" options", "", cfg)

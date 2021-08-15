@@ -33,9 +33,9 @@ func GetHostIP() (string, error) {
 	}
 
 	if strings.HasPrefix(ip, "127.") || ip == "" {
-		ip, err = GetHostIPByInterface("eth0")
+		ip, err = GetHostIPByInterface("eth0", true)
 		if strings.HasPrefix(ip, "127.") || ip == "" {
-			ip, err = GetHostIPByInterface("bond0")
+			ip, err = GetHostIPByInterface("bond0", true)
 		}
 	}
 
@@ -55,7 +55,7 @@ func GetHostIPByHostname(h string) (string, error) {
 	return addrs[0], nil
 }
 
-func GetHostIPByInterface(iface string) (string, error) {
+func GetHostIPByInterface(iface string, v4 bool) (string, error) {
 	ifaces, err := net.Interfaces()
 	if err != nil {
 		return "", err
@@ -77,11 +77,15 @@ func GetHostIPByInterface(iface string) (string, error) {
 		switch v := addrs[0].(type) {
 		case *net.IPNet:
 			if !v.IP.IsLoopback() {
-				return v.IP.String(), nil
+				if v4 && v.IP.To4() != nil || !v4 && v.IP.To16() != nil {
+					return v.IP.String(), nil
+				}
 			}
 		case *net.IPAddr:
 			if !v.IP.IsLoopback() {
-				return v.IP.String(), nil
+				if v4 && v.IP.To4() != nil || !v4 && v.IP.To16() != nil {
+					return v.IP.String(), nil
+				}
 			}
 		}
 	}

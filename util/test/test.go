@@ -5,7 +5,7 @@ import (
 
 	"github.com/donkeywon/golib/log"
 	"github.com/donkeywon/golib/runner"
-	"github.com/donkeywon/golib/util"
+	"github.com/donkeywon/golib/util/reflects"
 )
 
 var (
@@ -19,7 +19,7 @@ var (
 
 func init() {
 	debugRunner.SetCtx(context.Background())
-	util.ReflectSet(debugRunner.Runner, l)
+	reflects.Set(debugRunner.Runner, l)
 }
 
 // DebugInherit for test only.

@@ -11,6 +11,7 @@ import (
 	"github.com/donkeywon/golib/runner"
 	"github.com/donkeywon/golib/util"
 	"github.com/donkeywon/golib/util/cloud"
+	"github.com/donkeywon/golib/util/ethu"
 	"golang.org/x/time/rate"
 )
 
@@ -75,7 +76,7 @@ func (h *HostRateLimiter) Init() error {
 		h.setRxTxLimit(float64(h.FixedMBps), float64(h.FixedMBps))
 	} else {
 		h.Info("use nic", "nic", h.Nic)
-		h.nicSpeedMbps, err = util.GetNicSpeed(h.Nic)
+		h.nicSpeedMbps, err = ethu.GetNicSpeed(h.Nic)
 		if err != nil {
 			h.Error("get nic speed fail", err)
 			h.Info("try get nic speed on cloud")
@@ -147,7 +148,7 @@ func (h *HostRateLimiter) monitor() {
 		case <-t.C:
 			h.monitorCurSpeed()
 
-			stats, err := util.NetDevStats(nic)
+			stats, err := ethu.NetDevStats(nic)
 			if err != nil {
 				h.setRxTxLimit(h.minMBps, h.minMBps)
 				h.Error("get net dev stats fail, use min limit", err, "min_limit", i2MBps(h.MinMBps))

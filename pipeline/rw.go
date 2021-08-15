@@ -18,8 +18,8 @@ import (
 	"github.com/donkeywon/golib/plugin"
 	"github.com/donkeywon/golib/ratelimit"
 	"github.com/donkeywon/golib/runner"
-	"github.com/donkeywon/golib/util"
 	"github.com/donkeywon/golib/util/bytespool"
+	"github.com/donkeywon/golib/util/reflects"
 	"github.com/zeebo/xxh3"
 )
 
@@ -566,7 +566,7 @@ func (b *BaseRW) read(p []byte) (nr int, err error) {
 			h := b.readHooks[i]
 			hookErr := h(nr, p, err, endTS-startTS)
 			if hookErr != nil {
-				err = errors.Join(err, errs.Wrapf(hookErr, "read hook(%d) %s fail", i, util.ReflectGetFuncName(h)))
+				err = errors.Join(err, errs.Wrapf(hookErr, "read hook(%d) %s fail", i, reflects.GetFuncName(h)))
 			}
 		}
 	}()
@@ -582,7 +582,7 @@ func (b *BaseRW) write(p []byte) (nw int, err error) {
 			h := b.writeHooks[i]
 			hookErr := h(nw, p, err, endTS-startTS)
 			if hookErr != nil {
-				err = errors.Join(err, errs.Wrapf(hookErr, "write hook(%d) %s fail", i, util.ReflectGetFuncName(h)))
+				err = errors.Join(err, errs.Wrapf(hookErr, "write hook(%d) %s fail", i, reflects.GetFuncName(h)))
 			}
 		}
 	}()
