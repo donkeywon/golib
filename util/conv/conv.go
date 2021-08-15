@@ -1,11 +1,11 @@
 package conv
 
 import (
+	"fmt"
 	"reflect"
 	"strconv"
 	"time"
 
-	"github.com/donkeywon/golib/errs"
 	"github.com/donkeywon/golib/util/jsonu"
 )
 
@@ -116,7 +116,7 @@ func ToBool(v any) (bool, error) {
 	case *bool:
 		vv = *vt
 	default:
-		err = errs.Errorf("unexpected value type, expected: string or bool, actual: %s", reflect.TypeOf(v))
+		err = fmt.Errorf("unexpected value type, expected: string or bool, actual: %s", reflect.TypeOf(v))
 	}
 	return vv, err
 }
@@ -153,7 +153,7 @@ func ToInt(v any) (int, error) {
 	case *int:
 		vv = *vt
 	default:
-		err = errs.Errorf("unexpected value type, expected: string or any integer type, actual: %s", reflect.TypeOf(v))
+		err = fmt.Errorf("unexpected value type, expected: string or any integer type, actual: %s", reflect.TypeOf(v))
 	}
 	return vv, err
 }
@@ -193,7 +193,7 @@ func ToUint(v any) (uint, error) {
 	case *uint:
 		vv = *vt
 	default:
-		err = errs.Errorf("unexpected value type, expected: string or any unsigned integer type, actual: %s", reflect.TypeOf(v))
+		err = fmt.Errorf("unexpected value type, expected: string or any unsigned integer type, actual: %s", reflect.TypeOf(v))
 	}
 	return vv, err
 }
@@ -217,7 +217,7 @@ func ToFloat(v any) (float64, error) {
 	case *float64:
 		vv = *vt
 	default:
-		err = errs.Errorf("unexpected value type, expected: string or any float type, actual: %s", reflect.TypeOf(v))
+		err = fmt.Errorf("unexpected value type, expected: string or any float type, actual: %s", reflect.TypeOf(v))
 	}
 	return vv, err
 }

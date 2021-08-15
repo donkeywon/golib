@@ -62,8 +62,7 @@ func (f *fundamental) Format(s fmt.State, verb rune) {
 	switch verb {
 	case 'v':
 		if s.Flag('+') {
-			io.WriteString(s, f.msg)
-			f.stack.Format(s, verb)
+			ErrToStack(f, s, 0)
 			return
 		}
 		fallthrough
@@ -104,13 +103,7 @@ func (w *withStack) Format(s fmt.State, verb rune) {
 	switch verb {
 	case 'v':
 		if s.Flag('+') {
-			fmt.Fprintf(s, "%+v", w.Cause())
-			sf := (*w.stack)[:w.foldAt]
-			(&sf).Format(s, verb)
-			stackLen := len(*w.stack)
-			if w.foldAt < stackLen {
-				fmt.Fprintf(s, "\n\t... %d more", stackLen-w.foldAt)
-			}
+			ErrToStack(w, s, 0)
 			return
 		}
 		fallthrough
@@ -200,8 +193,7 @@ func (w *withMessage) Format(s fmt.State, verb rune) {
 	switch verb {
 	case 'v':
 		if s.Flag('+') {
-			fmt.Fprintf(s, "%+v\n", w.Cause())
-			io.WriteString(s, "cause: "+w.msg)
+			ErrToStack(w, s, 0)
 			return
 		}
 		fallthrough

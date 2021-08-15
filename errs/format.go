@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/donkeywon/golib/util/bufferpool"
+	"github.com/donkeywon/golib/util/conv"
 )
 
 var (
@@ -46,6 +47,8 @@ func (errFmtState) Flag(c int) bool {
 func (errFmtState) Width() (wid int, ok bool)      { panic("should not be called") }
 func (errFmtState) Precision() (prec int, ok bool) { panic("should not be called") }
 
+var newLineBytes = []byte{'\n'}
+
 func writeIndent(w io.Writer, indent []byte, indentCount int, skipFirst bool, s string) {
 	first := true
 	for len(s) > 0 {
@@ -74,7 +77,7 @@ func ErrToStackString(err error) string {
 	return buf.String()
 }
 
-func ErrToStack(err error, buf *bufferpool.Buffer, errsDepth int) {
+func ErrToStack(err error, w io.Writer, errsDepth int) {
 	switch terr := err.(type) {
 	case wrappedErrs, anotherWrappedErrs:
 		var errs []error
@@ -86,57 +89,51 @@ func ErrToStack(err error, buf *bufferpool.Buffer, errsDepth int) {
 		if len(errs) < 1 {
 			return
 		} else if len(errs) == 1 {
-			ErrToStack(errs[0], buf, errsDepth)
+			ErrToStack(errs[0], w, errsDepth)
 		} else {
-			writeIndent(buf, _errsIndent, errsDepth, false, _errsPrefix)
+			writeIndent(w, _errsIndent, errsDepth, false, _errsPrefix)
 			for _, e := range errs {
-				buf.WriteByte('\n')
-				writeIndent(buf, _errsIndent, errsDepth+1, false, _errsSeparator)
+				w.Write(newLineBytes)
+				writeIndent(w, _errsIndent, errsDepth+1, false, _errsSeparator)
 
 				_buf := bufferpool.GetBuffer()
 				ErrToStack(e, _buf, errsDepth+2)
-				writeIndent(buf, _errsIndent, 0, true, strings.TrimLeft(_buf.String(), " \n"))
+				writeIndent(w, _errsIndent, 0, true, strings.TrimLeft(_buf.String(), " \n"))
 				_buf.Free()
 			}
 		}
 	case wrappedErr:
-		ErrToStack(terr.Unwrap(), buf, errsDepth)
+		ErrToStack(terr.Unwrap(), w, errsDepth)
 
 		if emsg, ok := err.(*withMessage); ok {
-			buf.WriteByte('\n')
-			writeIndent(buf, _errsIndent, errsDepth, false, "cause: ")
-			buf.WriteString(emsg.msg)
+			w.Write(newLineBytes)
+			writeIndent(w, _errsIndent, errsDepth, false, "cause: ")
+			w.Write(conv.String2Bytes(emsg.msg))
 		} else if estack, ok := err.(*withStack); ok {
 			sf := (*estack.stack)[:estack.foldAt]
 			stackLen := len(*estack.stack)
 
 			_buf := bufferpool.GetBuffer()
 			(&sf).Format(errFmtState{_buf}, 'v')
-			writeIndent(buf, _errsIndent, errsDepth, false, _buf.String())
+			writeIndent(w, _errsIndent, errsDepth, false, _buf.String())
 			_buf.Free()
 
 			if estack.foldAt < stackLen {
-				buf.WriteByte('\n')
-				writeIndent(buf, _errsIndent, errsDepth, false, fmt.Sprintf("\t... %d more", stackLen-estack.foldAt))
+				w.Write(newLineBytes)
+				writeIndent(w, _errsIndent, errsDepth, false, fmt.Sprintf("\t... %d more", stackLen-estack.foldAt))
 			}
 		} else {
-			buf.WriteByte('\n')
-			writeIndent(buf, _errsIndent, errsDepth, false, "cause: ")
-			buf.WriteString(err.Error())
+			w.Write(newLineBytes)
+			writeIndent(w, _errsIndent, errsDepth, false, "cause: ")
+			w.Write(conv.String2Bytes(err.Error()))
 		}
 	case fmt.Formatter:
-		if buf.Len() > 0 {
-			buf.WriteByte('\n')
-		}
 		_buf := bufferpool.GetBuffer()
 		terr.Format(errFmtState{_buf}, 'v')
-		writeIndent(buf, _errsIndent, errsDepth, false, strings.TrimLeft(_buf.String(), " \n"))
+		writeIndent(w, _errsIndent, errsDepth, false, strings.TrimLeft(conv.Bytes2String(_buf.Bytes()), " \n"))
 		_buf.Free()
 	default:
-		if buf.Len() > 0 {
-			buf.WriteByte('\n')
-		}
-		buf.WriteString(terr.Error())
+		w.Write(conv.String2Bytes(terr.Error()))
 	}
 }
 

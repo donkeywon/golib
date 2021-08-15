@@ -2,6 +2,7 @@ package errs
 
 import (
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/donkeywon/golib/util/bufferpool"
@@ -43,7 +44,7 @@ func errF() error {
 
 func TestErr(t *testing.T) {
 	err := errF()
-	t.Logf("%+v", err)
+	fmt.Printf("%+v", err)
 }
 
 func TestFormat(t *testing.T) {
