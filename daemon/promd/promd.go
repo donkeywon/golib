@@ -20,7 +20,7 @@ type Promd struct {
 	plugin.Plugin
 	*Cfg
 
-	mu  sync.Mutex
+	mu  sync.RWMutex
 	m   map[string]prometheus.Metric
 	reg *prometheus.Registry
 }
@@ -88,10 +88,13 @@ func (p *Promd) AddCounter(name string, v float64) {
 }
 
 func (p *Promd) loadOrStore(name string, creator func() prometheus.Metric) prometheus.Metric {
+	p.mu.RLock()
 	m, exists := p.m[name]
 	if exists {
+		p.mu.RUnlock()
 		return m
 	}
+	p.mu.RUnlock()
 
 	p.mu.Lock()
 	m, exists = p.m[name]
