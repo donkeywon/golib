@@ -21,7 +21,14 @@ type Type string
 
 type Collector func(*Task) interface{}
 
-type StepDoneHook func(*Task, int, Step)
+type StepHook func(*Task, int, Step)
+
+type Hook func(*Task, error, *HookExtraData)
+
+type HookExtraData struct {
+	Submitted  bool
+	SubmitWait bool
+}
 
 type StepCfg struct {
 	Type StepType    `json:"type" validate:"required" yaml:"type"`
@@ -72,8 +79,8 @@ type Task struct {
 	plugin.Plugin
 	*Cfg
 
-	stepDoneHooks      []StepDoneHook
-	deferStepDoneHooks []StepDoneHook
+	stepDoneHooks      []StepHook
+	deferStepDoneHooks []StepHook
 
 	steps      []Step
 	deferSteps []Step
@@ -143,11 +150,11 @@ func (t *Task) Stop() error {
 	return nil
 }
 
-func (t *Task) RegisterStepDoneHook(hook ...StepDoneHook) {
+func (t *Task) RegisterStepDoneHook(hook ...StepHook) {
 	t.stepDoneHooks = append(t.stepDoneHooks, hook...)
 }
 
-func (t *Task) RegisterDeferStepDoneHook(hook ...StepDoneHook) {
+func (t *Task) RegisterDeferStepDoneHook(hook ...StepHook) {
 	t.deferStepDoneHooks = append(t.deferStepDoneHooks, hook...)
 }
 
