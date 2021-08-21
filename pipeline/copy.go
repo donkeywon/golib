@@ -49,9 +49,9 @@ func (cp *CopyRW) Init() error {
 
 func (cp *CopyRW) Start() error {
 	defer func() {
-		err := recover()
-		if err != nil {
-			cp.AppendError(errs.Errorf("copy panic: %+v", err))
+		e := recover()
+		if e != nil {
+			cp.AppendError(errs.PanicToErrWithMsg(e, "copy panic"))
 		}
 
 		closeErr := cp.Close()

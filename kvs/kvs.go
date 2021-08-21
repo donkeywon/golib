@@ -10,7 +10,6 @@ type Cfg struct {
 type KVS interface {
 	Store(k string, v any)
 	StoreAsString(k string, v any)
-	Stores(map[string]any)
 	Load(k string) (any, bool)
 	LoadOrStore(k string, v any) (any, bool)
 	LoadAndDelete(k string) (any, bool)

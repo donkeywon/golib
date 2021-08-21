@@ -1,14 +1,16 @@
 package consts
 
 const (
-	FieldStartTimeNano = "start_time_nano"
-	FieldStopTimeNano  = "stop_time_nano"
+	FieldStartTimeNano = "startTimeNano"
+	FieldStopTimeNano  = "stopTimeNano"
 
-	FieldStartTimeSec = "start_time_sec"
-	FieldStopTimeSec  = "stop_time_sec"
+	FieldStartTimeSec = "startTimeSec"
+	FieldStopTimeSec  = "stopTimeSec"
 
 	FieldCmdStdout   = "stdout"
 	FieldCmdStderr   = "stderr"
 	FieldCmdExitCode = "exit"
 	FieldCmdSignaled = "signaled"
+
+	FieldPipelineResult = "pipelineResult"
 )

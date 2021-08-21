@@ -41,16 +41,6 @@ func (b *InMemKVS) StoreAsString(k string, v any) {
 	b.m.Store(k, s)
 }
 
-func (b *InMemKVS) Stores(m map[string]any) {
-	if m == nil {
-		return
-	}
-
-	for k, v := range m {
-		b.Store(k, v)
-	}
-}
-
 func (b *InMemKVS) Load(k string) (any, bool) {
 	return b.m.Load(k)
 }

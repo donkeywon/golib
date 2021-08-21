@@ -75,16 +75,26 @@ func NewRWGroup() *RWGroup {
 }
 
 func (g *RWGroup) Init() error {
-	g.starter = g.createRW(g.RWGroupCfg.Starter)
+	var err error
+	g.starter, err = g.createRW(g.RWGroupCfg.Starter)
+	if err != nil {
+		return errs.Wrapf(err, "create starter rw(%s) fail", g.RWGroupCfg.Starter.Type)
+	}
 
 	g.readers = make([]RW, len(g.RWGroupCfg.Readers))
 	for i, cfg := range g.RWGroupCfg.Readers {
-		g.readers[i] = g.createRW(cfg)
+		g.readers[i], err = g.createRW(cfg)
+		if err != nil {
+			return errs.Wrapf(err, "create %d reader rw(%s) fail", i, cfg.Type)
+		}
 	}
 
 	g.writers = make([]RW, len(g.RWGroupCfg.Writers))
 	for i, cfg := range g.RWGroupCfg.Writers {
-		g.writers[i] = g.createRW(cfg)
+		g.writers[i], err = g.createRW(cfg)
+		if err != nil {
+			return errs.Wrapf(err, "create %d writer rw(%s) fail", i, cfg.Type)
+		}
 	}
 
 	return g.Runner.Init()
@@ -164,10 +174,13 @@ func (g *RWGroup) FirstReader() RW {
 	return g.readers[0]
 }
 
-func (g *RWGroup) createRW(rwCfg *RWCfg) RW {
-	rw := Create(rwCfg.Role, rwCfg.Type, rwCfg.Cfg, rwCfg.CommonCfg)
+func (g *RWGroup) createRW(rwCfg *RWCfg) (RW, error) {
+	rw, err := Create(rwCfg.Role, rwCfg.Type, rwCfg.Cfg, rwCfg.CommonCfg)
+	if err != nil {
+		return nil, errs.Wrapf(err, "create rw(%s) fail", rwCfg.Type)
+	}
 	rw.Inherit(g)
-	return rw
+	return rw, nil
 }
 
 func (g *RWGroup) initReaders() error {
