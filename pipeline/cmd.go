@@ -28,7 +28,7 @@ type CmdRW struct {
 
 func NewCmdRW() *CmdRW {
 	return &CmdRW{
-		RW: NewBaseRW(string(RWTypeCmd)),
+		RW: CreateBaseRW(string(RWTypeCmd)),
 	}
 }
 

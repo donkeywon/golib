@@ -80,7 +80,7 @@ type StoreRW struct {
 
 func NewStoreRW() *StoreRW {
 	return &StoreRW{
-		RW: NewBaseRW(string(RWTypeStore)),
+		RW: CreateBaseRW(string(RWTypeStore)),
 	}
 }
 

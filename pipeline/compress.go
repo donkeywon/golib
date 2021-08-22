@@ -51,7 +51,7 @@ type CompressRW struct {
 
 func NewCompressRW() *CompressRW {
 	return &CompressRW{
-		RW: NewBaseRW(string(RWTypeCompress)),
+		RW: CreateBaseRW(string(RWTypeCompress)),
 	}
 }
 

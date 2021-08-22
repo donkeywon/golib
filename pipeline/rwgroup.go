@@ -175,7 +175,7 @@ func (g *RWGroup) FirstReader() RW {
 }
 
 func (g *RWGroup) createRW(rwCfg *RWCfg) (RW, error) {
-	rw, err := Create(rwCfg.Role, rwCfg.Type, rwCfg.Cfg, rwCfg.CommonCfg)
+	rw, err := CreateRW(rwCfg)
 	if err != nil {
 		return nil, errs.Wrapf(err, "create rw(%s) fail", rwCfg.Type)
 	}
