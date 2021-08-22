@@ -28,8 +28,8 @@ func newBase(name string) Step {
 	}
 }
 
-func (b *baseStep) Store(k string, v any) {
-	b.Runner.StoreAsString(k, v)
+func (b *baseStep) Store(k string, v any) error {
+	return b.Runner.StoreAsString(k, v)
 }
 
 func (b *baseStep) GetTask() *Task {
