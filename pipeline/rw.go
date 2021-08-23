@@ -64,7 +64,7 @@ type RWRole string
 
 func CreateRW(rwCfg *RWCfg) (RW, error) {
 	cfg := plugin.CreateCfg(rwCfg.Type)
-	err := conv.ConvertOrMerge(cfg, rwCfg)
+	err := conv.ConvertOrMerge(cfg, rwCfg.Cfg)
 	if err != nil {
 		return nil, errs.Wrapf(err, "invalid rw(%s) cfg", rwCfg.Type)
 	}
