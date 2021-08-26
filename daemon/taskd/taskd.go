@@ -10,7 +10,7 @@ import (
 	"github.com/donkeywon/golib/plugin"
 	"github.com/donkeywon/golib/runner"
 	"github.com/donkeywon/golib/task"
-	"github.com/donkeywon/golib/util"
+	"github.com/donkeywon/golib/util/vtil"
 )
 
 const DaemonTypeTaskd boot.DaemonType = "taskd"
@@ -104,7 +104,7 @@ func (td *Taskd) submit(taskCfg *task.Cfg, wait bool, must bool) (*task.Task, bo
 	default:
 	}
 
-	err := util.V.Struct(taskCfg)
+	err := vtil.Struct(taskCfg)
 	if err != nil {
 		return nil, false, errs.Wrap(err, "invalid task cfg")
 	}

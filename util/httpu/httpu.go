@@ -8,7 +8,7 @@ import (
 
 	"github.com/donkeywon/golib/errs"
 	"github.com/donkeywon/golib/util/conv"
-	"github.com/donkeywon/golib/util/jsonu"
+	"github.com/donkeywon/golib/util/jsons"
 	"github.com/goccy/go-yaml"
 	"github.com/pelletier/go-toml/v2"
 	"google.golang.org/protobuf/proto"
@@ -102,7 +102,7 @@ func RespJSON(statusCode int, data interface{}, w http.ResponseWriter, headersKV
 		return
 	}
 
-	bs, err := jsonu.Marshal(data)
+	bs, err := jsons.Marshal(data)
 	if err != nil {
 		panic(errs.Wrap(err, "data marshal to json fail"))
 	}
@@ -123,7 +123,7 @@ func setContentTypeHeader(w http.ResponseWriter, t string) {
 }
 
 func ReqToJSON(r *http.Request, obj interface{}) error {
-	return jsonu.NewDecoder(r.Body).Decode(obj)
+	return jsons.NewDecoder(r.Body).Decode(obj)
 }
 
 func ReqToXML(r *http.Request, obj interface{}) error {

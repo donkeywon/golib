@@ -16,9 +16,10 @@ import (
 	"github.com/donkeywon/golib/log"
 	"github.com/donkeywon/golib/plugin"
 	"github.com/donkeywon/golib/runner"
-	"github.com/donkeywon/golib/util"
+	"github.com/donkeywon/golib/util/paths"
 	"github.com/donkeywon/golib/util/reflects"
 	"github.com/donkeywon/golib/util/signals"
+	"github.com/donkeywon/golib/util/vtil"
 	"github.com/goccy/go-yaml"
 	"go.uber.org/zap"
 )
@@ -39,7 +40,7 @@ func Boot(opt ...Option) {
 		b.Error("boot init fail", err)
 		os.Exit(1)
 	}
-	err = util.V.Struct(b)
+	err = vtil.Struct(b)
 	if err != nil {
 		b.Error("boot validate fail", err)
 		os.Exit(1)
@@ -235,10 +236,10 @@ func (b *Booter) loadCfgFromFile() error {
 	cfgPath := b.options.CfgPath
 	if cfgPath == "" {
 		cfgPath = consts.CfgPath
-		if !util.FileExist(cfgPath) {
+		if !paths.FileExist(cfgPath) {
 			return nil
 		}
-	} else if !util.FileExist(cfgPath) {
+	} else if !paths.FileExist(cfgPath) {
 		return errs.Errorf("config file not exists: %s", cfgPath)
 	}
 
@@ -279,7 +280,7 @@ func (b *Booter) validateCfg() error {
 		if !reflects.IsStructPointer(cfg) {
 			continue
 		}
-		err := util.V.Struct(cfg)
+		err := vtil.Struct(cfg)
 		if err != nil {
 			return errs.Wrapf(err, "invalid daemon(%s) cfg", s)
 		}

@@ -9,6 +9,7 @@ import (
 	"github.com/donkeywon/golib/errs"
 	"github.com/donkeywon/golib/log/core"
 	"github.com/donkeywon/golib/util"
+	"github.com/donkeywon/golib/util/paths"
 
 	"go.uber.org/zap"
 	"gopkg.in/natefinch/lumberjack.v2"
@@ -61,9 +62,9 @@ func (c *Cfg) Build(opts ...zap.Option) (*zap.Logger, error) {
 }
 
 func (c *Cfg) buildOutputs() ([]string, error) {
-	paths := util.Unique(strings.Split(c.Filepath, FilepathSplitter))
+	fps := util.Unique(strings.Split(c.Filepath, FilepathSplitter))
 	var outputs []string
-	for _, fp := range paths {
+	for _, fp := range fps {
 		fp = strings.TrimSpace(fp)
 		fpl := strings.ToLower(fp)
 		switch fpl {
@@ -72,7 +73,7 @@ func (c *Cfg) buildOutputs() ([]string, error) {
 		case "stderr":
 			outputs = append(outputs, "stderr")
 		default:
-			if !util.DirExist(filepath.Dir(fp)) {
+			if !paths.DirExist(filepath.Dir(fp)) {
 				return nil, errors.New("log dir not exists: " + fp)
 			}
 			lj := &lumberjack.Logger{

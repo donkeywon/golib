@@ -13,8 +13,8 @@ import (
 	"github.com/donkeywon/golib/pipeline"
 	"github.com/donkeywon/golib/ratelimit"
 	"github.com/donkeywon/golib/runner"
-	"github.com/donkeywon/golib/util"
 	"github.com/donkeywon/golib/util/cmd"
+	"github.com/donkeywon/golib/util/paths"
 )
 
 const DaemonTypeUpd boot.DaemonType = "upd"
@@ -90,7 +90,7 @@ func (u *Upd) upgrade(vi *VerInfo) error {
 
 	var err error
 	downloadPath := filepath.Join(u.DownloadDir, vi.Filename)
-	if util.FileExist(downloadPath) {
+	if paths.FileExist(downloadPath) {
 		u.Info("download dst path exists, remove it", "path", downloadPath)
 		err = os.RemoveAll(downloadPath)
 		if err != nil {
@@ -135,7 +135,7 @@ func (u *Upd) upgrade(vi *VerInfo) error {
 	if !strings.HasPrefix(upgradeDeployScriptPath, "/") {
 		upgradeDeployScriptPath = filepath.Join(extractDir, upgradeDeployScriptPath)
 	}
-	if !util.FileExist(upgradeDeployScriptPath) {
+	if !paths.FileExist(upgradeDeployScriptPath) {
 		return errs.Errorf("upgrade deploy script not exists: %s", upgradeDeployScriptPath)
 	}
 	res, err := cmd.Run("bash", upgradeDeployScriptPath)
@@ -149,7 +149,7 @@ func (u *Upd) upgrade(vi *VerInfo) error {
 		if !strings.HasPrefix(upgradeStartScriptPath, "/") {
 			upgradeStartScriptPath = filepath.Join(extractDir, upgradeStartScriptPath)
 		}
-		if !util.FileExist(upgradeStartScriptPath) {
+		if !paths.FileExist(upgradeStartScriptPath) {
 			return errs.Errorf("upgrade start script not exists: %s", upgradeStartScriptPath)
 		}
 
@@ -208,7 +208,7 @@ func downloadPackage(downloadDir string, filename string, ratelimitN int, storeC
 }
 
 func extractPackage(filepath string, dstDir string) ([]string, []string, error) {
-	if !util.DirExist(dstDir) {
+	if !paths.DirExist(dstDir) {
 		return nil, nil, errs.Errorf("extract dst dir not exists: %s", dstDir)
 	}
 	res, err := cmd.Run("tar", "xf", filepath, "-C", dstDir)

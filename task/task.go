@@ -8,8 +8,8 @@ import (
 	"github.com/donkeywon/golib/errs"
 	"github.com/donkeywon/golib/plugin"
 	"github.com/donkeywon/golib/runner"
-	"github.com/donkeywon/golib/util"
 	"github.com/donkeywon/golib/util/conv"
+	"github.com/donkeywon/golib/util/vtil"
 )
 
 func init() {
@@ -99,7 +99,7 @@ func New() *Task {
 }
 
 func (t *Task) Init() error {
-	err := util.V.Struct(t)
+	err := vtil.Struct(t)
 	if err != nil {
 		return err
 	}

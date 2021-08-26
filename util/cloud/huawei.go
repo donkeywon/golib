@@ -1,10 +1,10 @@
 package cloud
 
 import (
+	"encoding/json"
 	"time"
 
 	"github.com/donkeywon/golib/util/httpc"
-	"github.com/donkeywon/golib/util/jsonu"
 )
 
 type HuaweiEcsNetworkQosData struct {
@@ -36,7 +36,7 @@ func GetHuaweiEcsNetworkData() (*HuaweiEcsNetworkData, error) {
 	}
 
 	networkData := &HuaweiEcsNetworkData{}
-	err = jsonu.Unmarshal(data, networkData)
+	err = json.Unmarshal(data, networkData)
 	if err != nil {
 		return nil, err
 	}

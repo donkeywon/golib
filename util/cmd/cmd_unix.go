@@ -9,7 +9,7 @@ import (
 	"syscall"
 
 	"github.com/donkeywon/golib/errs"
-	"github.com/donkeywon/golib/util"
+	"github.com/donkeywon/golib/util/paths"
 )
 
 func beforeRunFromCfg(cfg *Cfg) []func(cmd *exec.Cmd) error {
@@ -27,7 +27,7 @@ func beforeRunFromCfg(cfg *Cfg) []func(cmd *exec.Cmd) error {
 	}
 	if cfg.WorkingDir != "" {
 		beforeRun = append(beforeRun, func(cmd *exec.Cmd) error {
-			if !util.DirExist(cfg.WorkingDir) {
+			if !paths.DirExist(cfg.WorkingDir) {
 				return errs.Errorf("working dir not exists: %s", cfg.WorkingDir)
 			}
 			cmd.Dir = cfg.WorkingDir

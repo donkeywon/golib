@@ -226,7 +226,7 @@ func newBase(name string) Runner {
 		stopDone:    make(chan struct{}),
 		done:        make(chan struct{}),
 		childrenMap: make(map[string]Runner),
-		KVS:         kvs.NewInMemKVS(),
+		KVS:         kvs.NewMemKVS(),
 	}
 	return br
 }
@@ -259,7 +259,7 @@ func (br *baseRunner) Init() error {
 		br.childrenMap = make(map[string]Runner)
 	}
 	if br.KVS == nil {
-		br.KVS = kvs.NewInMemKVS()
+		br.KVS = kvs.NewMemKVS()
 	}
 	if br.Ctx() == nil {
 		br.SetCtx(context.Background())
