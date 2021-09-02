@@ -2,6 +2,7 @@ package oss
 
 import (
 	"context"
+	"io"
 	"net/http"
 	"strconv"
 
@@ -104,7 +105,11 @@ func Delete(ctx context.Context, url string, ak string, sk string, region string
 }
 
 func Head(ctx context.Context, url string, ak string, sk string, region string) (*http.Response, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodHead, url, nil)
+	return Do(ctx, http.MethodHead, url, ak, sk, region, nil)
+}
+
+func Do(ctx context.Context, method string, url string, ak string, sk string, region string, body io.Reader) (*http.Response, error) {
+	req, err := http.NewRequestWithContext(ctx, method, url, body)
 	if err != nil {
 		return nil, err
 	}
