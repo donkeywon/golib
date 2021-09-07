@@ -1,4 +1,4 @@
-package test
+package tests
 
 import (
 	"context"
@@ -22,8 +22,8 @@ func init() {
 	reflects.Set(debugRunner.Runner, l)
 }
 
-// DebugInherit for test only.
-func DebugInherit(to runner.Runner) {
+// Init for test case only.
+func Init(to runner.Runner) {
 	to.WithLoggerFrom(debugRunner)
 	to.SetCtx(debugRunner.Ctx())
 }

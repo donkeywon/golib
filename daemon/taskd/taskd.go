@@ -26,9 +26,11 @@ var (
 )
 
 var _td = &Taskd{
-	Runner:    runner.Create(string(DaemonTypeTaskd)),
-	taskMap:   make(map[string]*task.Task),
-	taskIDMap: make(map[string]struct{}),
+	Runner:           runner.Create(string(DaemonTypeTaskd)),
+	taskMap:          make(map[string]*task.Task),
+	taskIDMap:        make(map[string]struct{}),
+	taskIDRunningMap: make(map[string]struct{}),
+	taskPausingMap:   make(map[string]*task.Task),
 }
 
 type Taskd struct {
@@ -62,6 +64,7 @@ func (td *Taskd) Init() error {
 }
 
 func (td *Taskd) Start() error {
+	td.Info("ready for task")
 	<-td.Stopping()
 	td.waitAllTaskDone()
 	td.pool.Stop()
@@ -149,6 +152,7 @@ func (td *Taskd) Pause(taskID string) error {
 	default:
 	}
 
+	td.Info("pausing task", "task_id", taskID)
 	runner.Stop(t)
 	<-t.Done()
 	td.Info("task paused", "task_id", taskID)
@@ -156,19 +160,20 @@ func (td *Taskd) Pause(taskID string) error {
 	return nil
 }
 
-func (td *Taskd) Resume(taskID string) error {
+func (td *Taskd) Resume(taskID string) (*task.Task, error) {
 	select {
 	case <-td.Stopping():
-		return ErrStopping
+		return nil, ErrStopping
 	default:
 	}
 
 	isPausing, t := td.unmarkTaskIfPausing(taskID)
 	if !isPausing {
-		return ErrTaskNotPausing
+		return nil, ErrTaskNotPausing
 	}
 
-	_, _, err := td.createInitSubmit(t.Cfg, false, true, []task.Hook{
+	td.Info("resuming task", "task_id", taskID)
+	newT, _, err := td.createInitSubmit(t.Cfg, false, true, []task.Hook{
 		func(newT *task.Task, err error, hed *task.HookExtraData) {
 			for i, newStep := range newT.Steps() {
 				data, _ := t.Steps()[i].Collect()
@@ -186,12 +191,13 @@ func (td *Taskd) Resume(taskID string) error {
 	})
 
 	if err != nil {
+		td.Error("resume task fail", err, "task_id", taskID)
 		td.markTaskPausing(t)
 		td.unmarkTaskAndTaskID(t.Cfg.ID)
-		return err
+		return newT, err
 	}
 
-	return nil
+	return newT, nil
 }
 
 func (td *Taskd) waitAllTaskDone() {
@@ -234,8 +240,16 @@ func (td *Taskd) submit(t *task.Task, wait bool, must bool) bool {
 		td.hookStart(t)
 
 		td.Info("task starting", "task_id", t.Cfg.ID)
-		go td.listenTask(t)
 		runner.Start(t)
+		td.hookDone(t)
+		td.unmarkTaskAndTaskID(t.Cfg.ID)
+
+		err := t.Err()
+		if err != nil {
+			td.Error("task fail", err, "task_id", t.Cfg.ID, "task_type", t.Cfg.Type)
+		} else {
+			td.Info("task done", "task_id", t.Cfg.ID, "task_type", t.Cfg.Type)
+		}
 	}
 
 	var submitted bool
@@ -398,24 +412,6 @@ func (td *Taskd) allTask() []*task.Task {
 		i++
 	}
 	return tasks
-}
-
-func (td *Taskd) listenTask(t *task.Task) {
-	select {
-	case <-td.Stopping():
-		return
-	case <-t.Done():
-	}
-	td.hookDone(t)
-	td.Info("listen done by task done", "task_id", t.Cfg.ID)
-	td.unmarkTaskAndTaskID(t.Cfg.ID)
-
-	err := t.Err()
-	if err != nil {
-		td.Error("task fail", err, "task_id", t.Cfg.ID, "task_type", t.Cfg.Type)
-	} else {
-		td.Info("task done", "task_id", t.Cfg.ID, "task_type", t.Cfg.Type)
-	}
 }
 
 func (td *Taskd) hookCreate(t *task.Task, err error) {
@@ -644,7 +640,7 @@ func Pause(taskID string) error {
 	return _td.Pause(taskID)
 }
 
-func Resume(taskID string) error {
+func Resume(taskID string) (*task.Task, error) {
 	return _td.Resume(taskID)
 }
 
