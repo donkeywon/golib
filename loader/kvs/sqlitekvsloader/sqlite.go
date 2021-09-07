@@ -1,4 +1,4 @@
-package kvs
+package sqlitekvsloader
 
 import (
 	"context"
@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/donkeywon/golib/errs"
+	"github.com/donkeywon/golib/kvs"
 	"github.com/donkeywon/golib/plugin"
 	"github.com/donkeywon/golib/util/conv"
 	"zombiezen.com/go/sqlite"
@@ -13,6 +14,10 @@ import (
 )
 
 func init() {
+	Load()
+}
+
+func Load() {
 	plugin.RegisterWithCfg(TypeSQLite, func() interface{} { return NewSQLiteKVS() }, func() interface{} { return NewSQLiteKVSCfg() })
 }
 
@@ -49,7 +54,7 @@ const (
 	querySQL          = "SELECT rowid, v, updated_at FROM %s where k = ?"
 	pageQuerySQL      = "SELECT rowid, k, v, updated_at FROM %s where rowid > ? LIMIT ?"
 
-	TypeSQLite Type = "sqlite"
+	TypeSQLite kvs.Type = "sqlite"
 )
 
 type DBModel struct {
@@ -227,39 +232,39 @@ func (s *SQLiteKVS) Del(k string) error {
 }
 
 func (s *SQLiteKVS) LoadAsBool(k string) (bool, error) {
-	return LoadAsBool(s, k)
+	return kvs.LoadAsBool(s, k)
 }
 
 func (s *SQLiteKVS) LoadAsString(k string) (string, error) {
-	return LoadAsString(s, k)
+	return kvs.LoadAsString(s, k)
 }
 
 func (s *SQLiteKVS) LoadAsStringOr(k string, d string) (string, error) {
-	return LoadAsStringOr(s, k, d)
+	return kvs.LoadAsStringOr(s, k, d)
 }
 
 func (s *SQLiteKVS) LoadAsInt(k string) (int, error) {
-	return LoadAsInt(s, k)
+	return kvs.LoadAsInt(s, k)
 }
 
 func (s *SQLiteKVS) LoadAsIntOr(k string, d int) (int, error) {
-	return LoadAsIntOr(s, k, d)
+	return kvs.LoadAsIntOr(s, k, d)
 }
 
 func (s *SQLiteKVS) LoadAsUint(k string) (uint, error) {
-	return LoadAsUint(s, k)
+	return kvs.LoadAsUint(s, k)
 }
 
 func (s *SQLiteKVS) LoadAsUintOr(k string, d uint) (uint, error) {
-	return LoadAsUintOr(s, k, d)
+	return kvs.LoadAsUintOr(s, k, d)
 }
 
 func (s *SQLiteKVS) LoadAsFloat(k string) (float64, error) {
-	return LoadAsFloat(s, k)
+	return kvs.LoadAsFloat(s, k)
 }
 
 func (s *SQLiteKVS) LoadAsFloatOr(k string, d float64) (float64, error) {
-	return LoadAsFloatOr(s, k, d)
+	return kvs.LoadAsFloatOr(s, k, d)
 }
 
 func (s *SQLiteKVS) Collect() (map[string]any, error) {
