@@ -1,6 +1,6 @@
 module github.com/donkeywon/golib/daemon
 
-go 1.22.5
+go 1.22.7
 
 require (
 	github.com/alitto/pond v1.9.1
