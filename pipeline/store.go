@@ -12,7 +12,7 @@ import (
 	"github.com/donkeywon/golib/plugin"
 	"github.com/donkeywon/golib/util/bufferpool"
 	"github.com/donkeywon/golib/util/conv"
-	sshutil "github.com/donkeywon/golib/util/ssh"
+	"github.com/donkeywon/golib/util/sshs"
 	"golang.org/x/crypto/ssh"
 )
 
@@ -337,7 +337,7 @@ func createOssMultipartWriter(storeCfg *StoreCfg, ossCfg *OssCfg) (*oss.MultiPar
 }
 
 func createSSHStarter(storeCfg *StoreCfg, sshCfg *SSHCfg) (*ssh.Client, *ssh.Session, error) {
-	return sshutil.NewClient(sshCfg.Addr, sshCfg.User, sshCfg.Pwd, []byte(sshCfg.PrivateKey), storeCfg.Timeout)
+	return sshs.NewClient(sshCfg.Addr, sshCfg.User, sshCfg.Pwd, []byte(sshCfg.PrivateKey), storeCfg.Timeout)
 }
 
 func sshReadCmd(path string) string {

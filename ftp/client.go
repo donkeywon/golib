@@ -25,8 +25,8 @@ var location, _ = time.LoadLocation("Asia/Shanghai")
 
 type Cfg struct {
 	Addr    string `json:"addr"    validate:"required" yaml:"addr"`
-	User    string `json:"user"    validate:"min=1"    yaml:"user"`
-	Pwd     string `json:"pwd"     validate:"min=1"    yaml:"pwd"`
+	User    string `json:"user"    validate:"required" yaml:"user"`
+	Pwd     string `json:"pwd"     yaml:"pwd"`
 	Timeout int    `json:"timeout" validate:"gte=1"    yaml:"timeout"`
 	Retry   int    `json:"retry"   validate:"gte=1"    yaml:"retry"`
 }

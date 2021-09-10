@@ -10,8 +10,7 @@ import (
 )
 
 func init() {
-	plugin.Register(StepTypePipeline, func() interface{} { return NewPipelineStep() })
-	plugin.RegisterCfg(StepTypePipeline, func() interface{} { return NewPipelineCfg() })
+	plugin.RegisterWithCfg(StepTypePipeline, func() interface{} { return NewPipelineStep() }, func() interface{} { return NewPipelineCfg() })
 }
 
 const StepTypePipeline StepType = "pipeline"
@@ -20,20 +19,20 @@ func NewPipelineCfg() *pipeline.Cfg {
 	return pipeline.NewCfg()
 }
 
-type Pipeline struct {
+type PipelineStep struct {
 	Step
 	*pipeline.Cfg
 
 	p *pipeline.Pipeline
 }
 
-func NewPipelineStep() *Pipeline {
-	return &Pipeline{
+func NewPipelineStep() *PipelineStep {
+	return &PipelineStep{
 		Step: newBase(string(StepTypePipeline)),
 	}
 }
 
-func (p *Pipeline) Init() error {
+func (p *PipelineStep) Init() error {
 	err := vtil.Struct(p.Cfg)
 	if err != nil {
 		return err
@@ -50,21 +49,21 @@ func (p *Pipeline) Init() error {
 	return p.Step.Init()
 }
 
-func (p *Pipeline) Start() error {
+func (p *PipelineStep) Start() error {
 	runner.Start(p.p)
 	p.Store(consts.FieldPipelineResult, p.p.Result())
 	return p.p.Err()
 }
 
-func (p *Pipeline) Stop() error {
+func (p *PipelineStep) Stop() error {
 	runner.Stop(p.p)
 	return nil
 }
 
-func (p *Pipeline) Type() interface{} {
+func (p *PipelineStep) Type() interface{} {
 	return StepTypePipeline
 }
 
-func (p *Pipeline) GetCfg() interface{} {
+func (p *PipelineStep) GetCfg() interface{} {
 	return p.Cfg
 }

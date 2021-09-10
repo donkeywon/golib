@@ -15,7 +15,7 @@ import (
 var Create = newBase // allow to override
 
 type Runner interface {
-	kvs.KVS
+	kvs.NoErrKVS
 
 	Init() error
 	Start() error
@@ -195,7 +195,7 @@ func safeStop(r Runner) {
 }
 
 type baseRunner struct {
-	kvs.KVS
+	kvs.NoErrKVS
 	ctx          context.Context
 	cancel       context.CancelFunc
 	err          error
@@ -226,7 +226,7 @@ func newBase(name string) Runner {
 		stopDone:    make(chan struct{}),
 		done:        make(chan struct{}),
 		childrenMap: make(map[string]Runner),
-		KVS:         kvs.NewMemKVS(),
+		NoErrKVS:    kvs.NewMapKVS(),
 	}
 	return br
 }
@@ -258,8 +258,8 @@ func (br *baseRunner) Init() error {
 	if br.childrenMap == nil {
 		br.childrenMap = make(map[string]Runner)
 	}
-	if br.KVS == nil {
-		br.KVS = kvs.NewMemKVS()
+	if br.NoErrKVS == nil {
+		br.NoErrKVS = kvs.NewMapKVS()
 	}
 	if br.Ctx() == nil {
 		br.SetCtx(context.Background())

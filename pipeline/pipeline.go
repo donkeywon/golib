@@ -150,17 +150,17 @@ func (p *Pipeline) Result() *Result {
 	r := &Result{
 		Cfg: p.Cfg,
 	}
-	r.Data, _ = p.Collect()
+	r.Data = p.Collect()
 
 	for _, rwg := range p.rwGroups {
 		for _, rw := range rwg.Readers() {
-			v, _ := rw.Collect()
+			v := rw.Collect()
 			r.RWsData = append(r.RWsData, v)
 		}
-		v, _ := rwg.Starter().Collect()
+		v := rwg.Starter().Collect()
 		r.RWsData = append(r.RWsData, v)
 		for _, rw := range rwg.Writers() {
-			v, _ := rw.Collect()
+			v := rw.Collect()
 			r.RWsData = append(r.RWsData, v)
 		}
 	}
