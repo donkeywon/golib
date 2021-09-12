@@ -12,7 +12,7 @@ import (
 )
 
 type Cfg struct {
-	Command    []string          `json:"command"    validate:"required,min=1" yaml:"command"`
+	Command    []string          `json:"command"    validate:"required" yaml:"command"`
 	Env        map[string]string `json:"env"        yaml:"env"`
 	RunAsUser  string            `json:"runAsUser"  yaml:"runAsUser"`
 	WorkingDir string            `json:"workingDir" yaml:"workingDir"`
@@ -45,15 +45,15 @@ func RunRaw(ctx context.Context, cfg *Cfg, beforeRun ...func(cmd *exec.Cmd) erro
 }
 
 func RunCmd(ctx context.Context, cmd *exec.Cmd, cfg *Cfg, beforeRun ...func(cmd *exec.Cmd) error) (*Result, error) {
-	r := StartCmd(cmd, append(beforeRunFromCfg(cfg), beforeRun...)...)
-	err := WaitCmd(ctx, cmd, r)
+	r := Start(cmd, append(beforeRunFromCfg(cfg), beforeRun...)...)
+	err := Wait(ctx, cmd, r)
 	return r, err
 }
 
-// StartCmd start a command
-// if error is nil, you can get pid from Result.Pid.
-// Must call WaitCmd after StartCmd whether error is nil or not
-func StartCmd(cmd *exec.Cmd, beforeRun ...func(cmd *exec.Cmd) error) *Result {
+// Start start a command
+// you can get pid from Result.Pid, 0 means start fail.
+// Must call Wait after Start whether cmd fail or not.
+func Start(cmd *exec.Cmd, beforeRun ...func(cmd *exec.Cmd) error) *Result {
 	r := &Result{}
 	if len(beforeRun) > 0 {
 		for _, f := range beforeRun {
@@ -83,9 +83,9 @@ func StartCmd(cmd *exec.Cmd, beforeRun ...func(cmd *exec.Cmd) error) *Result {
 	return r
 }
 
-// WaitCmd wait command exit
-// Must called after StartCmd
-func WaitCmd(ctx context.Context, cmd *exec.Cmd, startResult *Result) error {
+// Wait wait command exit
+// Must called after Start.
+func Wait(ctx context.Context, cmd *exec.Cmd, startResult *Result) error {
 	if startResult.stdoutBuf != nil {
 		defer func() {
 			startResult.stdoutBuf.Free()

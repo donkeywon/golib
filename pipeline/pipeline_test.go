@@ -68,7 +68,7 @@ func TestMultiGroupPipeline(t *testing.T) {
 	err := runner.Init(p)
 	require.NoError(t, err)
 
-	p.rwGroups[0].LastWriter().RegisterWriteHook(func(n int, bs []byte, err error, cost int64, misc ...interface{}) error {
+	p.rwGroups[0].LastWriter().HookWrite(func(n int, bs []byte, err error, cost int64, misc ...interface{}) error {
 		time.Sleep(time.Second)
 		return nil
 	})

@@ -1,8 +1,6 @@
 package task
 
 import (
-	"errors"
-	"io"
 	"strings"
 	"time"
 
@@ -106,24 +104,7 @@ func (s *SSHStep) Stop() error {
 }
 
 func (s *SSHStep) close() error {
-	var err error
-	sigErr := s.sess.Signal(ssh.SIGTERM)
-	if sigErr != nil && !errors.Is(sigErr, io.EOF) {
-		err = sigErr
-	}
-	sessErr := s.sess.Close()
-	if sessErr != nil && !errors.Is(sessErr, io.EOF) {
-		err = errors.Join(err, sessErr)
-	}
-	cliErr := s.cli.Close()
-	if cliErr != nil && !errors.Is(cliErr, io.EOF) {
-		err = errors.Join(err, cliErr)
-	}
-
-	if err != nil {
-		return errs.Wrap(err, "close ssh client fail")
-	}
-	return nil
+	return sshs.Close(s.cli, s.sess)
 }
 
 func (s *SSHStep) Type() interface{} {

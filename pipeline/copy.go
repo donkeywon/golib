@@ -10,8 +10,7 @@ import (
 )
 
 func init() {
-	plugin.Register(RWTypeCopy, func() interface{} { return NewCopyRW() })
-	plugin.RegisterCfg(RWTypeCopy, func() interface{} { return NewCopyRWCfg() })
+	plugin.RegisterWithCfg(RWTypeCopy, func() interface{} { return NewCopyRW() }, func() interface{} { return NewCopyRWCfg() })
 }
 
 const RWTypeCopy RWType = "copy"

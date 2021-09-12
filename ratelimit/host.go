@@ -23,7 +23,7 @@ func init() {
 const RateLimiterTypeHost RateLimiterType = "host"
 
 type HostRateLimiterCfg struct {
-	Nic             string `json:"nic"             validate:"required,min=1" yaml:"nic"`
+	Nic             string `json:"nic"             validate:"required"    yaml:"nic"`
 	MonitorInterval int    `json:"monitorInterval" yaml:"monitorInterval"`
 	ReservePercent  int    `json:"reservePercent"  yaml:"reservePercent"`
 	MinMBps         int    `json:"minMBps"         yaml:"minMBps"`

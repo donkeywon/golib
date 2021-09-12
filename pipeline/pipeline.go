@@ -12,14 +12,13 @@ import (
 )
 
 func init() {
-	plugin.Register(PluginTypePipeline, func() interface{} { return New() })
-	plugin.RegisterCfg(PluginTypePipeline, func() interface{} { return NewCfg() })
+	plugin.RegisterWithCfg(PluginTypePipeline, func() interface{} { return New() }, func() interface{} { return NewCfg() })
 }
 
 const PluginTypePipeline plugin.Type = "pipeline"
 
 type Cfg struct {
-	RWs []*RWCfg `json:"rws" validate:"min=1" yaml:"rws"`
+	RWs []*RWCfg `json:"rws" validate:"required" yaml:"rws"`
 }
 
 func NewCfg() *Cfg {

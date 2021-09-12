@@ -34,15 +34,11 @@ func TestGroup(t *testing.T) {
 }
 
 func TestStore(t *testing.T) {
-	cfg := NewRWGroupCfg().SetStarter(RWTypeStore, &StoreCfg{
-		Type: StoreTypeSSH,
-		Cfg: &SSHCfg{
-			Addr: "127.0.0.1:22",
-			User: "",
-			Pwd:  "",
-		},
-		URL:     "/root/test.file1",
-		Retry:   1,
+	cfg := NewRWGroupCfg().SetStarter(RWTypeSSH, &SSHRWCfg{
+		Addr:    "127.0.0.1:22",
+		User:    "",
+		Pwd:     "",
+		Path:    "/root/test.file1",
 		Timeout: 1,
 	}, nil).
 		FromReader(RWTypeTail, &TailRWCfg{Path: "/root/test.file"}, nil)
@@ -66,14 +62,11 @@ func TestStore(t *testing.T) {
 func TestFtp(t *testing.T) {
 	cfg := NewRWGroupCfg().SetStarter(RWTypeCopy, &CopyRWCfg{BufSize: 32 * 1024}, nil).
 		FromReader(RWTypeFile, &FileRWCfg{Path: "/root/test.file"}, nil).
-		ToWriter(RWTypeStore, &StoreCfg{
-			Type: StoreTypeFtp,
-			Cfg: &FtpCfg{
-				Addr: "127.0.0.1:21",
-				User: "",
-				Pwd:  "",
-			},
-			URL:     "test.file1",
+		ToWriter(RWTypeFtp, &FtpRWCfg{
+			Addr:    "127.0.0.1:21",
+			User:    "",
+			Pwd:     "",
+			Path:    "test.file1",
 			Retry:   1,
 			Timeout: 1,
 		}, nil)
@@ -91,16 +84,13 @@ func TestFtp(t *testing.T) {
 func TestOSS(t *testing.T) {
 	cfg := NewRWGroupCfg().SetStarter(RWTypeCopy, &CopyRWCfg{BufSize: 1024 * 1024}, nil).
 		FromReader(RWTypeFile, &FileRWCfg{Path: "/root/test.file.zst"}, nil).
-		ToWriter(RWTypeStore, &StoreCfg{
-			Type: StoreTypeOss,
-			Cfg: &OssCfg{
-				Ak:     "",
-				Sk:     "",
-				Append: false,
-			},
+		ToWriter(RWTypeOss, &OssRWCfg{
+			Ak:      "",
+			Sk:      "",
+			Append:  false,
 			URL:     "",
 			Retry:   1,
-			Timeout: 1,
+			Timeout: 10,
 		}, &RWCommonCfg{
 			BufSize:          1024 * 1024,
 			AsyncChanBufSize: 5,
