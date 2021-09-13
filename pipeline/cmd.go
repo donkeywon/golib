@@ -1,6 +1,7 @@
 package pipeline
 
 import (
+	"context"
 	"errors"
 	"os/exec"
 
@@ -23,6 +24,8 @@ func NewCmdRWCfg() *cmd.Cfg {
 type CmdRW struct {
 	RW
 	*cmd.Cfg
+
+	cmd *exec.Cmd
 }
 
 func NewCmdRW() *CmdRW {
@@ -36,11 +39,13 @@ func (c *CmdRW) Init() error {
 		return errs.New("cmd rw must be Starter")
 	}
 
+	c.cmd = exec.CommandContext(c.Ctx(), c.Cfg.Command[0], c.Cfg.Command[1:]...)
+
 	return c.RW.Init()
 }
 
 func (c *CmdRW) Start() error {
-	result, err := cmd.RunRaw(c.Ctx(), c.Cfg, func(cmd *exec.Cmd) error {
+	result, err := cmd.RunCmd(context.Background(), c.cmd, c.Cfg, func(cmd *exec.Cmd) error {
 		if c.Writer() != nil {
 			cmd.Stdout = c
 		}
@@ -51,9 +56,6 @@ func (c *CmdRW) Start() error {
 		return nil
 	})
 	c.Info("cmd exit", "result", result)
-	if errors.Is(err, ErrStoppedManually) {
-		err = nil
-	}
 
 	if result != nil {
 		c.Store(consts.FieldCmdStderr, result.Stderr)
@@ -65,11 +67,24 @@ func (c *CmdRW) Start() error {
 	}
 
 	closeErr := c.Close()
+	if result != nil && result.Signaled {
+		select {
+		case <-c.Stopping():
+			c.Info("exit signaled", "error", err)
+			return closeErr
+		default:
+		}
+	}
+
 	if err == nil {
 		return closeErr
 	}
 
 	return errors.Join(errs.Wrapf(err, "cmd exit, result: %v", result), closeErr)
+}
+
+func (c *CmdRW) Stop() error {
+	return cmd.MustStop(context.Background(), c.cmd)
 }
 
 func (c *CmdRW) Type() interface{} {

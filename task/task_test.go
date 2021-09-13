@@ -25,7 +25,7 @@ func TestTask(t *testing.T) {
 
 	task := New()
 	task.Cfg = cfg
-	tests.Init(task)
+	tests.DebugInit(task)
 
 	require.NoError(t, runner.Init(task))
 

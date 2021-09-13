@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/donkeywon/golib/runner"
+	"github.com/donkeywon/golib/util/cmd"
 	"github.com/donkeywon/golib/util/tests"
 	"github.com/stretchr/testify/require"
 )
@@ -19,7 +20,7 @@ func TestGroup(t *testing.T) {
 
 	g := NewRWGroup()
 	g.RWGroupCfg = cfg
-	tests.Init(g)
+	tests.DebugInit(g)
 
 	err := runner.Init(g)
 	require.NoError(t, err)
@@ -46,7 +47,7 @@ func TestStore(t *testing.T) {
 
 	g := NewRWGroup()
 	g.RWGroupCfg = cfg
-	tests.Init(g)
+	tests.DebugInit(g)
 
 	require.NoError(t, runner.Init(g))
 
@@ -73,7 +74,7 @@ func TestFtp(t *testing.T) {
 
 	g := NewRWGroup()
 	g.RWGroupCfg = cfg
-	tests.Init(g)
+	tests.DebugInit(g)
 
 	require.NoError(t, runner.Init(g))
 
@@ -96,6 +97,33 @@ func TestOSS(t *testing.T) {
 			AsyncChanBufSize: 5,
 			EnableAsync:      true,
 		})
+
+	g := NewRWGroup()
+	g.RWGroupCfg = cfg
+	tests.DebugInit(g)
+
+	require.NoError(t, runner.Init(g))
+
+	runner.Start(g)
+	require.NoError(t, g.Err())
+}
+
+func TestCmd(t *testing.T) {
+	cfg := NewRWGroupCfg().SetStarter(RWTypeCmd, &cmd.Cfg{
+		Command: []string{""},
+	}, nil).ToWriter(RWTypeCompress, &CompressRWCfg{
+		Type:        CompressTypeZstd,
+		Level:       CompressLevelFast,
+		Concurrency: 8,
+	}, nil).ToWriter(RWTypeOss, &OssRWCfg{
+		URL:    "http://127.0.0.1:9100/test-bucket/backup.mb.zst",
+		Ak:     "",
+		Sk:     "",
+		Region: "test-region",
+	}, &RWCommonCfg{
+		BufSize:        10 * 1024 * 1024,
+		EnableCalcHash: true,
+	})
 
 	g := NewRWGroup()
 	g.RWGroupCfg = cfg

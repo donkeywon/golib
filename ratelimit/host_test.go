@@ -19,7 +19,7 @@ func TestHost(t *testing.T) {
 	h := NewHostRateLimiter()
 	h.HostRateLimiterCfg = hc
 
-	tests.Init(h)
+	tests.DebugInit(h)
 
 	require.NoError(t, h.Init())
 
