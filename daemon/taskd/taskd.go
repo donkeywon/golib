@@ -176,13 +176,13 @@ func (td *Taskd) Resume(taskID string) (*task.Task, error) {
 	newT, _, err := td.createInitSubmit(t.Cfg, false, true, []task.Hook{
 		func(newT *task.Task, err error, hed *task.HookExtraData) {
 			for i, newStep := range newT.Steps() {
-				data, _ := t.Steps()[i].Collect()
+				data := t.Steps()[i].Collect()
 				for k, v := range data {
 					newStep.Store(k, v)
 				}
 			}
 			for i, newStep := range newT.DeferSteps() {
-				data, _ := t.DeferSteps()[i].Collect()
+				data := t.DeferSteps()[i].Collect()
 				for k, v := range data {
 					newStep.Store(k, v)
 				}
