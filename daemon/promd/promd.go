@@ -25,14 +25,18 @@ type Promd struct {
 	reg *prometheus.Registry
 }
 
-var _p = &Promd{
-	Runner: runner.Create(string(DaemonTypePromd)),
-	reg:    prometheus.NewRegistry(),
-	m:      make(map[string]prometheus.Metric),
+var _p = New()
+
+func P() *Promd {
+	return _p
 }
 
 func New() *Promd {
-	return _p
+	return &Promd{
+		Runner: runner.Create(string(DaemonTypePromd)),
+		reg:    prometheus.NewRegistry(),
+		m:      make(map[string]prometheus.Metric),
+	}
 }
 
 func (p *Promd) Init() error {
