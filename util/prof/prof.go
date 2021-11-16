@@ -19,6 +19,7 @@ var (
 	profSwitch  uint32
 	profTimeout = 300
 	stopCh      = make(chan struct{})
+	done        = make(chan struct{})
 	p           interface{ Stop() }
 )
 
@@ -62,13 +63,13 @@ func Start(mode string, dir string, timeoutSec int) (string, <-chan struct{}, er
 	}
 	opts = append(opts, profile.ProfilePath(dir))
 
-	done, err := start(timeoutSec, opts...)
+	err := start(timeoutSec, opts...)
 	return filepath.Join(dir, filename), done, err
 }
 
-func start(timeoutSec int, options ...func(*profile.Profile)) (<-chan struct{}, error) {
+func start(timeoutSec int, options ...func(*profile.Profile)) error {
 	if !atomic.CompareAndSwapUint32(&profSwitch, 0, 1) {
-		return nil, errors.New("already profiling")
+		return errors.New("already profiling")
 	}
 
 	opts := []func(*profile.Profile){profile.Quiet}
@@ -79,7 +80,7 @@ func start(timeoutSec int, options ...func(*profile.Profile)) (<-chan struct{}, 
 		timeoutSec = profTimeout
 	}
 
-	done := make(chan struct{})
+	done = make(chan struct{})
 	go func(timeoutSec int) {
 		t := time.NewTimer(time.Second * time.Duration(timeoutSec))
 		defer t.Stop()
@@ -93,7 +94,7 @@ func start(timeoutSec int, options ...func(*profile.Profile)) (<-chan struct{}, 
 		close(done)
 	}(timeoutSec)
 
-	return done, nil
+	return nil
 }
 
 func Stop() error {
@@ -101,6 +102,7 @@ func Stop() error {
 		return errors.New("not profiling")
 	}
 	stopCh <- struct{}{}
+	<-done
 	return nil
 }
 
