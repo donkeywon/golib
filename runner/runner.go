@@ -16,6 +16,7 @@ var Create = newBase // allow to override
 
 type Runner interface {
 	kvs.NoErrKVS
+	log.Logger
 
 	Init() error
 	Start() error
@@ -51,13 +52,8 @@ type Runner interface {
 	SelfErr() error
 	ChildrenErr() error
 
-	getLogger() *zap.Logger
 	WithLoggerFrom(r Runner, kvs ...any)
 	WithLoggerFields(kvs ...any)
-	Debug(msg string, kvs ...any)
-	Info(msg string, kvs ...any)
-	Warn(msg string, kvs ...any)
-	Error(msg string, err error, kvs ...any)
 }
 
 func Init(r Runner) error {
@@ -196,13 +192,14 @@ func safeStop(r Runner) {
 
 type baseRunner struct {
 	kvs.NoErrKVS
+	*zap.Logger
+
 	ctx          context.Context
 	cancel       context.CancelFunc
 	err          error
 	parent       Runner
 	started      chan struct{}
 	childrenMap  map[string]Runner
-	Logger       *zap.Logger
 	done         chan struct{}
 	stopDone     chan struct{}
 	stopping     chan struct{}
@@ -319,7 +316,12 @@ func (br *baseRunner) getLogger() *zap.Logger {
 }
 
 func (br *baseRunner) WithLoggerFrom(r Runner, kvs ...any) {
-	br.Logger = r.getLogger().Named(br.Name()).With(log.HandleZapFields(kvs)...)
+	type hasLogger interface {
+		getLogger() *zap.Logger
+	}
+	if h, ok := r.(hasLogger); ok {
+		br.Logger = h.getLogger().Named(br.Name()).With(log.HandleZapFields(kvs)...)
+	}
 }
 
 func (br *baseRunner) WithLoggerFields(kvs ...any) {
