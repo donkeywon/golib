@@ -4,7 +4,7 @@ go 1.22.7
 
 require (
 	github.com/donkeywon/golib v0.0.0
-	zombiezen.com/go/sqlite v1.3.0
+	zombiezen.com/go/sqlite v1.4.0
 )
 
 require (
@@ -18,7 +18,7 @@ require (
 	modernc.org/libc v1.60.1 // indirect
 	modernc.org/mathutil v1.6.0 // indirect
 	modernc.org/memory v1.8.0 // indirect
-	modernc.org/sqlite v1.32.0 // indirect
+	modernc.org/sqlite v1.33.1 // indirect
 )
 
 replace github.com/donkeywon/golib => ../../../
