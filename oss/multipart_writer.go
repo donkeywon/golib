@@ -203,7 +203,9 @@ func (w *MultiPartWriter) addAuth(req *http.Request) error {
 }
 
 func (w *MultiPartWriter) do(req *http.Request, ignoreCode ...int) ([]byte, *http.Response, error) {
-	body, resp, err := httpc.DoBody(req)
+	ctx, cancel := context.WithTimeout(w.ctx, time.Second*120)
+	defer cancel()
+	body, resp, err := httpc.DoBodyCtx(ctx, req)
 	if errors.Is(err, context.Canceled) {
 		return nil, nil, nil
 	}

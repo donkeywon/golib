@@ -190,7 +190,9 @@ func (w *AppendWriter) doAppend(body []byte) ([]byte, *http.Response, error) {
 
 	req.ContentLength = int64(len(body))
 
-	body, resp, err := httpc.DoBody(req)
+	ctx, cancel := context.WithTimeout(w.ctx, time.Second*120)
+	defer cancel()
+	body, resp, err := httpc.DoBodyCtx(ctx, req)
 	if err != nil && !errors.Is(err, context.Canceled) {
 		return nil, nil, errs.Wrap(err, "do http request fail")
 	}
