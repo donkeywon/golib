@@ -9,7 +9,6 @@ import (
 	"github.com/donkeywon/golib/errs"
 	"github.com/donkeywon/golib/kvs"
 	"github.com/donkeywon/golib/log"
-	"go.uber.org/zap"
 )
 
 var Create = newBase // allow to override
@@ -53,7 +52,6 @@ type Runner interface {
 	ChildrenErr() error
 
 	WithLoggerFrom(r Runner, kvs ...any)
-	WithLoggerFields(kvs ...any)
 }
 
 func Init(r Runner) error {
@@ -192,7 +190,7 @@ func safeStop(r Runner) {
 
 type baseRunner struct {
 	kvs.NoErrKVS
-	*zap.Logger
+	log.Logger
 
 	ctx          context.Context
 	cancel       context.CancelFunc
@@ -215,7 +213,7 @@ type baseRunner struct {
 
 func newBase(name string) Runner {
 	br := &baseRunner{
-		Logger:      zap.NewNop(),
+		Logger:      log.NewNopLogger(),
 		name:        name,
 		ctx:         context.Background(),
 		started:     make(chan struct{}),
@@ -238,7 +236,7 @@ func (br *baseRunner) Name() string {
 
 func (br *baseRunner) Init() error {
 	if br.Logger == nil {
-		br.Logger = zap.NewNop()
+		br.Logger = log.NewNopLogger()
 	}
 	if br.started == nil {
 		br.started = make(chan struct{})
@@ -311,37 +309,9 @@ func (br *baseRunner) Done() <-chan struct{} {
 	return br.done
 }
 
-func (br *baseRunner) getLogger() *zap.Logger {
-	return br.Logger
-}
-
 func (br *baseRunner) WithLoggerFrom(r Runner, kvs ...any) {
-	type hasLogger interface {
-		getLogger() *zap.Logger
-	}
-	if h, ok := r.(hasLogger); ok {
-		br.Logger = h.getLogger().Named(br.Name()).With(log.HandleZapFields(kvs)...)
-	}
-}
-
-func (br *baseRunner) WithLoggerFields(kvs ...any) {
-	br.Logger = br.Logger.With(log.HandleZapFields(kvs)...)
-}
-
-func (br *baseRunner) Debug(msg string, kvs ...any) {
-	br.Logger.Debug(msg, log.HandleZapFields(kvs)...)
-}
-
-func (br *baseRunner) Info(msg string, kvs ...any) {
-	br.Logger.Info(msg, log.HandleZapFields(kvs)...)
-}
-
-func (br *baseRunner) Warn(msg string, kvs ...any) {
-	br.Logger.Warn(msg, log.HandleZapFields(kvs)...)
-}
-
-func (br *baseRunner) Error(msg string, err error, kvs ...any) {
-	br.Logger.Error(msg, log.HandleZapFields(kvs, zap.Error(err))...)
+	br.Logger = r.WithLoggerName(br.Name())
+	br.WithLoggerFields(kvs...)
 }
 
 func (br *baseRunner) markStarted() bool {

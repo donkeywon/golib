@@ -5,22 +5,20 @@ import (
 	"runtime"
 )
 
-func Set(i interface{}, f interface{}) bool {
-	iValue := reflect.ValueOf(i)
-	if iValue.Kind() != reflect.Pointer {
+func SetFirst(s interface{}, f interface{}) bool {
+	sValue := reflect.ValueOf(s)
+	if reflect.Indirect(sValue).Kind() != reflect.Struct {
 		return false
 	}
 
-	fType := reflect.TypeOf(f)
-	if fType.Kind() != reflect.Pointer {
-		return false
-	}
+	fValue := reflect.ValueOf(f)
 
 	found := false
 	idx := 0
-	for ; idx < iValue.Elem().NumField(); idx++ {
-		f := iValue.Elem().Field(idx)
-		if f.CanSet() && f.Type() == fType {
+	for ; idx < sValue.Elem().NumField(); idx++ {
+		field := sValue.Elem().Field(idx)
+		if field.CanSet() &&
+			(field.Kind() == fValue.Kind() || field.Kind() == reflect.Interface && fValue.Type().Implements(field.Type())) {
 			found = true
 			break
 		}
@@ -29,7 +27,7 @@ func Set(i interface{}, f interface{}) bool {
 		return false
 	}
 
-	iValue.Elem().Field(idx).Set(reflect.ValueOf(f))
+	sValue.Elem().Field(idx).Set(fValue)
 	return true
 }
 
