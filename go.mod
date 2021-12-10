@@ -9,7 +9,7 @@ require (
 	github.com/earthboundkid/versioninfo/v2 v2.24.1
 	github.com/fsnotify/fsnotify v1.8.0
 	github.com/go-playground/validator/v10 v10.23.0
-	github.com/goccy/go-yaml v1.15.6
+	github.com/goccy/go-yaml v1.15.8
 	github.com/google/uuid v1.6.0
 	github.com/icza/backscanner v0.0.0-20241124160932-dff01ac50250
 	github.com/jinzhu/copier v0.4.0

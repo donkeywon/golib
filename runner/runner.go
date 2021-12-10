@@ -84,7 +84,7 @@ func Start(r Runner) {
 		}
 
 		if r.markStopping() {
-			// at this point
+			// At this time
 			// 1. stopping or canceled before call runner.Start(r)
 			// 2. done before call runner.Stop(r)
 			// both need to markStopDone

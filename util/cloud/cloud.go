@@ -2,7 +2,7 @@ package cloud
 
 import (
 	"github.com/donkeywon/golib/errs"
-	"github.com/donkeywon/golib/util/ethu"
+	"github.com/donkeywon/golib/util/eth"
 )
 
 const (
@@ -30,7 +30,7 @@ func GetNicSpeed() (int, error) {
 	case CloudTypeTencent:
 		speed, err = GetTencentCvmNetworkSpeed()
 	case CloudTypeAzure:
-		speed, err = ethu.GetNicSpeed("eth0")
+		speed, err = eth.GetNicSpeed("eth0")
 	default:
 		speed, err = 0, errs.Errorf("unknown cloud type: %s", typ)
 	}

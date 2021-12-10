@@ -10,7 +10,7 @@ import (
 	"github.com/donkeywon/golib/plugin"
 	"github.com/donkeywon/golib/runner"
 	"github.com/donkeywon/golib/util/cloud"
-	"github.com/donkeywon/golib/util/ethu"
+	"github.com/donkeywon/golib/util/eth"
 	"github.com/donkeywon/golib/util/vtil"
 	"golang.org/x/time/rate"
 )
@@ -76,7 +76,7 @@ func (h *HostRateLimiter) Init() error {
 		h.setRxTxLimit(float64(h.FixedMBps), float64(h.FixedMBps))
 	} else {
 		h.Info("use nic", "nic", h.Nic)
-		h.nicSpeedMbps, err = ethu.GetNicSpeed(h.Nic)
+		h.nicSpeedMbps, err = eth.GetNicSpeed(h.Nic)
 		if err != nil {
 			h.Error("get nic speed fail", err)
 			h.Info("try get nic speed on cloud")
@@ -148,14 +148,14 @@ func (h *HostRateLimiter) monitor() {
 		case <-t.C:
 			h.monitorCurSpeed()
 
-			stats, err := ethu.NetDevStats(nic)
+			stats, err := eth.GetNetDevStats()
 			if err != nil {
 				h.setRxTxLimit(h.minMBps, h.minMBps)
 				h.Error("get net dev stats fail, use min limit", err, "min_limit", i2MBps(h.MinMBps))
 				continue
 			}
 
-			if stats[nic] == nil {
+			if _, exists := stats[nic]; !exists {
 				h.setRxTxLimit(h.minMBps, h.minMBps)
 				h.Error("nic stats is empty, use min limit", nil, "min_limit", i2MBps(h.MinMBps), "stats", stats)
 				continue
@@ -181,9 +181,9 @@ func (h *HostRateLimiter) setRxTxLimit(rxL float64, txL float64) {
 	h.txRL.SetLimit(rate.Limit(txL * 1024 * 1024))
 }
 
-func (h *HostRateLimiter) handleNetDevStats(stats map[string]uint64) {
-	curNicRxBytes := stats["receive_bytes"]
-	curNicTxBytes := stats["transmit_bytes"]
+func (h *HostRateLimiter) handleNetDevStats(stat *eth.NetDevStats) {
+	curNicRxBytes := stat.RxBytes
+	curNicTxBytes := stat.TxBytes
 
 	if h.lastNicRxBytes == 0 || h.lastNicTxBytes == 0 {
 		h.setRxTxLimit(h.minMBps, h.minMBps)
