@@ -40,7 +40,7 @@ func TestTaskd(t *testing.T) {
 		go func(idx int) {
 			r := rands.RandInt(1, maxNum)
 			taskID := fmt.Sprintf("test-abc-%d", r)
-			_, err := td.Submit(createTaskCfg(taskID, r))
+			_, err := td.SubmitTask(createTaskCfg(taskID, r))
 			if err != nil {
 				td.Error("submit task fail", err, "task_id", taskID)
 			}
@@ -59,17 +59,17 @@ func TestPause(t *testing.T) {
 		Count: 5,
 	})
 
-	tsk, err := td.Submit(cfg)
+	tsk, err := td.SubmitTask(cfg)
 	require.NoError(t, err)
 
 	time.Sleep(time.Second * 5)
-	err = td.Pause(tsk.Cfg.ID)
+	err = td.PauseTask(tsk.Cfg.ID)
 	require.NoError(t, err)
 
 	td.Info("task result", "result", tsk.Result())
 
 	time.Sleep(time.Second)
-	tsk, err = td.Resume(tsk.Cfg.ID)
+	tsk, err = td.ResumeTask(tsk.Cfg.ID)
 	require.NoError(t, err)
 
 	<-tsk.Done()
