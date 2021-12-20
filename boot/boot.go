@@ -20,7 +20,7 @@ import (
 	"github.com/donkeywon/golib/util/paths"
 	"github.com/donkeywon/golib/util/reflects"
 	"github.com/donkeywon/golib/util/signals"
-	"github.com/donkeywon/golib/util/vtil"
+	"github.com/donkeywon/golib/util/v"
 	"github.com/goccy/go-yaml"
 )
 
@@ -40,7 +40,7 @@ func Boot(opt ...Option) {
 		b.Error("boot init fail", err)
 		os.Exit(1)
 	}
-	err = vtil.Struct(b)
+	err = v.Struct(b)
 	if err != nil {
 		b.Error("boot validate fail", err)
 		os.Exit(1)
@@ -198,10 +198,15 @@ func (b *Booter) OnChildDone(child runner.Runner) error {
 	select {
 	case <-b.Stopping():
 		return nil
+	case <-b.Ctx().Done():
+		return nil
 	default:
-		if child.Err() != nil {
-			b.Info("on daemon fail", "daemon", child.Name())
+		err := child.Err()
+		if err != nil {
+			b.Error("daemon exit abnormally", err, "daemon", child.Name())
 			runner.Stop(b)
+		} else {
+			b.Error("daemon exit, should not happen", nil, "daemon", child.Name())
 		}
 	}
 	return nil
@@ -290,7 +295,7 @@ func (b *Booter) validateCfg() error {
 		if !reflects.IsStructPointer(cfg) {
 			continue
 		}
-		err := vtil.Struct(cfg)
+		err := v.Struct(cfg)
 		if err != nil {
 			return errs.Wrapf(err, "invalid daemon(%s) cfg", s)
 		}

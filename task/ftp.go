@@ -5,7 +5,7 @@ import (
 	"github.com/donkeywon/golib/errs"
 	"github.com/donkeywon/golib/ftp"
 	"github.com/donkeywon/golib/plugin"
-	"github.com/donkeywon/golib/util/vtil"
+	"github.com/donkeywon/golib/util/v"
 )
 
 func init() {
@@ -43,7 +43,7 @@ func NewFtpStep() *FtpStep {
 }
 
 func (f *FtpStep) Init() error {
-	err := vtil.Struct(f.FtpStepCfg)
+	err := v.Struct(f.FtpStepCfg)
 	if err != nil {
 		return err
 	}

@@ -4,8 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"testing"
-
-	"github.com/donkeywon/golib/util/bufferpool"
 )
 
 func errA() error {
@@ -48,8 +46,8 @@ func TestErr(t *testing.T) {
 }
 
 func TestFormat(t *testing.T) {
-	buf := bufferpool.GetBuffer()
-	defer buf.Free()
+	buf := getBuffer()
+	defer buf.free()
 	e := errC()
 	ErrToStack(e, buf, 0)
 	t.Log(buf.String())

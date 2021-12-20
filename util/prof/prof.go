@@ -106,6 +106,10 @@ func Stop() error {
 	return nil
 }
 
+func IsRunning() bool {
+	return atomic.LoadUint32(&profSwitch) == 1
+}
+
 func genDir(dir string, mode string) string {
 	return filepath.Join(dir, fmt.Sprintf("%s-%s-%s", time.Now().Format("20060102150405"), mode, uuid.NewString()))
 }

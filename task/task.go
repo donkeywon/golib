@@ -10,7 +10,7 @@ import (
 	"github.com/donkeywon/golib/runner"
 	"github.com/donkeywon/golib/util/conv"
 	"github.com/donkeywon/golib/util/reflects"
-	"github.com/donkeywon/golib/util/vtil"
+	"github.com/donkeywon/golib/util/v"
 )
 
 func init() {
@@ -99,7 +99,7 @@ func New() *Task {
 }
 
 func (t *Task) Init() error {
-	err := vtil.Struct(t)
+	err := v.Struct(t)
 	if err != nil {
 		return err
 	}

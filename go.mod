@@ -9,7 +9,7 @@ require (
 	github.com/earthboundkid/versioninfo/v2 v2.24.1
 	github.com/fsnotify/fsnotify v1.8.0
 	github.com/go-playground/validator/v10 v10.23.0
-	github.com/goccy/go-yaml v1.15.10
+	github.com/goccy/go-yaml v1.15.11
 	github.com/google/uuid v1.6.0
 	github.com/icza/backscanner v0.0.0-20241124160932-dff01ac50250
 	github.com/jinzhu/copier v0.4.0
@@ -50,7 +50,7 @@ require (
 	github.com/tklauser/numcpus v0.9.0 // indirect
 	github.com/yusufpapurcu/wmi v1.2.4 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
-	golang.org/x/net v0.32.0 // indirect
+	golang.org/x/net v0.33.0 // indirect
 	golang.org/x/text v0.21.0 // indirect
 	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect

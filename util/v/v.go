@@ -1,4 +1,4 @@
-package vtil
+package v
 
 import "github.com/go-playground/validator/v10"
 

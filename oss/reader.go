@@ -47,7 +47,7 @@ func NewReader() *Reader {
 func (r *Reader) Read(p []byte) (int, error) {
 	select {
 	case <-r.closed:
-		return 0, errs.ErrReadFromClosedReader
+		return 0, ErrAlreadyClosed
 	default:
 	}
 

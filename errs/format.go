@@ -4,9 +4,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
-
-	"github.com/donkeywon/golib/util/bufferpool"
-	"github.com/donkeywon/golib/util/conv"
+	"unsafe"
 )
 
 var (
@@ -31,7 +29,7 @@ type stackTracer interface {
 	StackTrace() StackTrace
 }
 
-type errFmtState struct{ *bufferpool.Buffer }
+type errFmtState struct{ *buffer }
 
 var _ fmt.State = errFmtState{}
 
@@ -74,8 +72,8 @@ func ErrToStackString(err error) string {
 	if err == nil {
 		return ""
 	}
-	buf := bufferpool.GetBuffer()
-	defer buf.Free()
+	buf := getBuffer()
+	defer buf.free()
 	ErrToStack(err, buf, 0)
 	return buf.String()
 }
@@ -102,10 +100,10 @@ func ErrToStack(err error, w io.Writer, errsDepth int) {
 				w.Write(newLineBytes)
 				writeIndent(w, _errsIndent, errsDepth+1, false, _errsSeparator)
 
-				_buf := bufferpool.GetBuffer()
+				_buf := getBuffer()
 				ErrToStack(e, _buf, errsDepth+2)
 				writeIndent(w, _errsIndent, 0, true, strings.TrimLeft(_buf.String(), " \n"))
-				_buf.Free()
+				_buf.free()
 			}
 		}
 	case wrappedErr:
@@ -114,15 +112,15 @@ func ErrToStack(err error, w io.Writer, errsDepth int) {
 		if emsg, ok := err.(*withMessage); ok {
 			w.Write(newLineBytes)
 			writeIndent(w, _errsIndent, errsDepth, false, "cause: ")
-			w.Write(conv.String2Bytes(emsg.msg))
+			w.Write(string2Bytes(emsg.msg))
 		} else if estack, ok := err.(*withStack); ok {
 			sf := (*estack.stack)[:estack.foldAt]
 			stackLen := len(*estack.stack)
 
-			_buf := bufferpool.GetBuffer()
+			_buf := getBuffer()
 			(&sf).Format(errFmtState{_buf}, 'v')
 			writeIndent(w, _errsIndent, errsDepth, false, _buf.String())
-			_buf.Free()
+			_buf.free()
 
 			if estack.foldAt < stackLen {
 				w.Write(newLineBytes)
@@ -131,15 +129,15 @@ func ErrToStack(err error, w io.Writer, errsDepth int) {
 		} else {
 			w.Write(newLineBytes)
 			writeIndent(w, _errsIndent, errsDepth, false, "cause: ")
-			w.Write(conv.String2Bytes(err.Error()))
+			w.Write(string2Bytes(err.Error()))
 		}
 	case fmt.Formatter:
-		_buf := bufferpool.GetBuffer()
+		_buf := getBuffer()
 		terr.Format(errFmtState{_buf}, 'v')
-		writeIndent(w, _errsIndent, errsDepth, false, strings.TrimLeft(conv.Bytes2String(_buf.Bytes()), " \n"))
-		_buf.Free()
+		writeIndent(w, _errsIndent, errsDepth, false, strings.TrimLeft(bytes2String(_buf.Bytes()), " \n"))
+		_buf.free()
 	default:
-		w.Write(conv.String2Bytes(terr.Error()))
+		w.Write(string2Bytes(terr.Error()))
 	}
 }
 
@@ -160,4 +158,15 @@ func PanicToErrWithMsg(p interface{}, msg string) error {
 		}
 	}
 	return err
+}
+
+// for zero dep.
+func bytes2String(bs []byte) string {
+	return *(*string)(unsafe.Pointer(&bs))
+}
+
+func string2Bytes(s string) []byte {
+	x := (*[2]uintptr)(unsafe.Pointer(&s))
+	h := [3]uintptr{x[0], x[1], x[1]}
+	return *(*[]byte)(unsafe.Pointer(&h))
 }

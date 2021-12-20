@@ -100,7 +100,7 @@ func Start(r Runner) {
 				defer func() {
 					err = recover()
 					if err != nil {
-						r.Parent().AppendError(errs.PanicToErrWithMsg(err, fmt.Sprintf("panic when %s OnChildDone", r.Parent().Name())))
+						r.Parent().AppendError(errs.PanicToErrWithMsg(err, fmt.Sprintf("panic when %s OnChildDone: %s", r.Parent().Name(), r.Name())))
 					}
 				}()
 				r.Parent().AppendError(r.Parent().OnChildDone(r))
@@ -121,10 +121,20 @@ func Start(r Runner) {
 	r.Info("start")
 	r.markStarted()
 	go func() {
+		// 当r.Start()立即返回的情况下，上方的defer函数里的r.markStopping()和r.Cancel()可能会在此goroutine执行前就全部执行结束
+		// 这种情况下r.Stopping()和r.Ctx().Done()这两个case会同时可进入，会随机进入一个，偶尔就会进入到r.Ctx().Done()这个case里
+		// 所以偶尔就会看到明明没有调r.Cancel()，但是却走到r.Ctx().Done()的case里
+		// 在r.Ctx().Done()这个case里再判断一次r.Stopping()
+
 		select {
 		case <-r.Stopping():
 			return
 		case <-r.Ctx().Done():
+			select {
+			case <-r.Stopping():
+				return
+			default:
+			}
 			r.Info("received cancel, stopping")
 			stop(r)
 		}
