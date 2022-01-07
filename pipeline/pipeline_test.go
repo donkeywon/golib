@@ -85,10 +85,10 @@ func TestMultiGroupPipeline(t *testing.T) {
 
 func TestCompress(t *testing.T) {
 	cfg := NewCfg().
-		Add(RWRoleReader, RWTypeFile, &FileRWCfg{Path: "/Users/wangkun106/test.file.zst"}, nil).
+		Add(RWRoleReader, RWTypeFile, &FileRWCfg{Path: "test.file.zst"}, nil).
 		Add(RWRoleReader, RWTypeCompress, &CompressRWCfg{Type: CompressTypeZstd}, nil).
 		Add(RWRoleStarter, RWTypeCopy, &CopyRWCfg{BufSize: 32 * 1024}, nil).
-		Add(RWRoleWriter, RWTypeFile, &FileRWCfg{Path: "/Users/wangkun106/test.file"}, nil)
+		Add(RWRoleWriter, RWTypeFile, &FileRWCfg{Path: "test.file"}, nil)
 
 	p := New()
 	p.Cfg = cfg
