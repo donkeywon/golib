@@ -2,7 +2,6 @@ package pipeline
 
 import (
 	"context"
-	"errors"
 	"os/exec"
 
 	"github.com/donkeywon/golib/consts"
@@ -66,21 +65,20 @@ func (c *CmdRW) Start() error {
 		c.Store(consts.FieldCmdSignaled, result.Signaled)
 	}
 
-	closeErr := c.Close()
 	if result != nil && result.Signaled {
 		select {
 		case <-c.Stopping():
 			c.Info("exit signaled", "error", err)
-			return closeErr
+			return nil
 		default:
 		}
 	}
 
 	if err == nil {
-		return closeErr
+		return nil
 	}
 
-	return errors.Join(errs.Wrapf(err, "cmd exit, result: %v", result), closeErr)
+	return errs.Wrapf(err, "cmd exit, result: %v", result)
 }
 
 func (c *CmdRW) Stop() error {

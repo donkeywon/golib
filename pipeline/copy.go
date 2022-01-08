@@ -47,18 +47,6 @@ func (cp *CopyRW) Init() error {
 }
 
 func (cp *CopyRW) Start() error {
-	defer func() {
-		e := recover()
-		if e != nil {
-			cp.AppendError(errs.PanicToErrWithMsg(e, "copy panic"))
-		}
-
-		closeErr := cp.Close()
-		if closeErr != nil {
-			cp.AppendError(errs.Wrap(closeErr, "copy RW close fail"))
-		}
-	}()
-
 	buf := bytespool.GetBytesN(cp.BufSize)
 	defer buf.Free()
 

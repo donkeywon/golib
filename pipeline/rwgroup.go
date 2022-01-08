@@ -96,6 +96,20 @@ func (g *RWGroup) Init() error {
 }
 
 func (g *RWGroup) Start() error {
+	defer func() {
+		defer func() {
+			err := recover()
+			if err != nil {
+				g.AppendError(errs.PanicToErrWithMsg(err, "panic when close starter"))
+			}
+		}()
+
+		err := g.starter.Close()
+		if err != nil {
+			g.AppendError(errs.Wrap(err, "close starter fail"))
+		}
+	}()
+
 	var err error
 
 	err = g.initReaders()
