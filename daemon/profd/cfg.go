@@ -7,7 +7,8 @@ const (
 	DefaultProfilingOutputDir     = "/tmp"
 	DefaultEnableGoPs             = false
 	DefaultGoPsAddr               = ":"
-	DefaultEnableHTTPPprof        = false
+	DefaultEnableHTTPProf         = false
+	DefaultEnableWebProf          = false
 	DefaultEnableStatsViz         = false
 )
 
@@ -17,7 +18,8 @@ type Cfg struct {
 	StartupProfilingMode   string `yaml:"startupProfilingMode"     env:"PROF_STARTUP_PROFILING_MODE"     flag-long:"prof-startup-profiling-mode"   flag-description:"startup profiling mode, only works when prof-enable-startup-profiling is enabled"`
 	ProfOutputDir          string `yaml:"profOutputDir"            env:"PROF_OUTPUT_DIR"                 flag-long:"prof-output-dir"               flag-description:"dir path of pprof file save to"`
 
-	EnableHTTPPprof bool `yaml:"enableHTTPPprof" env:"PROF_ENABLE_HTTP_PPROF" flag-long:"prof-enable-http-pprof" flag-description:"enable pprof over http, need httpd"`
+	EnableHTTPProf bool `yaml:"enableHTTPProf" env:"PROF_ENABLE_HTTP_PROF" flag-long:"prof-enable-http-prof" flag-description:"enable prof over http, depends on httpd"`
+	EnableWebProf  bool `yaml:"enableWebProf"  env:"PROF_ENABLE_WEB_PROF"  flag-long:"prof-enable-web-prof"  flag-description:"enable prof over web, depends on httpd"`
 
 	EnableGoPs bool   `yaml:"enableGoPs" env:"PROF_ENABLE_GOPS" flag-long:"prof-enable-gops" flag-description:"enable gops agent"`
 	GoPsAddr   string `yaml:"goPsAddr"   env:"PROF_GOPS_ADDR"   flag-long:"prof-gops-addr"   flag-description:"gops agent listen addr"`
@@ -33,7 +35,8 @@ func NewCfg() *Cfg {
 		ProfOutputDir:          DefaultProfilingOutputDir,
 		EnableGoPs:             DefaultEnableGoPs,
 		GoPsAddr:               DefaultGoPsAddr,
-		EnableHTTPPprof:        DefaultEnableHTTPPprof,
+		EnableHTTPProf:         DefaultEnableHTTPProf,
+		EnableWebProf:          DefaultEnableWebProf,
 		EnableStatsViz:         DefaultEnableStatsViz,
 	}
 }

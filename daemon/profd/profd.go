@@ -72,15 +72,17 @@ func (p *Profd) Init() error {
 		}
 	}
 
-	if p.Cfg.EnableHTTPPprof {
+	if p.Cfg.EnableHTTPProf {
+		httpd.HandleRaw("/debug/pprof/start/{mode}", p.startProf)
+		httpd.HandleRaw("/debug/pprof/stop", p.stopProf)
+	}
+
+	if p.Cfg.EnableWebProf {
 		httpd.HandleFunc("/debug/pprof/", pprof.Index)
 		httpd.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
 		httpd.HandleFunc("/debug/pprof/profile", pprof.Profile)
 		httpd.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
 		httpd.HandleFunc("/debug/pprof/trace", pprof.Trace)
-
-		httpd.HandleRaw("/debug/pprof/start/{mode}", p.startProf)
-		httpd.HandleRaw("/debug/pprof/stop", p.stopProf)
 	}
 
 	if p.Cfg.EnableGoPs {
