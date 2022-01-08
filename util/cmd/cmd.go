@@ -33,10 +33,11 @@ type Result struct {
 }
 
 func Run(command ...string) (*Result, error) {
-	cfg := &Cfg{
-		Command: command,
-	}
-	return RunRaw(context.Background(), cfg)
+	return RunCtx(context.Background(), command...)
+}
+
+func RunCtx(ctx context.Context, command ...string) (*Result, error) {
+	return RunRaw(ctx, &Cfg{Command: command})
 }
 
 func RunRaw(ctx context.Context, cfg *Cfg, beforeRun ...func(cmd *exec.Cmd) error) (*Result, error) {
