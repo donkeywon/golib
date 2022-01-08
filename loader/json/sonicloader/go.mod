@@ -1,6 +1,6 @@
 module github.com/donkeywon/golib/loader/json/sonicloader
 
-go 1.22.7
+go 1.22.0
 
 require (
 	github.com/bytedance/sonic v1.12.7
