@@ -119,19 +119,19 @@ func (u *Upd) upgrade(vi *VerInfo) error {
 
 	stopped := make(chan struct{})
 	go func() {
-		u.Info("close all svc")
+		u.Info("stopping all")
 		runner.Stop(u.Parent())
 		if u.Parent().ChildrenErr() != nil {
-			u.Error("close all svc error occurred", u.Parent().ChildrenErr())
+			u.Error("stop all fail", u.Parent().ChildrenErr())
 		}
 		close(stopped)
 	}()
 
 	select {
 	case <-time.After(time.Minute):
-		u.Error("close all svc timeout", u.Parent().ChildrenErr())
+		u.Error("stop all timeout", u.Parent().ChildrenErr())
 	case <-stopped:
-		u.Info("all svc closed")
+		u.Info("all stopped")
 	}
 
 	upgradeDeployScriptPath := strings.TrimSpace(u.Cfg.UpgradeDeployScriptPath)

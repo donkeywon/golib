@@ -54,15 +54,20 @@ type Runner interface {
 	WithLoggerFrom(r Runner, kvs ...any)
 }
 
-func Init(r Runner) error {
-	var err error
+func Init(r Runner) (err error) {
+	defer func() {
+		p := recover()
+		if p != nil {
+			err = errs.PanicToErrWithMsg(p, fmt.Sprintf("panic when %s init", r.Name()))
+		}
+	}()
 	r.Info("init")
 	if r.Ctx() == nil {
 		r.SetCtx(context.Background())
 	}
 	err = r.Init()
 	if err != nil {
-		return err
+		return
 	}
 	r.Info("init done")
 	for _, child := range r.Children() {
@@ -70,13 +75,18 @@ func Init(r Runner) error {
 		child.SetParent(r)
 		err = Init(child)
 		if err != nil {
-			return err
+			return
 		}
 	}
-	return nil
+	return
 }
 
 func Start(r Runner) {
+	if !r.markStarted() {
+		r.Info("already started")
+		return
+	}
+
 	defer func() {
 		err := recover()
 		if err != nil {
@@ -84,7 +94,7 @@ func Start(r Runner) {
 		}
 
 		if r.markStopping() {
-			// At this time
+			// At this point
 			// 1. stopping or canceled before call runner.Start(r)
 			// 2. done before call runner.Stop(r)
 			// both need to markStopDone
@@ -118,8 +128,6 @@ func Start(r Runner) {
 	default:
 	}
 
-	r.Info("start")
-	r.markStarted()
 	go func() {
 		// 当r.Start()立即返回的情况下，上方的defer函数里的r.markStopping()和r.Cancel()可能会在此goroutine执行前就全部执行结束
 		// 这种情况下r.Stopping()和r.Ctx().Done()这两个case会同时可进入，会随机进入一个，偶尔就会进入到r.Ctx().Done()这个case里
@@ -139,6 +147,8 @@ func Start(r Runner) {
 			stop(r)
 		}
 	}()
+
+	r.Info("starting")
 	r.AppendError(r.Start())
 }
 
@@ -150,17 +160,27 @@ func StartBG(r Runner) {
 }
 
 func Stop(r Runner) {
+	stop(r)
 	if len(r.Children()) > 0 {
 		for i := len(r.Children()) - 1; i >= 0; i-- {
 			stop(r.Children()[i])
 		}
 	}
-	stop(r)
 }
 
 func stop(r Runner) {
+	if !r.markStopping() {
+		r.Info("already stopping")
+		return
+	}
+
+	r.Info("stopping")
+
 	select {
 	case <-r.Started():
+		safeStop(r)
+		r.Info("stop done")
+		r.markStopDone()
 	default:
 		// 这里不直接return的原因是：
 		// 有些struct组合了Runner接口，但是并不需要Start，只是依赖Runner的一些公共方法
@@ -168,24 +188,12 @@ func stop(r Runner) {
 		// 所以这里支持在Runner没有Start的情况下做Stop操作
 		// 这种情况下必须要调用runner.Init执行初始化，Init、Start、Stop都可以不用实现.
 		r.Info("stopping before started")
-		r.markStopping()
 		safeStop(r)
 		r.Info("stop done before started")
 		r.markStopDone()
 		r.markDone()
 		return
 	}
-
-	if !r.markStopping() {
-		r.Info("already stopping")
-		return
-	}
-
-	r.Info("stopping")
-	safeStop(r)
-	r.Info("stop done")
-	r.markStopDone()
-	<-r.Done()
 }
 
 func safeStop(r Runner) {
