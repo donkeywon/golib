@@ -15,7 +15,7 @@ import (
 )
 
 func init() {
-	_h.RegisterMiddleware(logAndRecoverMiddleware)
+	D().RegisterMiddleware(D().logAndRecoverMiddleware)
 }
 
 const DaemonTypeHttpd boot.DaemonType = "httpd"
@@ -44,7 +44,7 @@ func newHTTPServer(cfg *Cfg) *http.Server {
 	}
 }
 
-func H() *Httpd {
+func D() *Httpd {
 	return _h
 }
 
@@ -109,32 +109,27 @@ func logFields(r *http.Request, w *recordResponseWriter, startTs int64, endTs in
 	}
 }
 
-// RegisterMiddleware must called before Handle func below
-func RegisterMiddleware(mf ...MiddlewareFunc) {
-	_h.RegisterMiddleware(mf...)
+func (h *Httpd) Handle(pattern string, handler http.Handler) {
+	h.mux.Handle(pattern, h.buildHandlerChain(handler))
 }
 
-func Handle(pattern string, handler http.Handler) {
-	_h.mux.Handle(pattern, _h.buildHandlerChain(handler))
+func (h *Httpd) HandleFunc(pattern string, handler http.HandlerFunc) {
+	h.mux.HandleFunc(pattern, h.buildHandlerChain(handler).ServeHTTP)
 }
 
-func HandleFunc(pattern string, handler http.HandlerFunc) {
-	_h.mux.HandleFunc(pattern, _h.buildHandlerChain(handler).ServeHTTP)
+func (h *Httpd) HandleRaw(pattern string, handler RawHandler) {
+	h.mux.Handle(pattern, h.buildHandlerChain(handler))
 }
 
-func HandleRaw(pattern string, handler RawHandler) {
-	_h.mux.Handle(pattern, _h.buildHandlerChain(handler))
+func (h *Httpd) HandleAPI(pattern string, handler APIHandler) {
+	h.mux.Handle(pattern, h.buildHandlerChain(handler))
 }
 
-func HandleAPI(pattern string, handler APIHandler) {
-	_h.mux.Handle(pattern, _h.buildHandlerChain(handler))
+func (h *Httpd) HandleREST(pattern string, handler RESTHandler) {
+	h.mux.Handle(pattern, h.buildHandlerChain(handler))
 }
 
-func HandleREST(pattern string, handler RESTHandler) {
-	_h.mux.Handle(pattern, _h.buildHandlerChain(handler))
-}
-
-func logAndRecoverMiddleware(next http.Handler) http.Handler {
+func (h *Httpd) logAndRecoverMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w = newWriteOnceRecordResponseWriter(w)
 
@@ -145,11 +140,11 @@ func logAndRecoverMiddleware(next http.Handler) http.Handler {
 			e := recover()
 			if e != nil {
 				err := errs.PanicToErr(e)
-				_h.Error("handle req fail, panic occurred", err, logFields(r, w.(*recordResponseWriter), start, end)...)
+				h.Error("handle req fail, panic occurred", err, logFields(r, w.(*recordResponseWriter), start, end)...)
 				errStr := errs.ErrToStackString(err)
 				httpu.RespRaw(http.StatusInternalServerError, conv.String2Bytes(errStr), w)
 			} else {
-				_h.Info("handle req", logFields(r, w.(*recordResponseWriter), start, end)...)
+				h.Info("handle req", logFields(r, w.(*recordResponseWriter), start, end)...)
 			}
 		}()
 

@@ -28,7 +28,7 @@ type Upd struct {
 	upgradingBlockChan chan struct{}
 }
 
-func U() *Upd {
+func D() *Upd {
 	return _u
 }
 
@@ -185,7 +185,7 @@ func downloadPackage(downloadDir string, filename string, ratelimitN int, storeC
 
 	p := pipeline.New()
 	p.Cfg = cfg
-	p.Inherit(_u)
+	p.Inherit(D())
 	err := runner.Init(p)
 	if err != nil {
 		return errs.Wrap(err, "init download pipeline fail")
@@ -204,8 +204,4 @@ func extractPackage(filepath string, dstDir string) ([]string, []string, error) 
 		return res.Stdout, res.Stderr, err
 	}
 	return nil, nil, err
-}
-
-func Upgrade(vi *VerInfo) {
-	_u.Upgrade(vi)
 }

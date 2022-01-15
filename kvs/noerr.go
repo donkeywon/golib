@@ -24,8 +24,8 @@ type NoErrKVS interface {
 	LoadAsUintOr(k string, d uint) uint
 	LoadAsFloat(k string) float64
 	LoadAsFloatOr(k string, d float64) float64
-	Collect() map[string]any
-	CollectAsString() map[string]string
+	LoadAll() map[string]any
+	LoadAllAsString() map[string]string
 	Range(func(k string, v any) bool)
 }
 

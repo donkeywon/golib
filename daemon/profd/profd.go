@@ -23,7 +23,7 @@ type Profd struct {
 	*Cfg
 }
 
-func P() *Profd {
+func D() *Profd {
 	return _p
 }
 
@@ -67,22 +67,22 @@ func (p *Profd) Init() error {
 		if err != nil {
 			p.Error("init statsviz fail", err)
 		} else {
-			httpd.Handle("/debug/statsviz/", srv.Index())
-			httpd.HandleFunc("/debug/statsviz/ws", srv.Ws())
+			httpd.D().Handle("/debug/statsviz/", srv.Index())
+			httpd.D().HandleFunc("/debug/statsviz/ws", srv.Ws())
 		}
 	}
 
 	if p.Cfg.EnableHTTPProf {
-		httpd.HandleRaw("/debug/pprof/start/{mode}", p.startProf)
-		httpd.HandleRaw("/debug/pprof/stop", p.stopProf)
+		httpd.D().HandleRaw("/debug/pprof/start/{mode}", p.startProf)
+		httpd.D().HandleRaw("/debug/pprof/stop", p.stopProf)
 	}
 
 	if p.Cfg.EnableWebProf {
-		httpd.HandleFunc("/debug/pprof/", pprof.Index)
-		httpd.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
-		httpd.HandleFunc("/debug/pprof/profile", pprof.Profile)
-		httpd.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
-		httpd.HandleFunc("/debug/pprof/trace", pprof.Trace)
+		httpd.D().HandleFunc("/debug/pprof/", pprof.Index)
+		httpd.D().HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
+		httpd.D().HandleFunc("/debug/pprof/profile", pprof.Profile)
+		httpd.D().HandleFunc("/debug/pprof/symbol", pprof.Symbol)
+		httpd.D().HandleFunc("/debug/pprof/trace", pprof.Trace)
 	}
 
 	if p.Cfg.EnableGoPs {
