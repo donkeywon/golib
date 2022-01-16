@@ -1,9 +1,9 @@
 package upd
 
 import (
+	"github.com/donkeywon/golib/util/v"
 	"os"
-	"path/filepath"
-	"strings"
+	"os/exec"
 	"sync/atomic"
 	"time"
 
@@ -20,12 +20,14 @@ const DaemonTypeUpd boot.DaemonType = "upd"
 
 var _u = New()
 
+// Upd must be first daemon
 type Upd struct {
 	runner.Runner
 	*Cfg
 
 	upgrading          atomic.Bool
 	upgradingBlockChan chan struct{}
+	allDoneExceptMe    chan struct{}
 }
 
 func D() *Upd {
@@ -36,12 +38,15 @@ func New() *Upd {
 	return &Upd{
 		Runner:             runner.Create(string(DaemonTypeUpd)),
 		upgradingBlockChan: make(chan struct{}),
+		allDoneExceptMe:    make(chan struct{}),
 	}
 }
 
 func (u *Upd) Stop() error {
 	u.Cancel()
 	if u.isUpgrading() {
+		// at this point, all daemon done except upd
+		close(u.allDoneExceptMe)
 		<-u.upgradingBlockChan
 	}
 	return u.Runner.Stop()
@@ -69,9 +74,10 @@ func (u *Upd) isUpgrading() bool {
 
 func (u *Upd) Upgrade(vi *VerInfo) {
 	go func() {
-		err := u.upgrade(vi)
-		if err != nil {
-			u.Error("upgrade fail", err)
+		success := u.upgrade(vi)
+
+		// at this point, success is always fail, current process will exit if upgrade success
+		if !success {
 		}
 
 		select {
@@ -83,103 +89,91 @@ func (u *Upd) Upgrade(vi *VerInfo) {
 	}()
 }
 
-func (u *Upd) upgrade(vi *VerInfo) error {
+func (u *Upd) upgrade(vi *VerInfo) bool {
 	if !u.markUpgrading() {
-		return errs.New("already upgrading")
+		u.Warn("already upgrading")
+		return false
 	}
 	defer u.unmarkUpgrading()
 
-	u.Info("start upgrade", "cur_ver", buildinfo.Version, "new_ver", vi.Ver)
+	err := v.Struct(vi)
+	if err != nil {
+		u.Error("version info is invalid", err, "new_ver_info", vi)
+		return false
+	}
 
-	var err error
-	downloadPath := filepath.Join(u.DownloadDir, vi.Filename)
-	if paths.FileExist(downloadPath) {
-		u.Info("download dst path exists, remove it", "path", downloadPath)
-		err = os.RemoveAll(downloadPath)
+	u.Info("start upgrade", "cur_ver", buildinfo.Version, "new_ver_info", vi)
+
+	if paths.DirExist(vi.DownloadDstPath) {
+		u.Error("downloaded dst path is dir, use another path", nil)
+		return false
+	}
+
+	if paths.FileExist(vi.DownloadDstPath) {
+		u.Info("download dst path exists, remove it", "path", vi.DownloadDstPath)
+		err = os.Remove(vi.DownloadDstPath)
 		if err != nil {
-			return errs.Wrapf(err, "remove exists download dst path fail: %s", downloadPath)
+			u.Error("remove exists download dst path fail", err)
+			return false
 		}
 	}
 
-	err = downloadPackage(u.DownloadDir, vi.Filename, vi.StoreCfg)
+	u.Info("start download new package")
+	err = downloadPackage(vi.DownloadDstPath, vi.StoreCfg)
 	if err != nil {
-		return errs.Wrap(err, "download package fail")
+		u.Error("download new package fail", err)
+		return false
 	}
-	u.Info("download package done", "cfg", u.Cfg, "ver_info", vi)
+	u.Info("download new package done")
 
-	extractDir := strings.TrimSpace(u.Cfg.ExtractDir)
-	if !strings.HasPrefix(extractDir, "/") {
-		extractDir = filepath.Join(u.DownloadDir, extractDir)
-	}
-	stdout, stderr, err := extractPackage(downloadPath, extractDir)
-	if err != nil {
-		return errs.Wrapf(err, "extract package fail, stdout: %v, stderr: %v", stdout, stderr)
-	}
-	u.Info("extract package done", "extract_dir", extractDir, "stdout", stdout, "stderr", stderr)
-
-	stopped := make(chan struct{})
 	go func() {
 		u.Info("stopping all")
-		runner.Stop(u.Parent())
+		runner.StopAndWait(u.Parent())
 		if u.Parent().ChildrenErr() != nil {
 			u.Error("stop all fail", u.Parent().ChildrenErr())
 		}
-		close(stopped)
 	}()
 
 	select {
 	case <-time.After(time.Minute):
 		u.Error("stop all timeout", u.Parent().ChildrenErr())
-	case <-stopped:
+	case <-u.allDoneExceptMe:
 		u.Info("all stopped")
 	}
 
-	upgradeDeployScriptPath := strings.TrimSpace(u.Cfg.UpgradeDeployScriptPath)
-	if !strings.HasPrefix(upgradeDeployScriptPath, "/") {
-		upgradeDeployScriptPath = filepath.Join(extractDir, upgradeDeployScriptPath)
+	u.Info("start deploy new package")
+	var cmdResult *cmd.Result
+	cmdResult, err = cmd.RunCtx(u.Ctx(), vi.DeployCmd...)
+	if err != nil {
+		u.Error("deploy new package fail", err, "cmd_result", cmdResult)
+		return false
 	}
-	if !paths.FileExist(upgradeDeployScriptPath) {
-		return errs.Errorf("upgrade deploy script not exists: %s", upgradeDeployScriptPath)
-	}
-	res, err := cmd.Run("bash", upgradeDeployScriptPath)
-	u.Info("exec upgrade deploy script", "result", res, "err", err)
-	if res.ExitCode != 0 || err != nil {
+	u.Info("deploy new package done")
+
+	u.Info("start new binary")
+	nc := exec.Command(os.Args[0], os.Args[1:]...)
+	cmdResult = cmd.Start(nc)
+	if cmdResult.Pid == 0 {
+		u.Error("start new binary fail", nil, "cmd_result", cmdResult)
 		os.Exit(1)
 	}
-
-	upgradeStartScriptPath := strings.TrimSpace(u.Cfg.UpgradeStartScriptPath)
-	if upgradeStartScriptPath != "" {
-		if !strings.HasPrefix(upgradeStartScriptPath, "/") {
-			upgradeStartScriptPath = filepath.Join(extractDir, upgradeStartScriptPath)
-		}
-		if !paths.FileExist(upgradeStartScriptPath) {
-			return errs.Errorf("upgrade start script not exists: %s", upgradeStartScriptPath)
-		}
-
-		res, err = cmd.Run("bash", upgradeStartScriptPath)
-		u.Info("exec upgrade start script", "result", res, "err", err)
-		if res.ExitCode != 0 || err != nil {
-			os.Exit(1)
-		}
-	}
-
 	os.Exit(0)
-	return nil
+	return true
 }
 
-func downloadPackage(downloadDir string, filename string, storeCfg *pipeline.RWCfg) error {
+func downloadPackage(downloadDstPath string, storeCfg *pipeline.RWCfg) error {
 	cfg := pipeline.NewCfg().
 		AddCfg(storeCfg).
 		Add(
 			pipeline.RWRoleStarter,
 			pipeline.RWTypeCopy,
-			&pipeline.CopyRWCfg{BufSize: 1024 * 1024},
+			&pipeline.CopyRWCfg{BufSize: 64 * 1024},
 			nil,
 		).
 		Add(
 			pipeline.RWRoleWriter,
 			pipeline.RWTypeFile,
-			&pipeline.FileRWCfg{Path: filepath.Join(downloadDir, filename)},
+			&pipeline.FileRWCfg{Path: downloadDstPath},
 			nil,
 		)
 
@@ -193,15 +187,4 @@ func downloadPackage(downloadDir string, filename string, storeCfg *pipeline.RWC
 
 	runner.Start(p)
 	return p.Err()
-}
-
-func extractPackage(filepath string, dstDir string) ([]string, []string, error) {
-	if !paths.DirExist(dstDir) {
-		return nil, nil, errs.Errorf("extract dst dir not exists: %s", dstDir)
-	}
-	res, err := cmd.Run("tar", "xf", filepath, "-C", dstDir)
-	if res != nil {
-		return res.Stdout, res.Stderr, err
-	}
-	return nil, nil, err
 }
