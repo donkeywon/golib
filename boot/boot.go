@@ -180,9 +180,11 @@ func (b *Booter) Start() error {
 	case sig := <-termSigCh:
 		b.Info("received signal, exit", "signal", sig.String())
 		go runner.StopAndWait(b)
+		<-b.StopDone()
 	case sig := <-intSigCh:
 		b.Info("received signal, exit", "signal", sig.String())
 		b.Cancel()
+		<-b.StopDone()
 	case <-b.Stopping():
 		b.Info("exit due to stopping")
 	}
