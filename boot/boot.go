@@ -170,6 +170,8 @@ func (b *Booter) Init() error {
 }
 
 func (b *Booter) Start() error {
+	b.Info("starting", "version", buildinfo.Version, "build_time", buildinfo.BuildTime, "revision", buildinfo.Revision)
+
 	termSigCh := make(chan os.Signal, 1)
 	signal.Notify(termSigCh, signals.TermSignals...)
 

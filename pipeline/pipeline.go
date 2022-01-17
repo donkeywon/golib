@@ -15,7 +15,7 @@ func init() {
 	plugin.RegisterWithCfg(PluginTypePipeline, func() interface{} { return New() }, func() interface{} { return NewCfg() })
 }
 
-const PluginTypePipeline plugin.Type = "pipeline"
+const PluginTypePipeline plugin.Type = "ppl"
 
 type Cfg struct {
 	RWs []*RWCfg `json:"rws" validate:"required" yaml:"rws"`
@@ -55,7 +55,7 @@ type Pipeline struct {
 
 func New() *Pipeline {
 	return &Pipeline{
-		Runner: runner.Create("pipeline"),
+		Runner: runner.Create(string(PluginTypePipeline)),
 		Cfg:    NewCfg(),
 	}
 }
