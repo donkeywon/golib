@@ -9,14 +9,14 @@ require (
 	github.com/earthboundkid/versioninfo/v2 v2.24.1
 	github.com/fsnotify/fsnotify v1.8.0
 	github.com/go-playground/validator/v10 v10.24.0
-	github.com/goccy/go-yaml v1.15.13
+	github.com/goccy/go-yaml v1.15.15
 	github.com/google/uuid v1.6.0
 	github.com/icza/backscanner v0.0.0-20241124160932-dff01ac50250
 	github.com/jinzhu/copier v0.4.0
 	github.com/klauspost/compress v1.17.11
 	github.com/klauspost/pgzip v1.2.6
 	github.com/pelletier/go-toml/v2 v2.2.3
-	github.com/petermattis/goid v0.0.0-20241211131331-93ee7e083c43
+	github.com/petermattis/goid v0.0.0-20250121172306-05bcfb9a85dc
 	github.com/pkg/profile v1.7.0
 	github.com/prometheus/procfs v0.15.1
 	github.com/shirou/gopsutil/v3 v3.24.5
@@ -26,7 +26,7 @@ require (
 	golang.org/x/crypto v0.32.0
 	golang.org/x/sys v0.29.0
 	golang.org/x/time v0.9.0
-	google.golang.org/protobuf v1.36.2
+	google.golang.org/protobuf v1.36.3
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 )
 
@@ -37,7 +37,7 @@ require (
 	github.com/go-ole/go-ole v1.3.0 // indirect
 	github.com/go-playground/locales v0.14.1 // indirect
 	github.com/go-playground/universal-translator v0.18.1 // indirect
-	github.com/google/pprof v0.0.0-20241210010833-40e02aabc2ad // indirect
+	github.com/google/pprof v0.0.0-20250121033306-997b0b79cac0 // indirect
 	github.com/klauspost/cpuid/v2 v2.2.9 // indirect
 	github.com/kr/pretty v0.3.1 // indirect
 	github.com/leodido/go-urn v1.4.0 // indirect

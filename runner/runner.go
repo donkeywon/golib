@@ -54,7 +54,7 @@ type Runner interface {
 	WithLoggerFrom(r Runner, kvs ...any)
 }
 
-// Init a runner and init its children in order
+// Init a runner and init its children in order.
 func Init(r Runner) (err error) {
 	defer func() {
 		p := recover()
@@ -82,7 +82,7 @@ func Init(r Runner) (err error) {
 	return
 }
 
-// Start a runner and wait it done
+// Start a runner and wait it done.
 func Start(r Runner) {
 	if !r.markStarted() {
 		r.Info("already started")
@@ -154,7 +154,7 @@ func Start(r Runner) {
 	r.AppendError(r.Start())
 }
 
-// StartBG start a runner and its children in the background
+// StartBG start a runner and its children in the background.
 func StartBG(r Runner) {
 	go Start(r)
 	for _, c := range r.Children() {
@@ -162,7 +162,7 @@ func StartBG(r Runner) {
 	}
 }
 
-// Stop a runner, in most scenario, Stop is a notification action, used to notify the Runner to stop
+// Stop a runner, in most scenario, Stop is a notification action, used to notify the Runner to stop.
 func Stop(r Runner) {
 	stop(r, false)
 	if len(r.Children()) > 0 {

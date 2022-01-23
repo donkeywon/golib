@@ -244,7 +244,7 @@ func (td *Taskd) submit(t *task.Task, wait bool, must bool) bool {
 		td.markTaskRunning(t.Cfg.ID)
 		td.hookTask(t, nil, td.startHooks, "start", nil)
 
-		td.Info("task starting", "task_id", t.Cfg.ID)
+		td.Info("starting task", "task_id", t.Cfg.ID, "task_type", t.Cfg.Type)
 		runner.Start(t)
 		td.hookTask(t, nil, td.doneHooks, "done", nil)
 		td.unmarkTaskAndTaskID(t.Cfg.ID)

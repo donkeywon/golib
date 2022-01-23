@@ -81,8 +81,8 @@ func (h *HostRateLimiter) Init() error {
 			h.Error("get nic speed fail", err)
 			h.Info("try get nic speed on cloud")
 
-			cloudType := cloud.CloudType()
-			if cloudType == cloud.CloudTypeUnknown {
+			cloudType := cloud.Which()
+			if cloudType == cloud.TypeUnknown {
 				return errs.Errorf("unknown cloud type")
 			}
 

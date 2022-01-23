@@ -133,7 +133,7 @@ func (t *Task) Init() error {
 		}
 	}
 
-	return nil
+	return t.Runner.Init()
 }
 
 func (t *Task) Start() error {

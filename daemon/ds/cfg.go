@@ -1,4 +1,4 @@
-package dsd
+package ds
 
 import (
 	"time"

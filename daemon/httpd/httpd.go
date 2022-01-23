@@ -144,10 +144,15 @@ func (h *Httpd) logAndRecoverMiddleware(next http.Handler) http.Handler {
 				errStr := errs.ErrToStackString(err)
 				httpu.RespRaw(http.StatusInternalServerError, conv.String2Bytes(errStr), w)
 			} else {
-				h.Info("handle req", logFields(r, w.(*recordResponseWriter), start, end)...)
+				h.Debug("handle req done", logFields(r, w.(*recordResponseWriter), start, end)...)
 			}
 		}()
 
+		h.Debug("start handle req",
+			"uri", r.RequestURI,
+			"remote", r.RemoteAddr,
+			"req_method", r.Method,
+			"req_body_size", r.ContentLength)
 		next.ServeHTTP(w, r)
 	})
 }

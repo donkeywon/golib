@@ -62,7 +62,7 @@ func LoadAsString(kvs KVS, k string) (string, error) {
 	if !exists || v == nil {
 		return "", nil
 	}
-	vv, err := conv.AnyToString(v)
+	vv, err := conv.ToString(v)
 	if err != nil {
 		return "", errs.Wrap(err, "convert value to string fail")
 	}

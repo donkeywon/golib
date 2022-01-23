@@ -41,7 +41,7 @@ func (m *MapKVS) Store(k string, v any) {
 }
 
 func (m *MapKVS) StoreAsString(k string, v any) {
-	s, err := conv.AnyToString(v)
+	s, err := conv.ToString(v)
 	if err != nil {
 		panic(err)
 	}
@@ -113,7 +113,7 @@ func (m *MapKVS) LoadAllAsString() map[string]string {
 	var err error
 	result := make(map[string]string)
 	m.Range(func(k string, v any) bool {
-		result[k], err = conv.AnyToString(v)
+		result[k], err = conv.ToString(v)
 		if err != nil {
 			panic(err)
 		}
