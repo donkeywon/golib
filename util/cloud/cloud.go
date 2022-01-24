@@ -3,7 +3,10 @@ package cloud
 import (
 	"github.com/donkeywon/golib/errs"
 	"github.com/donkeywon/golib/util/eth"
+	"time"
 )
+
+var cloudMetadataReqTimeout = 10 * time.Second
 
 type Type string
 

@@ -1,33 +1,30 @@
 package cloud
 
 import (
-	"strconv"
-	"time"
-
+	"bytes"
 	"github.com/donkeywon/golib/util/httpc"
+	"net/http"
+	"strconv"
 )
 
 func IsTencent() bool {
 	data, err := GetTencentCvmBandwidthIngress()
-	if len(data) > 0 && err == nil {
+	if data != nil && data.Len() > 0 && err == nil {
 		return true
 	}
 	return false
 }
 
-func GetTencentCvmInstanceType() ([]byte, error) {
-	body, _, err := httpc.Gtimeout(time.Second, "http://metadata.tencentyun.com/latest/meta-data/instance/instance-type")
-	return body, err
+func GetTencentCvmInstanceType() (*bytes.Buffer, error) {
+	return getTencentMetadata("http://metadata.tencentyun.com/latest/meta-data/instance/instance-type")
 }
 
-func GetTencentCvmBandwidthEgress() ([]byte, error) {
-	body, _, err := httpc.Gtimeout(time.Second, "http://metadata.tencentyun.com/latest/meta-data/instance/bandwidth-limit-egress")
-	return body, err
+func GetTencentCvmBandwidthEgress() (*bytes.Buffer, error) {
+	return getTencentMetadata("http://metadata.tencentyun.com/latest/meta-data/instance/bandwidth-limit-egress")
 }
 
-func GetTencentCvmBandwidthIngress() ([]byte, error) {
-	body, _, err := httpc.Gtimeout(time.Second, "http://metadata.tencentyun.com/latest/meta-data/instance/bandwidth-limit-ingress")
-	return body, err
+func GetTencentCvmBandwidthIngress() (*bytes.Buffer, error) {
+	return getTencentMetadata("http://metadata.tencentyun.com/latest/meta-data/instance/bandwidth-limit-ingress")
 }
 
 func GetTencentCvmNetworkSpeed() (int, error) {
@@ -35,10 +32,19 @@ func GetTencentCvmNetworkSpeed() (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	speed, err := strconv.Atoi(string(egress))
+	speed, err := strconv.Atoi(egress.String())
 	if err != nil {
 		return 0, err
 	}
 	speed /= 1024
 	return speed, nil
+}
+
+func getTencentMetadata(url string) (*bytes.Buffer, error) {
+	resp := bytes.NewBuffer(nil)
+	_, err := httpc.Get(nil, cloudMetadataReqTimeout, url,
+		httpc.CheckStatusCode(http.StatusOK),
+		httpc.ToBytesBuffer(resp),
+	)
+	return resp, err
 }

@@ -1,7 +1,6 @@
 package promd
 
 import (
-	"plugin"
 	"reflect"
 	"sync"
 
@@ -17,7 +16,6 @@ const DaemonTypePromd boot.DaemonType = "promd"
 
 type Promd struct {
 	runner.Runner
-	plugin.Plugin
 	*Cfg
 
 	mu  sync.RWMutex

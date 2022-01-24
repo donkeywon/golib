@@ -1,40 +1,39 @@
 package cloud
 
 import (
-	"strconv"
-	"time"
-
+	"bytes"
 	"github.com/donkeywon/golib/util/httpc"
+	"strconv"
 )
 
 func IsAliyun() bool {
-	metadatas, err := getAliEcsInstaneMetadata("")
-	if len(metadatas) > 0 && err == nil {
+	metadata, err := getAliEcsInstanceMetadata("")
+	if metadata != nil && metadata.Len() > 0 && err == nil {
 		return true
 	}
 	return false
 }
 
-func GetAliEcsMetadataToken() ([]byte, error) {
-	body, _, err := httpc.PuTimeout(
-		time.Second,
-		"http://100.100.100.200/latest/api/token",
-		nil,
-		"X-aliyun-ecs-metadata-token-ttl-seconds",
-		"30")
-	return body, err
+func GetAliEcsMetadataToken() (*bytes.Buffer, error) {
+	respBody := bytes.NewBuffer(nil)
+
+	_, err := httpc.Put(nil, cloudMetadataReqTimeout, "http://100.100.100.200/latest/api/token",
+		httpc.WithHeaders("X-aliyun-ecs-metadata-token-ttl-seconds", "30"),
+		httpc.ToBytesBuffer(respBody))
+
+	return respBody, err
 }
 
-func GetAliEcsInstanceType() ([]byte, error) {
-	return getAliEcsInstaneMetadata("instance-type")
+func GetAliEcsInstanceType() (*bytes.Buffer, error) {
+	return getAliEcsInstanceMetadata("instance-type")
 }
 
-func GetAliEcsNetbwEgress() ([]byte, error) {
-	return getAliEcsInstaneMetadata("max-netbw-egress")
+func GetAliEcsNetbwEgress() (*bytes.Buffer, error) {
+	return getAliEcsInstanceMetadata("max-netbw-egress")
 }
 
-func GetAliEcsNetbwIngress() ([]byte, error) {
-	return getAliEcsInstaneMetadata("max-netbw-ingress")
+func GetAliEcsNetbwIngress() (*bytes.Buffer, error) {
+	return getAliEcsInstanceMetadata("max-netbw-ingress")
 }
 
 func GetAliEcsNetworkSpeed() (int, error) {
@@ -42,7 +41,7 @@ func GetAliEcsNetworkSpeed() (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	speed, err := strconv.Atoi(string(egress))
+	speed, err := strconv.Atoi(egress.String())
 	if err != nil {
 		return 0, err
 	}
@@ -50,16 +49,16 @@ func GetAliEcsNetworkSpeed() (int, error) {
 	return speed, nil
 }
 
-func getAliEcsInstaneMetadata(typ string) ([]byte, error) {
+func getAliEcsInstanceMetadata(typ string) (*bytes.Buffer, error) {
 	token, err := GetAliEcsMetadataToken()
 	if err != nil {
 		return nil, err
 	}
 
-	body, _, err := httpc.Gtimeout(
-		time.Second,
-		"http://100.100.100.200/latest/meta-data/instance/"+typ,
-		"X-aliyun-ecs-metadata-token",
-		string(token))
-	return body, err
+	respBody := bytes.NewBuffer(nil)
+	_, err = httpc.Get(nil, cloudMetadataReqTimeout, "http://100.100.100.200/latest/meta-data/instance/"+typ,
+		httpc.WithHeaders("X-aliyun-ecs-metadata-token", token.String()),
+		httpc.ToBytesBuffer(respBody))
+
+	return respBody, err
 }

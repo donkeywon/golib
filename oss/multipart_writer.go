@@ -5,10 +5,8 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/xml"
-	"errors"
 	"fmt"
 	"net/http"
-	"slices"
 	"sync"
 	"time"
 
@@ -82,12 +80,7 @@ func (w *MultiPartWriter) Write(p []byte) (int, error) {
 	var err error
 
 	if !oss.IsAzblob(w.URL) && !w.initialized {
-		w.uploadID, err = retry.DoWithData(
-			func() (string, error) {
-				return w.initMultiPart()
-			},
-			retry.Attempts(uint(w.Retry)),
-		)
+		w.uploadID, err = w.initMultiPart()
 		if err != nil {
 			return 0, errs.Wrap(err, "init multi part fail")
 		}
@@ -126,75 +119,52 @@ func (w *MultiPartWriter) Abort() error {
 		return nil
 	}
 
-	url := w.URL + "?uploadId=" + w.uploadID
+	var respBody = bytes.NewBuffer(nil)
+	resp, err := retry.DoWithData(func() (*http.Response, error) {
+		return httpc.Delete(nil, time.Second*time.Duration(w.Timeout), w.URL+"?uploadId="+w.uploadID,
+			httpc.ReqOptionFunc(w.addAuth),
+			httpc.CheckStatusCode(http.StatusNoContent),
+			httpc.ToBytesBuffer(respBody))
+	}, retry.Attempts(uint(w.Retry)))
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*time.Duration(w.Timeout))
-	defer cancel()
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, url, nil)
 	if err != nil {
-		return errs.Wrap(err, "new abort multipart request fail")
+		return errs.Wrapf(err, "abort multipart fail, resp: %+v, body: %s", resp, respBody.String())
 	}
-
-	err = w.addAuth(req)
-	if err != nil {
-		return errs.Wrap(err, "sign oss req fail")
-	}
-
-	body, resp, err := w.do(req, http.StatusNoContent)
-	if err != nil {
-		return errs.Wrapf(err, "abort multipart fail, resp: %+v, body: %s", resp, string(body))
-	}
-
 	return nil
 }
 
 func (w *MultiPartWriter) Complete() error {
 	var (
-		url    string
-		bs     []byte
-		err    error
-		method string
+		url         string
+		err         error
+		body        interface{}
+		checkStatus int
+		resp        *http.Response
+		respBody    = bytes.NewBuffer(nil)
 	)
 
 	if oss.IsAzblob(w.URL) {
 		url = w.URL + "?comp=blocklist"
-
-		res := &BlockList{Latest: w.blockList}
-		bs, err = xml.Marshal(res)
-		if err != nil {
-			return errs.Wrapf(err, "marshal BlockList fail: %+v", res)
-		}
-		method = http.MethodPut
+		checkStatus = http.StatusCreated
+		body = &BlockList{Latest: w.blockList}
 	} else {
 		url = w.URL + "?uploadId=" + w.uploadID
-
-		res := &CompleteMultipartUpload{Parts: w.parts}
-		bs, err = xml.Marshal(res)
-		if err != nil {
-			return errs.Wrapf(err, "marshal CompleteMultipartUpload fail: %+v", res)
-		}
-		method = http.MethodPost
+		checkStatus = http.StatusOK
+		body = &CompleteMultipartUpload{Parts: w.parts}
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*time.Duration(w.Timeout))
-	defer cancel()
+	resp, err = retry.DoWithData(func() (*http.Response, error) {
+		return httpc.Put(nil, time.Second*time.Duration(w.Timeout), url,
+			httpc.ReqOptionFunc(w.addAuth),
+			httpc.WithBodyMarshal(body, xml.Marshal),
+			httpc.CheckStatusCode(checkStatus),
+			httpc.ToBytesBuffer(respBody),
+		)
+	}, retry.Attempts(uint(w.Retry)))
 
-	req, err := http.NewRequestWithContext(ctx, method, url, bytes.NewReader(bs))
 	if err != nil {
-		return errs.Wrap(err, "new complete multipart request fail")
+		return errs.Wrapf(err, "retry do complete multipart request fail, resp: %+v, body: %s", resp, respBody.String())
 	}
-
-	err = w.addAuth(req)
-	if err != nil {
-		return errs.Wrap(err, "sign oss req fail")
-	}
-
-	body, resp, err := w.do(req)
-	if err != nil {
-		return errs.Wrapf(err, "do complete multipart request fail, resp: %+v, body: %s", resp, string(body))
-	}
-
 	return nil
 }
 
@@ -202,56 +172,24 @@ func (w *MultiPartWriter) addAuth(req *http.Request) error {
 	return oss.Sign(req, w.Ak, w.Sk, w.Region)
 }
 
-func (w *MultiPartWriter) do(req *http.Request, ignoreCode ...int) ([]byte, *http.Response, error) {
-	body, resp, err := httpc.DoBody(req)
-	if errors.Is(err, context.Canceled) {
-		return nil, nil, nil
-	}
-	if err != nil {
-		return nil, nil, errs.Wrap(err, "do write http request fail")
-	}
-
-	if oss.IsAzblob(w.URL) {
-		if resp.StatusCode != http.StatusCreated && !slices.Contains(ignoreCode, resp.StatusCode) {
-			return body, resp, errs.Errorf("http resp status code is not created: %d, body: %s", resp.StatusCode, string(body))
-		}
-	} else {
-		if resp.StatusCode != http.StatusOK && !slices.Contains(ignoreCode, resp.StatusCode) {
-			return body, resp, errs.Errorf("http resp status code is not ok: %d, body: %s", resp.StatusCode, string(body))
-		}
-	}
-
-	return body, resp, nil
-}
-
 func (w *MultiPartWriter) initMultiPart() (string, error) {
-	url := w.URL + "?uploads"
+	result := &InitiateMultipartUploadResult{}
+	resp, err := retry.DoWithData(
+		func() (*http.Response, error) {
+			return httpc.Post(w.ctx, time.Second*time.Duration(w.Timeout), w.URL+"?uploads",
+				httpc.ReqOptionFunc(w.addAuth),
+				httpc.CheckStatusCode(http.StatusOK),
+				httpc.ToAnyUnmarshal(result, xml.Unmarshal),
+			)
+		},
+		retry.Attempts(uint(w.Retry)),
+	)
 
-	ctx, cancel := context.WithTimeout(w.ctx, time.Second*time.Duration(w.Timeout))
-	defer cancel()
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, nil)
 	if err != nil {
-		return "", errs.Wrap(err, "new init multipart request fail")
+		return "", errs.Wrapf(err, "retry do init multipart request fail, resp: %+v", resp)
 	}
 
-	err = w.addAuth(req)
-	if err != nil {
-		return "", errs.Wrap(err, "sign oss req fail")
-	}
-
-	body, resp, err := w.do(req)
-	if err != nil {
-		return "", errs.Wrapf(err, "do req fail, resp: %+v, resp body: %s", resp, string(body))
-	}
-
-	res := &InitiateMultipartUploadResult{}
-	err = xml.Unmarshal(body, res)
-	if err != nil {
-		return "", errs.Wrapf(err, "unmarshal multipart response xml fail, resp: %+v, resp body: %s", resp, string(body))
-	}
-
-	return res.UploadID, nil
+	return result.UploadID, nil
 }
 
 func (w *MultiPartWriter) uploadPart(body []byte) error {
@@ -288,35 +226,30 @@ func (w *MultiPartWriter) uploadPart(body []byte) error {
 
 func (w *MultiPartWriter) upload(partNo int, uploadID string, body []byte) (string, error) {
 	var (
-		url  string
-		etag string
+		url         string
+		etag        string
+		checkStatus int
+		respBody    = bytes.NewBuffer(nil)
 	)
 	if oss.IsAzblob(w.URL) {
 		blockID := base64.StdEncoding.EncodeToString([]byte(uuid.NewString()))
 		etag = blockID
 		url = fmt.Sprintf("%s?comp=block&blockid=%s", w.URL, blockID)
+		checkStatus = http.StatusCreated
 	} else {
 		url = fmt.Sprintf("%s?partNumber=%d&uploadId=%s", w.URL, partNo, uploadID)
+		checkStatus = http.StatusOK
 	}
 
-	ctx, cancel := context.WithTimeout(w.ctx, time.Second*time.Duration(w.Timeout))
-	defer cancel()
+	resp, err := httpc.Put(w.ctx, time.Second*time.Duration(w.Timeout), url,
+		httpc.ReqOptionFunc(w.addAuth),
+		httpc.WithBody(body),
+		httpc.CheckStatusCode(checkStatus),
+		httpc.ToBytesBuffer(respBody),
+	)
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPut, url, bytes.NewReader(body))
 	if err != nil {
-		return "", errs.Wrap(err, "new upload request fail")
-	}
-
-	req.ContentLength = int64(len(body))
-
-	err = w.addAuth(req)
-	if err != nil {
-		return "", errs.Wrap(err, "sign oss req fail")
-	}
-
-	_, resp, err := w.do(req)
-	if err != nil {
-		return "", errs.Wrap(err, "do upload request fail")
+		return "", errs.Wrapf(err, "do upload request fail, resp: %+v, respBody: %s", resp, respBody.String())
 	}
 
 	if oss.IsAzblob(w.URL) {
@@ -328,7 +261,7 @@ func (w *MultiPartWriter) upload(partNo int, uploadID string, body []byte) (stri
 		etag = resp.Header.Get("ETag")
 	}
 	if etag == "" {
-		return "", errs.Errorf("etag not exists in resp header: %+v", resp)
+		return "", errs.Errorf("etag not exists in resp header, resp: %+v, respBody: %s", resp, respBody.String())
 	}
 
 	return etag, nil

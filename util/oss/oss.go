@@ -1,14 +1,17 @@
 package oss
 
 import (
+	"bytes"
 	"context"
-	"io"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/donkeywon/golib/errs"
 	"github.com/donkeywon/golib/util/httpc"
 )
+
+var commonTimeout = 10 * time.Second
 
 func Which(url string) Type {
 	if IsAzblob(url) {
@@ -75,59 +78,42 @@ func Sign(req *http.Request, ak string, sk string, region string) error {
 	return AmzSign(req, ak, sk, region)
 }
 
-func Delete(ctx context.Context, url string, ak string, sk string, region string) error {
-	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, url, nil)
-	if err != nil {
-		return errs.Wrap(err, "create http delete request fail")
-	}
-
-	err = Sign(req, ak, sk, region)
-	if err != nil {
-		return errs.Wrap(err, "oss sign fail")
-	}
-
-	body, resp, err := httpc.DoBody(req)
-	if err != nil {
-		return errs.Wrap(err, "do http delete request fail")
-	}
-
+func Delete(ctx context.Context, timeout time.Duration, url string, ak string, sk string, region string) error {
+	var (
+		checkStatus []int
+		respBody    = bytes.NewBuffer(nil)
+	)
 	if IsAzblob(url) {
-		if resp == nil || (resp.StatusCode != http.StatusAccepted && resp.StatusCode != http.StatusNotFound) {
-			return errs.Errorf("http resp status code is not accepted: %d, body: %s", resp.StatusCode, string(body))
-		}
+		checkStatus = []int{http.StatusAccepted, http.StatusNotFound}
 	} else {
-		if resp == nil || resp.StatusCode != http.StatusNoContent {
-			return errs.Errorf("http resp status code is not ok: %d, body: %s", resp.StatusCode, string(body))
-		}
+		checkStatus = []int{http.StatusNoContent}
+	}
+
+	resp, err := httpc.Delete(ctx, timeout, url,
+		httpc.ReqOptionFunc(func(req *http.Request) error {
+			return Sign(req, ak, sk, region)
+		}),
+		httpc.CheckStatusCode(checkStatus...),
+		httpc.ToBytesBuffer(respBody),
+	)
+
+	if err != nil {
+		return errs.Errorf("do http delete request fail, resp: %+v, respBody: %s", resp, respBody.String())
 	}
 
 	return nil
 }
 
-func Head(ctx context.Context, url string, ak string, sk string, region string) (*http.Response, error) {
-	return Do(ctx, http.MethodHead, url, ak, sk, region, nil)
-}
+func Head(ctx context.Context, timeout time.Duration, url string, ak string, sk string, region string) (*http.Response, error) {
+	resp, err := httpc.Head(ctx, timeout, url,
+		httpc.ReqOptionFunc(func(req *http.Request) error {
+			return Sign(req, ak, sk, region)
+		}),
+		httpc.CheckStatusCode(http.StatusOK),
+	)
 
-func Do(ctx context.Context, method string, url string, ak string, sk string, region string, body io.Reader) (*http.Response, error) {
-	req, err := http.NewRequestWithContext(ctx, method, url, body)
 	if err != nil {
-		return nil, err
-	}
-
-	if ak != "" || sk != "" {
-		err = Sign(req, ak, sk, region)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	resp, err := httpc.Do(req)
-	if err != nil {
-		return resp, err
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, errs.Errorf("http resp status code is not ok: %d, resp: %+v", resp.StatusCode, resp)
+		return nil, errs.Errorf("do http head request fail, resp: %+v", resp)
 	}
 
 	return resp, nil
