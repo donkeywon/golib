@@ -25,6 +25,7 @@ const (
 	MIMEXML               = "application/xml"
 	MIMEXML2              = "text/xml"
 	MIMEPlain             = "text/plain"
+	MIMEPlainUTF8         = "text/plain; charset=utf-8"
 	MIMEPOSTForm          = "application/x-www-form-urlencoded"
 	MIMEMultipartPOSTForm = "multipart/form-data"
 	MIMEPROTOBUF          = "application/x-protobuf"

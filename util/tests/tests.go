@@ -26,10 +26,10 @@ var (
 
 func init() {
 	debugRunner.SetCtx(context.Background())
-	reflects.SetFirst(debugRunner.Runner, l)
+	reflects.SetFirstMatchedField(debugRunner.Runner, l)
 
 	defaultRunner.SetCtx(context.Background())
-	reflects.SetFirst(defaultRunner.Runner, dl)
+	reflects.SetFirstMatchedField(defaultRunner.Runner, dl)
 }
 
 // DebugInit for test case only, with debug log level.

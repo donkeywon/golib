@@ -111,7 +111,7 @@ func (b *Booter) Init() error {
 	var err error
 
 	// use default logger as temp logger
-	reflects.SetFirst(b.Runner, log.Default())
+	reflects.SetFirstMatchedField(b.Runner, log.Default())
 
 	b.cfgMap = buildCfgMap()
 	b.cfgMap["log"] = b.logCfg
@@ -153,7 +153,7 @@ func (b *Booter) Init() error {
 	if err != nil {
 		return errs.Wrap(err, "build logger fail")
 	}
-	ok := reflects.SetFirst(b.Runner, l.WithLoggerName(b.Name()))
+	ok := reflects.SetFirstMatchedField(b.Runner, l.WithLoggerName(b.Name()))
 	if !ok {
 		panic("boot set logger fail")
 	}
