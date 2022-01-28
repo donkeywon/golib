@@ -14,14 +14,14 @@ import (
 )
 
 func init() {
-	plugin.RegisterWithCfg(PluginTypeTask, func() interface{} { return New() }, func() interface{} { return NewCfg() })
+	plugin.RegWithCfg(PluginTypeTask, func() any { return New() }, func() any { return NewCfg() })
 }
 
 const PluginTypeTask plugin.Type = "task"
 
 type Type string
 
-type Collector func(*Task) interface{}
+type Collector func(*Task) any
 
 type StepHook func(*Task, int, Step)
 
@@ -33,8 +33,8 @@ type HookExtraData struct {
 }
 
 type StepCfg struct {
-	Type StepType    `json:"type" validate:"required" yaml:"type"`
-	Cfg  interface{} `json:"cfg"  validate:"required" yaml:"cfg"`
+	Type StepType `json:"type" validate:"required" yaml:"type"`
+	Cfg  any      `json:"cfg"  validate:"required" yaml:"cfg"`
 }
 
 type Cfg struct {
@@ -60,20 +60,20 @@ func (c *Cfg) SetType(t Type) *Cfg {
 	return c
 }
 
-func (c *Cfg) Add(typ StepType, cfg interface{}) *Cfg {
+func (c *Cfg) Add(typ StepType, cfg any) *Cfg {
 	c.Steps = append(c.Steps, &StepCfg{Type: typ, Cfg: cfg})
 	return c
 }
 
-func (c *Cfg) Defer(typ StepType, cfg interface{}) *Cfg {
+func (c *Cfg) Defer(typ StepType, cfg any) *Cfg {
 	c.DeferSteps = append(c.DeferSteps, &StepCfg{Type: typ, Cfg: cfg})
 	return c
 }
 
 type Result struct {
-	Data           map[string]interface{}   `json:"data"           yaml:"data"`
-	StepsData      []map[string]interface{} `json:"stepsData"      yaml:"stepsData"`
-	DeferStepsData []map[string]interface{} `json:"deferStepsData" yaml:"deferStepsData"`
+	Data           map[string]any   `json:"data"           yaml:"data"`
+	StepsData      []map[string]any `json:"stepsData"      yaml:"stepsData"`
+	DeferStepsData []map[string]any `json:"deferStepsData" yaml:"deferStepsData"`
 }
 
 type Task struct {
@@ -164,7 +164,7 @@ func (t *Task) RegisterCollector(c Collector) {
 	t.collector = c
 }
 
-func (t *Task) Result() interface{} {
+func (t *Task) Result() any {
 	if t.collector == nil {
 		return t.result()
 	}
@@ -204,11 +204,11 @@ func (t *Task) Store(k string, v any) {
 	t.Runner.StoreAsString(k, v)
 }
 
-func (t *Task) Type() interface{} {
+func (t *Task) Type() any {
 	return PluginTypeTask
 }
 
-func (t *Task) GetCfg() interface{} {
+func (t *Task) GetCfg() any {
 	return t.Cfg
 }
 

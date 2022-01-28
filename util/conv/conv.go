@@ -223,7 +223,7 @@ func ToFloat(v any) (float64, error) {
 	return vv, err
 }
 
-func MapTo(dst interface{}, m map[string]interface{}) error {
+func MapTo(dst any, m map[string]any) error {
 	bs, err := jsons.Marshal(m)
 	if err != nil {
 		return err
@@ -231,9 +231,9 @@ func MapTo(dst interface{}, m map[string]interface{}) error {
 	return jsons.Unmarshal(bs, dst)
 }
 
-func ConvertOrMerge(dst interface{}, src interface{}) error {
+func ConvertOrMerge(dst any, src any) error {
 	var err error
-	if cm, ok := src.(map[string]interface{}); ok {
+	if cm, ok := src.(map[string]any); ok {
 		err = MapTo(dst, cm)
 	} else if reflect.TypeOf(src) == reflect.TypeOf(dst) {
 		err = copier.CopyWithOption(dst, src, copier.Option{IgnoreEmpty: true, DeepCopy: true})

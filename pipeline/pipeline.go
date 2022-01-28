@@ -12,7 +12,7 @@ import (
 )
 
 func init() {
-	plugin.RegisterWithCfg(PluginTypePipeline, func() interface{} { return New() }, func() interface{} { return NewCfg() })
+	plugin.RegWithCfg(PluginTypePipeline, func() any { return New() }, func() any { return NewCfg() })
 }
 
 const PluginTypePipeline plugin.Type = "ppl"
@@ -25,7 +25,7 @@ func NewCfg() *Cfg {
 	return &Cfg{}
 }
 
-func (c *Cfg) Add(role RWRole, typ RWType, cfg interface{}, commonCfg *RWCommonCfg) *Cfg {
+func (c *Cfg) Add(role RWRole, typ RWType, cfg any, commonCfg *RWCommonCfg) *Cfg {
 	c.RWs = append(c.RWs, &RWCfg{
 		Type:      typ,
 		Cfg:       cfg,
@@ -41,9 +41,9 @@ func (c *Cfg) AddCfg(cfg *RWCfg) *Cfg {
 }
 
 type Result struct {
-	Cfg     *Cfg                     `json:"cfg"     yaml:"cfg"`
-	Data    map[string]interface{}   `json:"data"    yaml:"data"`
-	RWsData []map[string]interface{} `json:"rwsData" yaml:"rwsData"`
+	Cfg     *Cfg             `json:"cfg"     yaml:"cfg"`
+	Data    map[string]any   `json:"data"    yaml:"data"`
+	RWsData []map[string]any `json:"rwsData" yaml:"rwsData"`
 }
 
 type Pipeline struct {
@@ -138,11 +138,11 @@ func (p *Pipeline) Stop() error {
 	return nil
 }
 
-func (p *Pipeline) Type() interface{} {
+func (p *Pipeline) Type() any {
 	return PluginTypePipeline
 }
 
-func (p *Pipeline) GetCfg() interface{} {
+func (p *Pipeline) GetCfg() any {
 	return p.Cfg
 }
 

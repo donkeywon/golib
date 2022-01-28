@@ -11,44 +11,44 @@ var (
 	ErrInvalidPluginCfgCreator = errors.New("invalid plugin cfg creator")
 )
 
-type Creator func() interface{}
-type CfgCreator func() interface{}
+type Creator func() any
+type CfgCreator func() any
 
 type Type string
 
 type CfgSetter interface {
-	SetCfg(cfg interface{})
+	SetCfg(cfg any)
 }
 
 type CfgGetter interface {
-	GetCfg() interface{}
+	GetCfg() any
 }
 
 type Plugin interface {
 	CfgGetter
-	Type() interface{}
+	Type() any
 }
 
 var (
-	_plugins    = make(map[interface{}]Creator)
-	_pluginCfgs = make(map[interface{}]CfgCreator)
+	_plugins    = make(map[any]Creator)
+	_pluginCfgs = make(map[any]CfgCreator)
 )
 
 // 推荐自定义plugin的类型，不要直接使用基础类型，例如
 // type DaemonType string
 // const DaemonTypeHttpd DaemonType = "httpd"
-// Register(DaemonTypeHttpd, func() interface{} { return NewHttpd() }).
-func Register(typ interface{}, creator Creator) {
+// Reg(DaemonTypeHttpd, func() any { return NewHttpd() }).
+func Reg(typ any, creator Creator) {
 	_plugins[typ] = creator
 }
 
-func RegisterCfg(typ interface{}, creator CfgCreator) {
+func RegCfg(typ any, creator CfgCreator) {
 	_pluginCfgs[typ] = creator
 }
 
-func RegisterWithCfg(typ interface{}, creator Creator, cfgCreator CfgCreator) {
-	Register(typ, creator)
-	RegisterCfg(typ, cfgCreator)
+func RegWithCfg(typ any, creator Creator, cfgCreator CfgCreator) {
+	Reg(typ, creator)
+	RegCfg(typ, cfgCreator)
 }
 
 // 创建一个注册的Plugin
@@ -58,7 +58,7 @@ func RegisterWithCfg(typ interface{}, creator Creator, cfgCreator CfgCreator) {
 // 1. plugin不存在，说明没有注册，大部分情况是没有调用RegisterPlugin
 // 2. cfg设置失败，说明plugin本身定义的有问题
 // 这两种情况下说明代码本身有问题，所以直接panic.
-func CreateWithCfg(typ interface{}, cfg interface{}) interface{} {
+func CreateWithCfg(typ any, cfg any) any {
 	f, exists := _plugins[typ]
 	if !exists {
 		panic(fmt.Sprintf("plugin not exists: %+v", typ))
@@ -82,7 +82,7 @@ func CreateWithCfg(typ interface{}, cfg interface{}) interface{} {
 	return p
 }
 
-func CreateCfg(typ interface{}) interface{} {
+func CreateCfg(typ any) any {
 	f, exists := _pluginCfgs[typ]
 	if !exists {
 		panic(fmt.Sprintf("plugin cfg not exists: %+v", typ))
@@ -100,11 +100,11 @@ func CreateCfg(typ interface{}) interface{} {
 	return cfg
 }
 
-func Create(typ interface{}) interface{} {
+func Create(typ any) any {
 	return CreateWithCfg(typ, CreateCfg(typ))
 }
 
-func SetCfg(p interface{}, cfg interface{}) {
+func SetCfg(p any, cfg any) {
 	pValue := reflect.ValueOf(p)
 	if pValue.Kind() != reflect.Pointer {
 		panic(fmt.Sprintf("plugin(%+v) must be a pointer", pValue.Type()))

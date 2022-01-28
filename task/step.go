@@ -40,10 +40,10 @@ func (b *baseStep) SetTask(t *Task) {
 	b.t = t
 }
 
-func (b *baseStep) Type() interface{} {
+func (b *baseStep) Type() any {
 	panic("method Step.Type not implemented")
 }
 
-func (b *baseStep) GetCfg() interface{} {
+func (b *baseStep) GetCfg() any {
 	panic("method Step.GetCfg not implemented")
 }

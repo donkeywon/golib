@@ -7,8 +7,8 @@ import (
 )
 
 func init() {
-	plugin.Register(PluginTypeRWGroup, func() interface{} { return NewRWGroup() })
-	plugin.RegisterCfg(PluginTypeRWGroup, func() interface{} { return NewRWGroupCfg() })
+	plugin.Reg(PluginTypeRWGroup, func() any { return NewRWGroup() })
+	plugin.RegCfg(PluginTypeRWGroup, func() any { return NewRWGroupCfg() })
 }
 
 const PluginTypeRWGroup plugin.Type = "rwgroup"
@@ -23,7 +23,7 @@ func NewRWGroupCfg() *RWGroupCfg {
 	return &RWGroupCfg{}
 }
 
-func (c *RWGroupCfg) SetStarter(typ RWType, cfg interface{}, commonCfg *RWCommonCfg) *RWGroupCfg {
+func (c *RWGroupCfg) SetStarter(typ RWType, cfg any, commonCfg *RWCommonCfg) *RWGroupCfg {
 	c.Starter = &RWCfg{
 		Type:      typ,
 		Cfg:       cfg,
@@ -33,7 +33,7 @@ func (c *RWGroupCfg) SetStarter(typ RWType, cfg interface{}, commonCfg *RWCommon
 	return c
 }
 
-func (c *RWGroupCfg) FromReader(typ RWType, cfg interface{}, commonCfg *RWCommonCfg) *RWGroupCfg {
+func (c *RWGroupCfg) FromReader(typ RWType, cfg any, commonCfg *RWCommonCfg) *RWGroupCfg {
 	c.Readers = append(c.Readers, &RWCfg{
 		Type:      typ,
 		Cfg:       cfg,
@@ -43,7 +43,7 @@ func (c *RWGroupCfg) FromReader(typ RWType, cfg interface{}, commonCfg *RWCommon
 	return c
 }
 
-func (c *RWGroupCfg) ToWriter(typ RWType, cfg interface{}, commonCfg *RWCommonCfg) *RWGroupCfg {
+func (c *RWGroupCfg) ToWriter(typ RWType, cfg any, commonCfg *RWCommonCfg) *RWGroupCfg {
 	c.Writers = append(c.Writers, &RWCfg{
 		Type:      typ,
 		Cfg:       cfg,

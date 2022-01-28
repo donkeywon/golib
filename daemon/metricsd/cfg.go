@@ -1,4 +1,4 @@
-package promd
+package metricsd
 
 const (
 	DefaultDisableGoCollector   = false

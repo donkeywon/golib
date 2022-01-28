@@ -25,8 +25,8 @@ var (
 	Marshal       = json.Marshal
 	MarshalIndent = json.MarshalIndent
 
-	UnmarshalString = func(buf string, val interface{}) error { return json.Unmarshal(toBytes(buf), val) }
-	MarshalString   = func(val interface{}) (string, error) {
+	UnmarshalString = func(buf string, val any) error { return json.Unmarshal(toBytes(buf), val) }
+	MarshalString   = func(val any) (string, error) {
 		bs, err := json.Marshal(val)
 		if err != nil {
 			return "", err

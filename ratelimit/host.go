@@ -16,8 +16,8 @@ import (
 )
 
 func init() {
-	plugin.RegisterCfg(RateLimiterTypeHost, func() interface{} { return NewHostRateLimiterCfg() })
-	plugin.Register(RateLimiterTypeHost, func() interface{} { return NewHostRateLimiter() })
+	plugin.RegCfg(RateLimiterTypeHost, func() any { return NewHostRateLimiterCfg() })
+	plugin.Reg(RateLimiterTypeHost, func() any { return NewHostRateLimiter() })
 }
 
 const RateLimiterTypeHost RateLimiterType = "host"

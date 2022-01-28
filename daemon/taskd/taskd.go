@@ -80,11 +80,11 @@ func (td *Taskd) Stop() error {
 	return nil
 }
 
-func (td *Taskd) Type() interface{} {
+func (td *Taskd) Type() any {
 	return DaemonTypeTaskd
 }
 
-func (td *Taskd) GetCfg() interface{} {
+func (td *Taskd) GetCfg() any {
 	return td.Cfg
 }
 
@@ -528,7 +528,7 @@ func (td *Taskd) ListPausingTaskIDs() []string {
 	return ids
 }
 
-func (td *Taskd) GetTaskResult(taskID string) (interface{}, error) {
+func (td *Taskd) GetTaskResult(taskID string) (any, error) {
 	t := td.getTask(taskID)
 	if t == nil {
 		return nil, ErrTaskNotExists

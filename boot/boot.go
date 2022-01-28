@@ -33,7 +33,7 @@ type Daemon interface {
 
 var (
 	_daemons []DaemonType // dependencies in order
-	_cfgMap  = make(map[string]interface{})
+	_cfgMap  = make(map[string]any)
 	_b       *Booter
 )
 
@@ -58,6 +58,7 @@ func Boot(opt ...Option) {
 	}
 }
 
+// SetLoggerLevel dynamic change log level after Boot.
 func SetLoggerLevel(lvl string) {
 	_b.SetLoggerLevel(lvl)
 }
@@ -65,16 +66,16 @@ func SetLoggerLevel(lvl string) {
 // RegDaemon register a Daemon creator and its config creator.
 func RegDaemon(typ DaemonType, creator plugin.Creator, cfgCreator plugin.CfgCreator) {
 	if slices.Contains(_daemons, typ) {
-		return
+		panic("duplicate register daemon: " + typ)
 	}
-	plugin.RegisterWithCfg(typ, creator, cfgCreator)
+	plugin.RegWithCfg(typ, creator, cfgCreator)
 	_daemons = append(_daemons, typ)
 }
 
 // RegCfg register additional config, cfg type must be pointer.
-func RegCfg(name string, cfg interface{}) {
+func RegCfg(name string, cfg any) {
 	if _, exists := _cfgMap[name]; exists {
-		return
+		panic("duplicate register cfg: " + name)
 	}
 	_cfgMap[name] = cfg
 }
@@ -88,7 +89,7 @@ type options struct {
 type Booter struct {
 	runner.Runner
 	*options
-	cfgMap     map[DaemonType]interface{}
+	cfgMap     map[string]any
 	logCfg     *log.Cfg
 	flagParser *flags.Parser
 }
@@ -163,7 +164,7 @@ func (b *Booter) Init() error {
 	}
 
 	for _, daemonType := range _daemons {
-		daemon, isDaemon := plugin.CreateWithCfg(daemonType, b.cfgMap[daemonType]).(Daemon)
+		daemon, isDaemon := plugin.CreateWithCfg(daemonType, b.cfgMap[string(daemonType)]).(Daemon)
 		if !isDaemon {
 			return errs.Errorf("plugin %+v is not a Daemon", daemonType)
 		}
@@ -267,23 +268,23 @@ func (b *Booter) loadCfgFromFile() error {
 		return errs.Wrap(err, "read config file fail")
 	}
 
-	fileCfgMap := make(map[DaemonType]interface{})
+	fileCfgMap := make(map[string]any)
 	err = yaml.UnmarshalWithOptions(f, &fileCfgMap, yaml.CustomUnmarshaler(durationUnmarshaler))
 	if err != nil {
 		return errs.Wrap(err, "unmarshal config file fail")
 	}
 
-	for daemonType, cfg := range b.cfgMap {
-		v, exists := fileCfgMap[daemonType]
+	for typ, cfg := range b.cfgMap {
+		v, exists := fileCfgMap[typ]
 		if !exists {
 			continue
 		}
 
-		// v is map[string]interface{}
+		// v is map[string]any
 		bs, _ := yaml.Marshal(v)
 		err = yaml.Unmarshal(bs, cfg)
 		if err != nil {
-			return errs.Wrapf(err, "unmarshal daemon %s config fail", daemonType)
+			return errs.Wrapf(err, "unmarshal daemon %s config fail", typ)
 		}
 	}
 
@@ -321,28 +322,28 @@ func durationUnmarshaler(d *time.Duration, b []byte) error {
 	return nil
 }
 
-func buildCfgMap() map[DaemonType]interface{} {
-	cfgMap := make(map[DaemonType]interface{})
+func buildCfgMap() map[string]any {
+	cfgMap := make(map[string]any)
 	for _, daemonType := range _daemons {
 		cfg := plugin.CreateCfg(daemonType)
-		cfgMap[daemonType] = cfg
+		cfgMap[string(daemonType)] = cfg
 	}
 	for k, cfg := range _cfgMap {
-		cfgMap[DaemonType(k)] = cfg
+		cfgMap[k] = cfg
 	}
 	return cfgMap
 }
 
-func buildFlagParser(data interface{}, cfgMap map[DaemonType]interface{}) (*flags.Parser, error) {
+func buildFlagParser(data any, cfgMap map[string]any) (*flags.Parser, error) {
 	var err error
 	parser := flags.NewParser(data, flags.Default, flags.FlagTagPrefix(consts.FlagTagPrefix))
-	for daemonType, cfg := range cfgMap {
+	for typ, cfg := range cfgMap {
 		if !reflects.IsStructPointer(cfg) {
 			continue
 		}
-		_, err = parser.AddGroup(string(daemonType)+" options", "", cfg)
+		_, err = parser.AddGroup(string(typ)+" options", "", cfg)
 		if err != nil {
-			return nil, errs.Wrapf(err, "add %s flags fail", daemonType)
+			return nil, errs.Wrapf(err, "add %s flags fail", typ)
 		}
 	}
 	return parser, nil

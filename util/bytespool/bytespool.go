@@ -8,7 +8,7 @@ type Bytes struct {
 }
 
 var (
-	_bytesPool = &sync.Pool{New: func() interface{} {
+	_bytesPool = &sync.Pool{New: func() any {
 		return &Bytes{
 			b: make([]byte, 0),
 		}

@@ -18,7 +18,7 @@ func init() {
 }
 
 func Load() {
-	plugin.RegisterWithCfg(TypeSQLite, func() interface{} { return NewSQLiteKVS() }, func() interface{} { return NewSQLiteKVSCfg() })
+	plugin.RegWithCfg(TypeSQLite, func() any { return NewSQLiteKVS() }, func() any { return NewSQLiteKVSCfg() })
 }
 
 const (
@@ -334,11 +334,11 @@ func (s *SQLiteKVS) LoadAllAsString() (map[string]string, error) {
 	return result, err
 }
 
-func (s *SQLiteKVS) Type() interface{} {
+func (s *SQLiteKVS) Type() any {
 	return TypeSQLite
 }
 
-func (s *SQLiteKVS) GetCfg() interface{} {
+func (s *SQLiteKVS) GetCfg() any {
 	return s.SQLiteKVSCfg
 }
 

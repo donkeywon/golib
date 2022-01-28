@@ -1,20 +1,21 @@
-package ds
+package db
 
 import (
 	"database/sql"
+
 	"github.com/donkeywon/golib/boot"
-	"github.com/donkeywon/golib/daemon/promd"
+	"github.com/donkeywon/golib/daemon/metricsd"
 	"github.com/donkeywon/golib/errs"
 	"github.com/donkeywon/golib/runner"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
-const DaemonTypeDS boot.DaemonType = "ds"
+const DaemonTypeDB boot.DaemonType = "db"
 
 var (
 	_d = New()
 
-	fqNamespace    = string(DaemonTypeDS)
+	fqNamespace    = string(DaemonTypeDB)
 	fqSubsystem    = "pool_stats"
 	variableLabels = []string{"name", "type"}
 
@@ -30,63 +31,63 @@ var (
 	maxLifetimeClosedDesc = prometheus.NewDesc(prometheus.BuildFQName(fqNamespace, fqSubsystem, "max_life_time_closed"), "The total number of connections closed due to SetConnMaxLifeTime.", variableLabels, nil)
 )
 
-type DS struct {
+type DB struct {
 	runner.Runner
 	*Cfg
 
 	dbs map[string]*sql.DB
 }
 
-func D() *DS {
+func D() *DB {
 	return _d
 }
 
-func New() *DS {
-	return &DS{
-		Runner: runner.Create(string(DaemonTypeDS)),
+func New() *DB {
+	return &DB{
+		Runner: runner.Create(string(DaemonTypeDB)),
 		dbs:    make(map[string]*sql.DB),
 	}
 }
 
-func (d *DS) Init() error {
-	for _, ds := range d.Cfg.DS {
-		db, err := sql.Open(ds.Type, ds.DSN)
+func (d *DB) Init() error {
+	for _, dbCfg := range d.Cfg.DB {
+		db, err := sql.Open(dbCfg.Type, dbCfg.DSN)
 		if err != nil {
-			return errs.Wrapf(err, "open datasource fail, name: %s, type: %s, dsn: %s", ds.Name, ds.Type, ds.DSN)
+			return errs.Wrapf(err, "open datasource fail, name: %s, type: %s, dsn: %s", dbCfg.Name, dbCfg.Type, dbCfg.DSN)
 		}
 
-		db.SetMaxIdleConns(ds.MaxIdle)
-		db.SetMaxOpenConns(ds.MaxOpen)
-		db.SetConnMaxLifetime(ds.MaxLifeTime)
-		db.SetConnMaxIdleTime(ds.MaxIdleTime)
-		d.dbs[ds.Name] = db
+		db.SetMaxIdleConns(dbCfg.MaxIdle)
+		db.SetMaxOpenConns(dbCfg.MaxOpen)
+		db.SetConnMaxLifetime(dbCfg.MaxLifeTime)
+		db.SetConnMaxIdleTime(dbCfg.MaxIdleTime)
+		d.dbs[dbCfg.Name] = db
 	}
 	if d.Cfg.EnableExportMetrics {
-		promd.D().MustRegister(d)
+		metricsd.D().MustRegister(d)
 	}
 	return d.Runner.Init()
 }
 
-func (d *DS) Stop() error {
-	for _, ds := range d.Cfg.DS {
-		db := d.dbs[ds.Name]
+func (d *DB) Stop() error {
+	for _, dbCfg := range d.Cfg.DB {
+		db := d.dbs[dbCfg.Name]
 		err := db.Close()
 		if err != nil {
-			d.Error("close db fail", err, "name", ds.Name, "type", ds.Type)
+			d.Error("close db fail", err, "name", dbCfg.Name, "type", dbCfg.Type)
 		}
 	}
 	return nil
 }
 
-func (d *DS) GetCfg() interface{} {
+func (d *DB) GetCfg() any {
 	return d.Cfg
 }
 
-func (d *DS) Type() interface{} {
-	return DaemonTypeDS
+func (d *DB) Type() any {
+	return DaemonTypeDB
 }
 
-func (d *DS) Describe(ch chan<- *prometheus.Desc) {
+func (d *DB) Describe(ch chan<- *prometheus.Desc) {
 	ch <- maxOpenConnectionsDesc
 	ch <- openConnectionsDesc
 	ch <- inUseConnectionsDesc
@@ -98,24 +99,24 @@ func (d *DS) Describe(ch chan<- *prometheus.Desc) {
 	ch <- maxLifetimeClosedDesc
 }
 
-func (d *DS) Collect(ch chan<- prometheus.Metric) {
-	for _, ds := range d.Cfg.DS {
-		db := d.dbs[ds.Name]
+func (d *DB) Collect(ch chan<- prometheus.Metric) {
+	for _, dbCfg := range d.Cfg.DB {
+		db := d.dbs[dbCfg.Name]
 		stats := db.Stats()
 
-		ch <- prometheus.MustNewConstMetric(maxOpenConnectionsDesc, prometheus.GaugeValue, float64(stats.MaxOpenConnections), ds.Name, ds.Type)
-		ch <- prometheus.MustNewConstMetric(openConnectionsDesc, prometheus.GaugeValue, float64(stats.OpenConnections), ds.Name, ds.Type)
-		ch <- prometheus.MustNewConstMetric(idleConnectionsDesc, prometheus.GaugeValue, float64(stats.Idle), ds.Name, ds.Type)
-		ch <- prometheus.MustNewConstMetric(inUseConnectionsDesc, prometheus.GaugeValue, float64(stats.InUse), ds.Name, ds.Type)
+		ch <- prometheus.MustNewConstMetric(maxOpenConnectionsDesc, prometheus.GaugeValue, float64(stats.MaxOpenConnections), dbCfg.Name, dbCfg.Type)
+		ch <- prometheus.MustNewConstMetric(openConnectionsDesc, prometheus.GaugeValue, float64(stats.OpenConnections), dbCfg.Name, dbCfg.Type)
+		ch <- prometheus.MustNewConstMetric(idleConnectionsDesc, prometheus.GaugeValue, float64(stats.Idle), dbCfg.Name, dbCfg.Type)
+		ch <- prometheus.MustNewConstMetric(inUseConnectionsDesc, prometheus.GaugeValue, float64(stats.InUse), dbCfg.Name, dbCfg.Type)
 
-		ch <- prometheus.MustNewConstMetric(waitCountDesc, prometheus.CounterValue, float64(stats.WaitCount), ds.Name, ds.Type)
-		ch <- prometheus.MustNewConstMetric(waitDurationDesc, prometheus.CounterValue, float64(stats.WaitDuration), ds.Name, ds.Type)
-		ch <- prometheus.MustNewConstMetric(maxIdleClosedDesc, prometheus.CounterValue, float64(stats.MaxIdleClosed), ds.Name, ds.Type)
-		ch <- prometheus.MustNewConstMetric(maxIdleTimeClosedDesc, prometheus.CounterValue, float64(stats.MaxIdleTimeClosed), ds.Name, ds.Type)
-		ch <- prometheus.MustNewConstMetric(maxLifetimeClosedDesc, prometheus.CounterValue, float64(stats.MaxLifetimeClosed), ds.Name, ds.Type)
+		ch <- prometheus.MustNewConstMetric(waitCountDesc, prometheus.CounterValue, float64(stats.WaitCount), dbCfg.Name, dbCfg.Type)
+		ch <- prometheus.MustNewConstMetric(waitDurationDesc, prometheus.CounterValue, float64(stats.WaitDuration), dbCfg.Name, dbCfg.Type)
+		ch <- prometheus.MustNewConstMetric(maxIdleClosedDesc, prometheus.CounterValue, float64(stats.MaxIdleClosed), dbCfg.Name, dbCfg.Type)
+		ch <- prometheus.MustNewConstMetric(maxIdleTimeClosedDesc, prometheus.CounterValue, float64(stats.MaxIdleTimeClosed), dbCfg.Name, dbCfg.Type)
+		ch <- prometheus.MustNewConstMetric(maxLifetimeClosedDesc, prometheus.CounterValue, float64(stats.MaxLifetimeClosed), dbCfg.Name, dbCfg.Type)
 	}
 }
 
-func (d *DS) Get(name string) *sql.DB {
+func (d *DB) Get(name string) *sql.DB {
 	return d.dbs[name]
 }

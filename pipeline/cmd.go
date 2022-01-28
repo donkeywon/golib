@@ -11,7 +11,7 @@ import (
 )
 
 func init() {
-	plugin.RegisterWithCfg(RWTypeCmd, func() interface{} { return NewCmdRW() }, func() interface{} { return NewCmdRWCfg() })
+	plugin.RegWithCfg(RWTypeCmd, func() any { return NewCmdRW() }, func() any { return NewCmdRWCfg() })
 }
 
 const RWTypeCmd RWType = "cmd"
@@ -85,10 +85,10 @@ func (c *CmdRW) Stop() error {
 	return cmd.MustStop(context.Background(), c.cmd)
 }
 
-func (c *CmdRW) Type() interface{} {
+func (c *CmdRW) Type() any {
 	return RWTypeCmd
 }
 
-func (c *CmdRW) GetCfg() interface{} {
+func (c *CmdRW) GetCfg() any {
 	return c.Cfg
 }

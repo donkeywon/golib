@@ -15,10 +15,10 @@ func init() {
 func Load() {
 	jsons.Marshal = json.Marshal
 	jsons.Unmarshal = json.Unmarshal
-	jsons.UnmarshalString = func(buf string, val interface{}) error {
+	jsons.UnmarshalString = func(buf string, val any) error {
 		return json.Unmarshal(conv.String2Bytes(buf), val)
 	}
-	jsons.MarshalString = func(val interface{}) (string, error) {
+	jsons.MarshalString = func(val any) (string, error) {
 		bs, err := json.Marshal(val)
 		if err != nil {
 			return "", err

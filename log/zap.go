@@ -93,7 +93,7 @@ func buildTimeEncoder(enc string) zapcore.TimeEncoder {
 	return te
 }
 
-func HandleZapFields(withGoid bool, args []interface{}, additional ...zap.Field) []zap.Field {
+func HandleZapFields(withGoid bool, args []any, additional ...zap.Field) []zap.Field {
 	if len(args) == 0 {
 		if !withGoid {
 			return additional
