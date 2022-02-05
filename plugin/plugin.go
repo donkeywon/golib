@@ -73,9 +73,7 @@ func CreateWithCfg(typ any, cfg any) any {
 		panic(fmt.Sprintf("plugin created is nil: %+v", typ))
 	}
 
-	if sp, ok := p.(CfgSetter); ok {
-		sp.SetCfg(cfg)
-	} else {
+	if cfg != nil {
 		SetCfg(p, cfg)
 	}
 
@@ -85,12 +83,12 @@ func CreateWithCfg(typ any, cfg any) any {
 func CreateCfg(typ any) any {
 	f, exists := _pluginCfgs[typ]
 	if !exists {
-		panic(fmt.Sprintf("plugin cfg not exists: %+v", typ))
+		return nil
 	}
 
 	cfg := f()
 	if cfg == nil {
-		panic(fmt.Sprintf("plugin cfg created is nil: %+v", typ))
+		return nil
 	}
 
 	rt := reflect.TypeOf(cfg)
@@ -105,6 +103,11 @@ func Create(typ any) any {
 }
 
 func SetCfg(p any, cfg any) {
+	if sp, ok := p.(CfgSetter); ok {
+		sp.SetCfg(cfg)
+		return
+	}
+
 	pValue := reflect.ValueOf(p)
 	if pValue.Kind() != reflect.Pointer {
 		panic(fmt.Sprintf("plugin(%+v) must be a pointer", pValue.Type()))

@@ -9,7 +9,7 @@ import (
 )
 
 var (
-	l           = log.Debug()
+	l           = log.Default()
 	debugRunner = &struct {
 		runner.Runner
 	}{
@@ -25,6 +25,8 @@ var (
 )
 
 func init() {
+	l.SetLoggerLevel("debug")
+
 	debugRunner.SetCtx(context.Background())
 	reflects.SetFirstMatchedField(debugRunner.Runner, l)
 

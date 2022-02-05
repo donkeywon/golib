@@ -334,10 +334,10 @@ func buildCfgMap() map[string]any {
 	return cfgMap
 }
 
-func buildFlagParser(data any, cfgMap map[string]any) (*flags.Parser, error) {
+func buildFlagParser(options any, additional map[string]any) (*flags.Parser, error) {
 	var err error
-	parser := flags.NewParser(data, flags.Default, flags.FlagTagPrefix(consts.FlagTagPrefix))
-	for typ, cfg := range cfgMap {
+	parser := flags.NewParser(options, flags.Default, flags.FlagTagPrefix(consts.FlagTagPrefix))
+	for typ, cfg := range additional {
 		if !reflects.IsStructPointer(cfg) {
 			continue
 		}

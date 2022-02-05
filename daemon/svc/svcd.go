@@ -2,6 +2,7 @@ package svc
 
 import (
 	"fmt"
+	"github.com/donkeywon/golib/plugin"
 	"strings"
 
 	"github.com/donkeywon/golib/boot"
@@ -19,35 +20,46 @@ type Module string
 type Name string
 
 var _s = &svcd{
-	Runner:        runner.Create("svc"),
-	svcCreatorMap: map[string]Creator{},
-	svcMap:        make(map[string]any),
-	svcCfgMap:     make(map[string]any),
+	Runner:      runner.Create("svc"),
+	svcCreators: make([]svcCreatorWithFQN, 0, 64),
+	svcMap:      make(map[string]any),
+	svcCfgMap:   make(map[string]any),
 }
 
 func D() boot.Daemon {
 	return _s
 }
 
+type svcCreatorWithFQN struct {
+	fqn     string
+	creator Creator
+}
+
 type svcd struct {
 	runner.Runner
 	*Cfg
 
-	svcCreatorMap map[string]Creator
-	svcMap        map[string]any
-	svcCfgMap     map[string]any
+	svcCreators []svcCreatorWithFQN
+	svcMap      map[string]any
+	svcCfgMap   map[string]any
 }
 
 func (s *svcd) Init() error {
-	for fqn, creator := range s.svcCreatorMap {
+	for _, fqnWithCreator := range s.svcCreators {
+		fqn := fqnWithCreator.fqn
 		s.Debug("create svc", "fqn", fqn)
-		ins := creator()
+
+		ins := fqnWithCreator.creator()
 		if ins == nil {
 			return errs.Errorf("svc is nil, FQN: %s", fqn)
 		}
 
+		if _, exists := s.svcMap[fqn]; exists {
+			return errs.Errorf("svc already exists, FQN: %s", fqn)
+		}
+
 		s.svcMap[fqn] = ins
-		bs := &baseSvc{Logger: s.WithLoggerName(fqn), ctx: s.Ctx()}
+		bs := &baseSvc{Logger: s.WithLoggerName(fqn)}
 		success := reflects.SetFirstMatchedField(ins, bs)
 		if !success {
 			return errs.Errorf("svc must have an exported field of type Svc, FQN: %s", fqn)
@@ -55,9 +67,13 @@ func (s *svcd) Init() error {
 
 		if cfg, hasCfg := s.svcCfgMap[fqn]; hasCfg {
 			s.Debug("apply cfg to svc", "fqn", fqn, "cfg", cfg)
-			success = reflects.SetFirstMatchedField(ins, cfg)
-			if !success {
-				return errs.Errorf("svc must have an exported field of type Cfg, FQN: %s", fqn)
+			if cs, ok := ins.(plugin.CfgSetter); ok {
+				cs.SetCfg(cfg)
+			} else {
+				success = reflects.SetFirstMatchedField(ins, cfg)
+				if !success {
+					return errs.Errorf("svc must have an exported field of type Cfg, FQN: %s", fqn)
+				}
 			}
 		}
 	}
@@ -69,11 +85,7 @@ func (s *svcd) Reg(ns Namespace, m Module, svcName Name, creator Creator) {
 	checkValid(ns, m, svcName)
 
 	fqn := buildFQN(ns, m, svcName)
-	if _, ok := s.svcCreatorMap[fqn]; ok {
-		panic(fmt.Errorf("svc creator already exists, FQN: %s", fqn))
-	}
-
-	s.svcCreatorMap[fqn] = creator
+	s.svcCreators = append(s.svcCreators, svcCreatorWithFQN{fqn: fqn, creator: creator})
 }
 
 func (s *svcd) RegWithCfg(ns Namespace, m Module, svcName Name, creator Creator, cfgCreator CfgCreator) {
@@ -107,6 +119,18 @@ func (s *svcd) GetCfg() any {
 	return s.Cfg
 }
 
+func Reg(ns Namespace, m Module, svcName Name, creator Creator) {
+	_s.Reg(ns, m, svcName, creator)
+}
+
+func RegWithCfg(ns Namespace, m Module, svcName Name, creator Creator, cfgCreator CfgCreator) {
+	_s.RegWithCfg(ns, m, svcName, creator, cfgCreator)
+}
+
+func Get(ns Namespace, m Module, svcName Name) Svc {
+	return _s.Get(ns, m, svcName)
+}
+
 func buildFQN(ns Namespace, m Module, svcName Name) string {
 	return fmt.Sprintf("%s.%s.%s", ns, m, svcName)
 }
@@ -118,16 +142,4 @@ func checkValid(ns Namespace, m Module, svcName Name) {
 	if string(ns) == "" || string(m) == "" || svcName == "" {
 		panic("namespace and module and svcName must not empty")
 	}
-}
-
-func Reg(ns Namespace, m Module, svcName Name, creator Creator) {
-	_s.Reg(ns, m, svcName, creator)
-}
-
-func RegWithCfg(ns Namespace, m Module, svcName Name, creator Creator, cfgCreator CfgCreator) {
-	_s.RegWithCfg(ns, m, svcName, creator, cfgCreator)
-}
-
-func Get(ns Namespace, m Module, svcName Name) Svc {
-	return _s.Get(ns, m, svcName)
 }

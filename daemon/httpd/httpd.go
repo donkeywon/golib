@@ -14,7 +14,7 @@ import (
 )
 
 func init() {
-	D().RegisterMiddleware(D().logAndRecoverMiddleware)
+	D().RegMiddleware(D().logAndRecoverMiddleware)
 }
 
 const DaemonTypeHTTPd boot.DaemonType = "httpd"
@@ -79,7 +79,7 @@ func (h *HTTPd) AppendError(err ...error) {
 	}
 }
 
-func (h *HTTPd) RegisterMiddleware(mf ...MiddlewareFunc) {
+func (h *HTTPd) RegMiddleware(mf ...MiddlewareFunc) {
 	h.middlewares = append(h.middlewares, mf...)
 }
 

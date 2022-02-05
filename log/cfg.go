@@ -6,7 +6,7 @@ const (
 	DefaultMaxFileSize     = 100
 	DefaultMaxBackups      = 30
 	DefaultMaxAge          = 30
-	DefaultDisableCompress = false
+	DefaultDisableCompress = true
 )
 
 // Cfg is logger cfg include level, rotate, etc.
@@ -32,7 +32,7 @@ func NewCfg() *Cfg {
 	}
 }
 
-// Build logger from cfg
+// Build logger from cfg.
 // DO NOT CREATE GLOBAL LOGGER.
 // USE PROVIDED LOGGER, SUCH AS Runner.Info
 func (c *Cfg) Build() (Logger, error) {
@@ -41,12 +41,5 @@ func (c *Cfg) Build() (Logger, error) {
 
 func Default() Logger {
 	l, _ := NewCfg().Build()
-	return l
-}
-
-func Debug() Logger {
-	lc := NewCfg()
-	lc.Level = "debug"
-	l, _ := lc.Build()
 	return l
 }
