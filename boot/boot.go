@@ -3,6 +3,8 @@ package boot
 import (
 	"errors"
 	"fmt"
+	"github.com/goccy/go-yaml/ast"
+	"github.com/goccy/go-yaml/parser"
 	"os"
 	"os/signal"
 	"runtime"
@@ -238,7 +240,7 @@ func (b *Booter) loadCfgFromFlag() error {
 }
 
 func (b *Booter) loadCfgFromEnv() error {
-	for daemonType, cfg := range b.cfgMap {
+	for path, cfg := range b.cfgMap {
 		if !reflects.IsStructPointer(cfg) {
 			continue
 		}
@@ -246,7 +248,7 @@ func (b *Booter) loadCfgFromEnv() error {
 			Prefix: b.options.EnvPrefix,
 		})
 		if err != nil {
-			return errs.Wrapf(err, "parse env to daemon(%s) cfg fail", daemonType)
+			return errs.Wrapf(err, "parse env tocfg fail: %s", path)
 		}
 	}
 	return nil
@@ -260,31 +262,36 @@ func (b *Booter) loadCfgFromFile() error {
 			return nil
 		}
 	} else if !paths.FileExist(cfgPath) {
-		return errs.Errorf("config file not exists: %s", cfgPath)
+		return errs.Errorf("cfg file not exists: %s", cfgPath)
 	}
 
 	f, err := os.ReadFile(cfgPath)
 	if err != nil {
-		return errs.Wrap(err, "read config file fail")
+		return errs.Wrap(err, "read cfg file fail")
 	}
 
-	fileCfgMap := make(map[string]any)
-	err = yaml.UnmarshalWithOptions(f, &fileCfgMap, yaml.CustomUnmarshaler(durationUnmarshaler))
+	af, err := parser.ParseBytes(f, 0)
 	if err != nil {
-		return errs.Wrap(err, "unmarshal config file fail")
+		return errs.Wrap(err, "parse cfg file fail")
 	}
 
-	for typ, cfg := range b.cfgMap {
-		v, exists := fileCfgMap[typ]
-		if !exists {
+	var (
+		node ast.Node
+		yp   *yaml.Path
+	)
+	for name, cfg := range b.cfgMap {
+		yp, err = yaml.PathString("$." + name)
+		if err != nil {
+			return errs.Wrapf(err, "invalid cfg name: %s", name)
+		}
+		node, err = yp.FilterFile(af)
+		if errors.Is(err, yaml.ErrNotFoundNode) {
 			continue
 		}
 
-		// v is map[string]any
-		bs, _ := yaml.Marshal(v)
-		err = yaml.Unmarshal(bs, cfg)
+		err = yaml.NodeToValue(node, cfg, yaml.CustomUnmarshaler(durationUnmarshaler))
 		if err != nil {
-			return errs.Wrapf(err, "unmarshal daemon %s config fail", typ)
+			return errs.Wrapf(err, "unmarshal cfg fail: %s", name)
 		}
 	}
 
@@ -296,13 +303,13 @@ func (b *Booter) loadCfg() error {
 }
 
 func (b *Booter) validateCfg() error {
-	for s, cfg := range b.cfgMap {
+	for name, cfg := range b.cfgMap {
 		if !reflects.IsStructPointer(cfg) {
 			continue
 		}
 		err := v.Struct(cfg)
 		if err != nil {
-			return errs.Wrapf(err, "invalid daemon(%s) cfg", s)
+			return errs.Wrapf(err, "invalid cfg: %s", name)
 		}
 	}
 	return nil
@@ -328,8 +335,8 @@ func buildCfgMap() map[string]any {
 		cfg := plugin.CreateCfg(daemonType)
 		cfgMap[string(daemonType)] = cfg
 	}
-	for k, cfg := range _cfgMap {
-		cfgMap[k] = cfg
+	for name, cfg := range _cfgMap {
+		cfgMap[name] = cfg
 	}
 	return cfgMap
 }
@@ -337,13 +344,13 @@ func buildCfgMap() map[string]any {
 func buildFlagParser(options any, additional map[string]any) (*flags.Parser, error) {
 	var err error
 	parser := flags.NewParser(options, flags.Default, flags.FlagTagPrefix(consts.FlagTagPrefix))
-	for typ, cfg := range additional {
+	for name, cfg := range additional {
 		if !reflects.IsStructPointer(cfg) {
 			continue
 		}
-		_, err = parser.AddGroup(string(typ)+" options", "", cfg)
+		_, err = parser.AddGroup(string(name)+" options", "", cfg)
 		if err != nil {
-			return nil, errs.Wrapf(err, "add %s flags fail", typ)
+			return nil, errs.Wrapf(err, "add flags fail: %s", name)
 		}
 	}
 	return parser, nil

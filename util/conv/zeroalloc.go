@@ -3,17 +3,11 @@ package conv
 import "unsafe"
 
 func Bytes2String(bs []byte) string {
-	return *(*string)(unsafe.Pointer(&bs))
-}
-
-func String2BytesNoCap(s string) []byte {
-	return *(*[]byte)(unsafe.Pointer(&s))
+	return unsafe.String(unsafe.SliceData(bs), len(bs))
 }
 
 func String2Bytes(s string) []byte {
-	x := (*[2]uintptr)(unsafe.Pointer(&s))
-	h := [3]uintptr{x[0], x[1], x[1]}
-	return *(*[]byte)(unsafe.Pointer(&h))
+	return unsafe.Slice(unsafe.StringData(s), len(s))
 }
 
 func Uint64ToInt64(val uint64) int64 {
