@@ -10,7 +10,7 @@ import (
 	"github.com/icza/backscanner"
 )
 
-const defaultBufSize = 1024 * 1024
+const defaultBufSize = 32 * 1024
 
 func ReadLines(r io.Reader, lines int, bufSize int) ([]string, error) {
 	if bufSize == 0 {

@@ -2,9 +2,10 @@ package cloud
 
 import (
 	"bytes"
+	"net/http"
+
 	"github.com/donkeywon/golib/util/httpc"
 	"github.com/donkeywon/golib/util/jsons"
-	"net/http"
 )
 
 type HuaweiEcsNetworkQosData struct {

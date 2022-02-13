@@ -2,8 +2,9 @@ package cloud
 
 import (
 	"bytes"
-	"github.com/donkeywon/golib/util/httpc"
 	"strconv"
+
+	"github.com/donkeywon/golib/util/httpc"
 )
 
 func IsAliyun() bool {

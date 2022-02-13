@@ -2,9 +2,10 @@ package cloud
 
 import (
 	"bytes"
-	"github.com/donkeywon/golib/util/httpc"
 	"net/http"
 	"strconv"
+
+	"github.com/donkeywon/golib/util/httpc"
 )
 
 func IsTencent() bool {
