@@ -173,10 +173,10 @@ func StopAndWait(r Runner) {
 }
 
 func stopRunnerAndChildren(r Runner, wait bool) {
-	stop(r, wait)
+	stop(r, false)
 	if len(r.Children()) > 0 {
 		for i := len(r.Children()) - 1; i >= 0; i-- {
-			stop(r.Children()[i], wait)
+			stopRunnerAndChildren(r.Children()[i], wait)
 			if wait {
 				<-r.Children()[i].Done()
 			}
