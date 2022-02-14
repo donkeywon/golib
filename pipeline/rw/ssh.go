@@ -3,6 +3,7 @@ package rw
 import (
 	"errors"
 	"fmt"
+	"io"
 	"path/filepath"
 
 	"github.com/donkeywon/golib/errs"
@@ -100,7 +101,11 @@ func (s *SSH) Close() error {
 }
 
 func (s *SSH) Stop() error {
-	return s.sshSess.Signal(ssh.SIGKILL)
+	err := s.sshSess.Signal(ssh.SIGKILL)
+	if errors.Is(err, io.EOF) {
+		return nil
+	}
+	return errs.Wrap(err, "ssh signal kill failed")
 }
 
 func (s *SSH) Type() any {

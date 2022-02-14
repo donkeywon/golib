@@ -45,7 +45,7 @@ func (t *Tail) Init() error {
 		return errs.Wrap(err, "create tail reader failed")
 	}
 
-	_ = t.NestReader(t.t)
+	t.NestReader(t.t)
 
 	return t.RW.Init()
 }

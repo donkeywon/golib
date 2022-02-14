@@ -75,7 +75,7 @@ func (c *Compress) Close() error {
 	}
 }
 
-func (c *Compress) NestReader(r io.ReadCloser) error {
+func (c *Compress) NestReader(r io.ReadCloser) {
 	c.reader = r
 	switch c.CompressCfg.Type {
 	case CompressTypeNop:
@@ -90,10 +90,10 @@ func (c *Compress) NestReader(r io.ReadCloser) error {
 		c.compressReader = r
 	}
 
-	return c.RW.NestReader(c.compressReader)
+	c.RW.NestReader(c.compressReader)
 }
 
-func (c *Compress) NestWriter(w io.WriteCloser) error {
+func (c *Compress) NestWriter(w io.WriteCloser) {
 	c.writer = w
 	switch c.CompressCfg.Type {
 	case CompressTypeNop:
@@ -108,7 +108,7 @@ func (c *Compress) NestWriter(w io.WriteCloser) error {
 		c.compressWriter = w
 	}
 
-	return c.RW.NestWriter(c.compressWriter)
+	c.RW.NestWriter(c.compressWriter)
 }
 
 func (c *Compress) Type() any {
