@@ -56,12 +56,12 @@ func GetNicSpeed(nic string) (int, error) {
 func GetNetDevStats() (map[string]*NetDevStats, error) {
 	fs, err := procfs.NewFS(procfs.DefaultMountPoint)
 	if err != nil {
-		return nil, errs.Wrap(err, "open proc fs fail")
+		return nil, errs.Wrap(err, "open proc fs failed")
 	}
 
 	netDev, err := fs.NetDev()
 	if err != nil {
-		return nil, errs.Wrap(err, "parse /proc/net/dev fail")
+		return nil, errs.Wrap(err, "parse /proc/net/dev failed")
 	}
 
 	stats := make(map[string]*NetDevStats, len(netDev))

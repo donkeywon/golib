@@ -78,7 +78,7 @@ func (h *HostRateLimiter) Init() error {
 		h.Info("use nic", "nic", h.Nic)
 		h.nicSpeedMbps, err = eth.GetNicSpeed(h.Nic)
 		if err != nil {
-			h.Error("get nic speed fail", err)
+			h.Error("get nic speed failed", err)
 			h.Info("try get nic speed on cloud")
 
 			cloudType := cloud.Which()
@@ -89,7 +89,7 @@ func (h *HostRateLimiter) Init() error {
 			h.Info("host on cloud", "type", cloudType)
 			h.nicSpeedMbps, err = cloud.GetNicSpeed()
 			if err != nil {
-				return errs.Wrapf(err, "get cloud(%s) network nic speed fail", cloudType)
+				return errs.Wrapf(err, "get cloud(%s) network nic speed failed", cloudType)
 			}
 		}
 

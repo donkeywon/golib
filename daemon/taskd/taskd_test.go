@@ -42,7 +42,7 @@ func TestTaskd(t *testing.T) {
 			taskID := fmt.Sprintf("test-abc-%d", r)
 			_, err := td.SubmitTask(createTaskCfg(taskID, r))
 			if err != nil {
-				td.Error("submit task fail", err, "task_id", taskID)
+				td.Error("submit task failed", err, "task_id", taskID)
 			}
 		}(i)
 	}

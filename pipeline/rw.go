@@ -25,7 +25,6 @@ import (
 )
 
 var (
-	ErrStoppedManually  = errors.New("RW stopped manually")
 	ErrChecksumNotMatch = errors.New("checksum not match")
 
 	CreateBaseRW = newBaseRW
@@ -189,7 +188,7 @@ func newBaseRW(name string) RW {
 func (b *baseRW) Init() (err error) {
 	defer func() {
 		if err != nil {
-			b.Warn("close after RW init fail", "err", err, "close_err", b.Close())
+			b.Warn("close after RW init failed", "err", err, "close_err", b.Close())
 		}
 	}()
 
@@ -226,7 +225,7 @@ func (b *baseRW) Init() (err error) {
 		b.rl.Inherit(b)
 		err = runner.Init(b.rl)
 		if err != nil {
-			return errs.Wrap(err, "init rate limiter fail")
+			return errs.Wrap(err, "init rate limiter failed")
 		}
 		b.HookWrite(b.hookWriteRateLimit)
 		b.HookRead(b.hookReadRateLimit)
@@ -259,55 +258,15 @@ func (b *baseRW) Init() (err error) {
 		return errs.New("RW can only be one of the roles: Reader|Writer|Starter")
 	}
 
-	if b.IsStarter() {
-		b.HookRead(b.hookManuallyStop)
-		b.HookWrite(b.hookManuallyStop)
-	}
-
 	return b.Runner.Init()
 }
 
 // Start 如果当前RW可以作为Starter，那么需要实现Start方法.
 func (b *baseRW) Start() error {
-	// for example
-
-	// read from b and write to b.Writer()
-	// such as io.Copy(b.Writer(), b)
-
-	// 执行到这里，说明要么读到了io.EOF，要么被Stop
-	// 如果被Stop的话，b.read()方法会返回一个ErrStoppedManually
-	// if errors.Is(err, ErrStoppedManually) {
-	// 	   err = nil
-	// }
-
-	// closeErr = b.Close() // 也可以放到defer里
-	// if closeErr != nil {
-	// 	   err = errors.Join(err, closeErr)
-	// }
-	// return err
-
 	return errs.New("non-runnable RW type")
 }
 
-// Stop 通知RW停止
-// 不在Stop方法中做CloseReader和CloseWriter的操作的原因是想做到优雅关闭
-// 由Starter检测到stop信号后停止read，然后再进行Close，参考Start方法中的example
-//
-// 存在一种特殊情况，例如
-// b.Reader()是TailRW或者其他类似的ReadCloser，当执行Read方法的时候，会存在阻塞的情况
-// 如果不执行Close方法且一直没有新内容的话，那么Read会一直阻塞住
-// 所以对b.Reader()和b.Writer()也执行一次runner.Stop通知，由TailRW自己在Stop方法中做Close操作.
 func (b *baseRW) Stop() error {
-	if b.Reader() != nil {
-		if r, ok := b.Reader().(RW); ok {
-			runner.Stop(r)
-		}
-	}
-	if b.Writer() != nil {
-		if w, ok := b.Writer().(RW); ok {
-			runner.Stop(w)
-		}
-	}
 	return b.Runner.Stop()
 }
 
@@ -323,7 +282,7 @@ func (b *baseRW) NestReader(r io.ReadCloser) error {
 	if rw, ok := r.(RW); ok && b.Reader() != nil {
 		err := rw.NestReader(b.Reader())
 		if err != nil {
-			return errs.Wrapf(err, "rw(%s) nest reader fail", rw.Type())
+			return errs.Wrapf(err, "rw(%s) nest reader failed", rw.Type())
 		}
 		b.r = rw
 	} else {
@@ -336,7 +295,7 @@ func (b *baseRW) NestWriter(w io.WriteCloser) error {
 	if rw, ok := w.(RW); ok && b.Writer() != nil {
 		err := rw.NestWriter(b.Writer())
 		if err != nil {
-			return errs.Wrapf(err, "rw(%s) nest writer fail", rw.Type())
+			return errs.Wrapf(err, "rw(%s) nest writer failed", rw.Type())
 		}
 		b.w = rw
 	} else {
@@ -550,15 +509,6 @@ func (b *baseRW) initHash() {
 	}
 }
 
-func (b *baseRW) hookManuallyStop(_ int, _ []byte, _ error, _ int64, _ ...any) error {
-	select {
-	case <-b.Stopping():
-		return ErrStoppedManually
-	default:
-		return nil
-	}
-}
-
 func (b *baseRW) getBuf() *bytespool.Bytes {
 	return bytespool.GetBytesN(b.bufSize)
 }
@@ -575,7 +525,7 @@ func (b *baseRW) read(p []byte) (nr int, err error) {
 			h := b.readHooks[i]
 			hookErr := h(nr, p, err, endTS-startTS)
 			if hookErr != nil {
-				err = errors.Join(err, errs.Wrapf(hookErr, "read hook(%d) %s fail", i, reflects.GetFuncName(h)))
+				err = errors.Join(err, errs.Wrapf(hookErr, "read hook(%d) %s failed", i, reflects.GetFuncName(h)))
 			}
 		}
 	}()
@@ -591,7 +541,7 @@ func (b *baseRW) write(p []byte) (nw int, err error) {
 			h := b.writeHooks[i]
 			hookErr := h(nw, p, err, endTS-startTS)
 			if hookErr != nil {
-				err = errors.Join(err, errs.Wrapf(hookErr, "write hook(%d) %s fail", i, reflects.GetFuncName(h)))
+				err = errors.Join(err, errs.Wrapf(hookErr, "write hook(%d) %s failed", i, reflects.GetFuncName(h)))
 			}
 		}
 	}()
@@ -662,7 +612,7 @@ func (b *baseRW) prepareReadBuf() error {
 	b.buf.Shrink(nr)
 	if err != nil {
 		if err != io.EOF {
-			err = errs.Wrap(err, "read to buf fail")
+			err = errs.Wrap(err, "read to buf failed")
 		}
 		b.rerr.Store(err)
 	}
@@ -707,7 +657,7 @@ func (b *baseRW) writeBuf(p []byte) (int, error) {
 		b.Debug("buf full, flush")
 		err = b.flushNoLock()
 		if err != nil {
-			b.Debug("write buf returned caused by flush fail")
+			b.Debug("write buf returned caused by flush failed")
 			return 0, err
 		}
 	}
@@ -741,7 +691,7 @@ func (b *baseRW) flushNoLock() error {
 
 	b.offset = 0
 	if err != nil {
-		return errs.Wrap(err, "flush write fail")
+		return errs.Wrap(err, "flush write failed")
 	}
 	return nil
 }
@@ -768,11 +718,11 @@ func (b *baseRW) deadlineFlush() {
 			b.Debug("deadline flush")
 			err := b.flushNoLock()
 			if err != nil {
-				err = errs.Wrap(err, "deadline flush fail")
+				err = errs.Wrap(err, "deadline flush failed")
 
 				ok := b.werr.Store(err)
 				if !ok {
-					b.Warn("deadline flush err store fail", "err", err)
+					b.Warn("deadline flush err store failed", "err", err)
 				}
 			}
 			b.mu.Unlock()
@@ -805,7 +755,7 @@ func (b *baseRW) asyncRead() {
 			return
 		}
 		if err != nil {
-			b.rerr.Store(errs.Wrap(err, "async read fail"))
+			b.rerr.Store(errs.Wrap(err, "async read failed"))
 			close(b.asyncChan)
 			b.Error("async read finished caused by error occurred", err)
 			return
@@ -839,10 +789,10 @@ func (b *baseRW) asyncWrite() {
 		}
 
 		// 这里不能直接break或return，因为要消费asyncChan里剩余的buf并进行Free，否则会内存泄漏，消费完后才会return或break
-		err = errs.Wrap(err, "async write fail")
+		err = errs.Wrap(err, "async write failed")
 		ok = b.werr.Store(err)
 		if !ok {
-			b.Warn("async write fail err store fail", "err", err)
+			b.Warn("async write fail err store failed", "err", err)
 		}
 	}
 }
@@ -852,10 +802,11 @@ func (b *baseRW) closeReader() error {
 		return nil
 	}
 
-	b.Info("close nested reader")
-
-	err := b.Reader().Close()
+	var err error
 	b.closeOnce.Do(func() {
+		b.Info("close nested reader")
+		err = b.Reader().Close()
+
 		close(b.closed)
 
 		if b.bufSize > 0 && b.buf != nil {
@@ -875,10 +826,10 @@ func (b *baseRW) closeReader() error {
 		}
 	})
 
-	if err == nil {
-		return nil
+	if err != nil {
+		return errs.Wrapf(err, "%s close nested reader failed", b.Name())
 	}
-	return errs.Wrapf(err, "%s close nested reader fail", b.Name())
+	return nil
 }
 
 func (b *baseRW) closeWriter() error {
@@ -886,17 +837,20 @@ func (b *baseRW) closeWriter() error {
 		return nil
 	}
 
-	b.Info("close nested writer")
-
-	var err error
+	var (
+		err      error
+		flushErr error
+	)
 	b.closeOnce.Do(func() {
 		close(b.closed)
 
 		if b.bufSize > 0 && b.buf != nil {
+			b.Info("close-flush")
+
 			b.mu.Lock()
-			err = b.flushNoLock()
-			if err != nil {
-				err = errs.Wrap(err, "close flush fail")
+			flushErr = b.flushNoLock()
+			if flushErr != nil {
+				flushErr = errs.Wrap(flushErr, "close-flush failed")
 			}
 			if b.buf != nil {
 				b.buf.Free()
@@ -909,12 +863,23 @@ func (b *baseRW) closeWriter() error {
 			// 等async线程写完
 			<-b.asyncDone
 		}
+
+		b.Info("close nested writer")
+		err = b.Writer().Close()
+		if err != nil {
+			err = errs.Wrapf(err, "%s close nested writer failed", b.Name())
+		}
 	})
-	closeErr := b.Writer().Close()
-	if closeErr == nil {
+	if flushErr != nil && err != nil {
+		errors.Join(flushErr, err)
+	}
+	if err != nil {
 		return err
 	}
-	return errors.Join(err, errs.Wrapf(closeErr, "%s close nested writer fail", b.Name()))
+	if flushErr != nil {
+		return flushErr
+	}
+	return nil
 }
 
 func (b *baseRW) hookIncWritten(n int, _ []byte, _ error, _ int64, _ ...any) error {
@@ -948,7 +913,7 @@ func (b *baseRW) hookReadRateLimit(n int, _ []byte, _ error, _ int64, _ ...any) 
 	}
 	e := b.rl.RxWaitN(n, 0)
 	if e != nil {
-		b.Warn("read rate limit fail", "n", n, "err", e.Error())
+		b.Warn("read rate limit failed", "n", n, "err", e.Error())
 	}
 	return nil
 }
@@ -959,7 +924,7 @@ func (b *baseRW) hookWriteRateLimit(n int, _ []byte, _ error, _ int64, _ ...any)
 	}
 	e := b.rl.TxWaitN(n, 0)
 	if e != nil {
-		b.Warn("write rate limit fail", "n", n, "err", e.Error())
+		b.Warn("write rate limit failed", "n", n, "err", e.Error())
 	}
 	return nil
 }

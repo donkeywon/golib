@@ -63,7 +63,7 @@ func New() *Pipeline {
 func (p *Pipeline) Init() error {
 	err := v.Struct(p.Cfg)
 	if err != nil {
-		return errs.Wrap(err, "validate fail")
+		return errs.Wrap(err, "validate failed")
 	}
 
 	rwCfgGroups := groupRWCfgByStarter(p.Cfg.RWs)
@@ -91,7 +91,7 @@ func (p *Pipeline) Init() error {
 			err = p.rwGroups[i].Starter().NestWriter(pw)
 		}
 		if err != nil {
-			return errs.Wrapf(err, "rwGroup(%d) nest pipe writer fail", i)
+			return errs.Wrapf(err, "rwGroup(%d) nest pipe writer failed", i)
 		}
 
 		if len(p.rwGroups[i+1].Readers()) > 0 {
@@ -100,7 +100,7 @@ func (p *Pipeline) Init() error {
 			err = p.rwGroups[i+1].Starter().NestReader(pr)
 		}
 		if err != nil {
-			return errs.Wrapf(err, "rwGroup(%d) nest pipe reader fail", i+1)
+			return errs.Wrapf(err, "rwGroup(%d) nest pipe reader failed", i+1)
 		}
 	}
 
@@ -156,16 +156,17 @@ func (p *Pipeline) Result() *Result {
 	}
 	r.Data = p.LoadAll()
 
+	var data map[string]any
 	for _, rwg := range p.rwGroups {
 		for _, rw := range rwg.Readers() {
-			v := rw.LoadAll()
-			r.RWsData = append(r.RWsData, v)
+			data = rw.LoadAll()
+			r.RWsData = append(r.RWsData, data)
 		}
-		v := rwg.Starter().LoadAll()
-		r.RWsData = append(r.RWsData, v)
+		data = rwg.Starter().LoadAll()
+		r.RWsData = append(r.RWsData, data)
 		for _, rw := range rwg.Writers() {
-			v := rw.LoadAll()
-			r.RWsData = append(r.RWsData, v)
+			data = rw.LoadAll()
+			r.RWsData = append(r.RWsData, data)
 		}
 	}
 	return r

@@ -62,7 +62,7 @@ func (s *SSHStep) Start() error {
 	var err error
 	s.cli, s.sess, err = sshs.NewClient(s.SSHStepCfg.Addr, s.SSHStepCfg.User, s.SSHStepCfg.Pwd, []byte(s.SSHStepCfg.PrivateKey), s.SSHStepCfg.Timeout)
 	if err != nil {
-		return errs.Wrap(err, "create ssh client fail")
+		return errs.Wrap(err, "create ssh client failed")
 	}
 
 	defer func() {
@@ -73,7 +73,7 @@ func (s *SSHStep) Start() error {
 		}
 		err = s.close()
 		if err != nil {
-			s.Error("close ssh client fail", err)
+			s.Error("close ssh client failed", err)
 		}
 	}()
 
@@ -94,7 +94,7 @@ func (s *SSHStep) Start() error {
 	s.Store(consts.FieldStopTimeNano, stopNano)
 	s.Info("ssh cmd done", "stdout", stdoutBuf.String(), "stderr", stderrBuf.String(), "cost_nano", stopNano-startNano, "err", err)
 	if err != nil {
-		return errs.Wrap(err, "ssh cmd fail")
+		return errs.Wrap(err, "ssh cmd failed")
 	}
 	return nil
 }

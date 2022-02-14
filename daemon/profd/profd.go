@@ -37,7 +37,7 @@ func (p *Profd) Init() error {
 	if p.Cfg.EnableStartupProfiling {
 		filepath, done, err := prof.Start(p.Cfg.StartupProfilingMode, p.Cfg.ProfOutputDir, p.Cfg.StartupProfilingSec)
 		if err != nil {
-			p.Error("startup profiling fail", err,
+			p.Error("startup profiling failed", err,
 				"mode", p.Cfg.StartupProfilingMode,
 				"duration", fmt.Sprintf("%ds", p.Cfg.StartupProfilingSec),
 				"filepath", filepath)
@@ -65,7 +65,7 @@ func (p *Profd) Init() error {
 	if p.Cfg.EnableStatsViz {
 		srv, err := statsviz.NewServer()
 		if err != nil {
-			p.Error("init statsviz fail", err)
+			p.Error("init statsviz failed", err)
 		} else {
 			httpd.D().Handle("/debug/statsviz/", srv.Index())
 			httpd.D().HandleFunc("/debug/statsviz/ws", srv.Ws())
@@ -88,7 +88,7 @@ func (p *Profd) Init() error {
 	if p.Cfg.EnableGoPs {
 		err := agent.Listen(agent.Options{Addr: p.Cfg.GoPsAddr})
 		if err != nil {
-			p.Error("init gops agent fail", err, "addr", p.Cfg.GoPsAddr)
+			p.Error("init gops agent failed", err, "addr", p.Cfg.GoPsAddr)
 		}
 	}
 

@@ -70,7 +70,7 @@ func (f *FtpStep) Start() error {
 
 	err := f.cli.Init()
 	if err != nil {
-		return errs.Wrap(err, "init ftp client fail")
+		return errs.Wrap(err, "init ftp client failed")
 	}
 
 	defer func() {
@@ -81,7 +81,7 @@ func (f *FtpStep) Start() error {
 		}
 		err = f.cli.Close()
 		if err != nil {
-			f.Error("close ftp client fail", err)
+			f.Error("close ftp client failed", err)
 		}
 	}()
 
@@ -90,7 +90,7 @@ func (f *FtpStep) Start() error {
 	f.Store(consts.FieldFtpMsg, msg)
 	f.Info("ftp cmd done", "code", code, "msg", msg, "err", err)
 	if err != nil {
-		return errs.Wrap(err, "ftp cmd fail")
+		return errs.Wrap(err, "ftp cmd failed")
 	}
 	return nil
 }

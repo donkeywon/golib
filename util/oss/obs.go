@@ -44,7 +44,7 @@ func ObsSign(req *http.Request, ak string, sk string, bucket string, obj string)
 	mac := hmac.New(sha1.New, []byte(sk))
 	_, err := mac.Write([]byte(stringToSign))
 	if err != nil {
-		return errs.Wrap(err, "obs hmac write fail")
+		return errs.Wrap(err, "obs hmac write failed")
 	}
 
 	sign := base64.StdEncoding.EncodeToString(mac.Sum(nil))

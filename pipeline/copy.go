@@ -50,17 +50,26 @@ func (cp *CopyRW) Start() error {
 	buf := bytespool.GetBytesN(cp.BufSize)
 	defer buf.Free()
 
-	_, err := io.CopyBuffer(cp.Writer(), cp, buf.B())
-	if errors.Is(err, ErrStoppedManually) {
-		cp.Info("stopped manually", "err", err)
-		err = nil
-	}
-
+	_, err := io.CopyBuffer(cp.Writer(), cp.Reader(), buf.B())
 	if err != nil {
-		return errs.Wrap(err, "io copy fail")
+		select {
+		case <-cp.Stopping():
+			cp.Warn("copy stopped manually", "err", err)
+			err = nil
+		default:
+		}
 	}
 
-	return nil
+	closeErr := cp.Close()
+	if closeErr != nil {
+		cp.Error("close rw failed", closeErr)
+	}
+
+	return errs.Wrap(err, "io copy failed")
+}
+
+func (cp *CopyRW) Stop() error {
+	return errors.Join(cp.Close(), cp.RW.Stop())
 }
 
 func (cp *CopyRW) Type() any {

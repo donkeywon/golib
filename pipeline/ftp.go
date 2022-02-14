@@ -52,13 +52,13 @@ func (f *FtpRW) Init() error {
 	if f.IsReader() {
 		r, err := createFtpReader(f.FtpRWCfg)
 		if err != nil {
-			return errs.Wrap(err, "create ftp reader fail")
+			return errs.Wrap(err, "create ftp reader failed")
 		}
 		f.NestReader(r)
 	} else {
 		w, err := createFtpWriter(f.FtpRWCfg)
 		if err != nil {
-			return errs.Wrap(err, "create ftp writer fail")
+			return errs.Wrap(err, "create ftp writer failed")
 		}
 		f.NestWriter(w)
 	}
@@ -105,7 +105,7 @@ func createFtpReader(ftpCfg *FtpRWCfg) (*ftp.Reader, error) {
 
 	err := r.Init()
 	if err != nil {
-		return nil, errs.Wrap(err, "init ftp reader fail")
+		return nil, errs.Wrap(err, "init ftp reader failed")
 	}
 
 	return r, nil
@@ -118,7 +118,7 @@ func createFtpWriter(ftpCfg *FtpRWCfg) (*ftp.Writer, error) {
 
 	err := w.Init()
 	if err != nil {
-		return nil, errs.Wrap(err, "init ftp writer fail")
+		return nil, errs.Wrap(err, "init ftp writer failed")
 	}
 
 	return w, nil

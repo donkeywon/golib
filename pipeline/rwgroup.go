@@ -73,14 +73,14 @@ func (g *RWGroup) Init() error {
 	var err error
 	g.starter, err = g.createRW(g.RWGroupCfg.Starter)
 	if err != nil {
-		return errs.Wrapf(err, "create starter rw(%s) fail", g.RWGroupCfg.Starter.Type)
+		return errs.Wrapf(err, "create starter rw(%s) failed", g.RWGroupCfg.Starter.Type)
 	}
 
 	g.readers = make([]RW, len(g.RWGroupCfg.Readers))
 	for i, cfg := range g.RWGroupCfg.Readers {
 		g.readers[i], err = g.createRW(cfg)
 		if err != nil {
-			return errs.Wrapf(err, "create %d reader rw(%s) fail", i, cfg.Type)
+			return errs.Wrapf(err, "create %d reader rw(%s) failed", i, cfg.Type)
 		}
 	}
 
@@ -88,7 +88,7 @@ func (g *RWGroup) Init() error {
 	for i, cfg := range g.RWGroupCfg.Writers {
 		g.writers[i], err = g.createRW(cfg)
 		if err != nil {
-			return errs.Wrapf(err, "create %d writer rw(%s) fail", i, cfg.Type)
+			return errs.Wrapf(err, "create %d writer rw(%s) failed", i, cfg.Type)
 		}
 	}
 
@@ -100,13 +100,13 @@ func (g *RWGroup) Start() error {
 		defer func() {
 			err := recover()
 			if err != nil {
-				g.AppendError(errs.PanicToErrWithMsg(err, "panic when close starter"))
+				g.AppendError(errs.PanicToErrWithMsg(err, "panic on closing starter"))
 			}
 		}()
 
 		err := g.starter.Close()
 		if err != nil {
-			g.AppendError(errs.Wrap(err, "close starter fail"))
+			g.AppendError(errs.Wrap(err, "close starter failed"))
 		}
 	}()
 
@@ -114,33 +114,33 @@ func (g *RWGroup) Start() error {
 
 	err = g.initReaders()
 	if err != nil {
-		return errs.Wrap(err, "init readers fail")
+		return errs.Wrap(err, "init readers failed")
 	}
 
 	if len(g.readers) > 0 {
 		lastReader := g.readers[len(g.readers)-1]
 		err = g.starter.NestReader(lastReader)
 		if err != nil {
-			return errs.Wrapf(err, "starter %s nest reader %s(%d) fail", g.starter.Type(), lastReader.Type(), len(g.readers)-1)
+			return errs.Wrapf(err, "starter %s nest reader %s(%d) failed", g.starter.Type(), lastReader.Type(), len(g.readers)-1)
 		}
 	}
 
 	err = g.initWriters()
 	if err != nil {
-		return errs.Wrap(err, "init writers fail")
+		return errs.Wrap(err, "init writers failed")
 	}
 
 	if len(g.writers) > 0 {
 		firstWriter := g.writers[0]
 		err = g.starter.NestWriter(firstWriter)
 		if err != nil {
-			return errs.Wrapf(err, "starter %s nest writer %s(%d) fail", g.starter.Type(), firstWriter.Type(), 0)
+			return errs.Wrapf(err, "starter %s nest writer %s(%d) failed", g.starter.Type(), firstWriter.Type(), 0)
 		}
 	}
 
 	err = runner.Init(g.starter)
 	if err != nil {
-		return errs.Wrapf(err, "init starter %s fail", g.starter.Type())
+		return errs.Wrapf(err, "init starter %s failed", g.starter.Type())
 	}
 
 	runner.Start(g.starter)
@@ -186,7 +186,7 @@ func (g *RWGroup) FirstReader() RW {
 func (g *RWGroup) createRW(rwCfg *RWCfg) (RW, error) {
 	rw, err := CreateRW(rwCfg)
 	if err != nil {
-		return nil, errs.Wrapf(err, "create rw(%s) fail", rwCfg.Type)
+		return nil, errs.Wrapf(err, "create rw(%s) failed", rwCfg.Type)
 	}
 	rw.Inherit(g)
 	return rw, nil
@@ -198,13 +198,13 @@ func (g *RWGroup) initReaders() error {
 		if i > 0 {
 			err = g.readers[i].NestReader(g.readers[i-1])
 			if err != nil {
-				return errs.Wrapf(err, "reader(%d) %s nest reader(%d) %s fail", i, g.readers[i].Type(), i+1, g.readers[i+1].Type())
+				return errs.Wrapf(err, "reader(%d) %s nest reader(%d) %s failed", i, g.readers[i].Type(), i+1, g.readers[i+1].Type())
 			}
 		}
 
 		err = runner.Init(g.readers[i])
 		if err != nil {
-			return errs.Wrapf(err, "init reader(%d) %s fail", i, g.readers[i].Type())
+			return errs.Wrapf(err, "init reader(%d) %s failed", i, g.readers[i].Type())
 		}
 	}
 
@@ -217,13 +217,13 @@ func (g *RWGroup) initWriters() error {
 		if i < len(g.writers)-1 {
 			err = g.writers[i].NestWriter(g.writers[i+1])
 			if err != nil {
-				return errs.Wrapf(err, "writer(%d) %s nest writer(%d) %s fail", i, g.writers[i].Type(), i+1, g.writers[i+1].Type())
+				return errs.Wrapf(err, "writer(%d) %s nest writer(%d) %s failed", i, g.writers[i].Type(), i+1, g.writers[i+1].Type())
 			}
 		}
 
 		err = runner.Init(g.writers[i])
 		if err != nil {
-			return errs.Wrapf(err, "init writer(%d) %s fail", i, g.writers[i].Type())
+			return errs.Wrapf(err, "init writer(%d) %s failed", i, g.writers[i].Type())
 		}
 	}
 	return nil

@@ -63,7 +63,7 @@ func (r *Reader) Read(p []byte) (int, error) {
 			retry.Attempts(uint(r.Retry)),
 		)
 		if err != nil {
-			r.headErr = errs.Wrap(err, "oss head fail")
+			r.headErr = errs.Wrap(err, "head oss failed")
 			return
 		}
 		r.total, err = strconv.Atoi(resp.Header.Get("Content-Length"))
@@ -87,7 +87,7 @@ func (r *Reader) Read(p []byte) (int, error) {
 	nr, err := r.retryRead(r.Pos, p)
 	r.Pos += nr
 	if err != nil {
-		return nr, errs.Wrap(err, "retry read oss object fail")
+		return nr, errs.Wrap(err, "retry read oss object failed")
 	}
 
 	return nr, nil
@@ -143,7 +143,7 @@ func (r *Reader) readPart(start int, p []byte) (int, error) {
 		err = nil
 	}
 	if err != nil {
-		return nr, errs.Wrap(err, "get oss object part fail")
+		return nr, errs.Wrap(err, "get oss object part failed")
 	}
 
 	contentRange := resp.Header.Get("Content-Range")

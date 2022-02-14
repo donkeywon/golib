@@ -45,18 +45,18 @@ func NewReader(filepath string, pos int64) (*Reader, error) {
 	if r.pos > 0 {
 		_, err = r.file.Seek(r.pos, io.SeekStart)
 		if err != nil {
-			return nil, r.close(errs.Wrap(err, "file seek fail"))
+			return nil, r.close(errs.Wrap(err, "file seek failed"))
 		}
 	}
 
 	r.fi, err = r.file.Stat()
 	if err != nil {
-		return nil, r.close(errs.Wrap(err, "get file stat fail"))
+		return nil, r.close(errs.Wrap(err, "get file stat failed"))
 	}
 
 	r.watcher, err = fsnotify.NewWatcher()
 	if err != nil {
-		return nil, r.close(errs.Wrap(err, "create notify watcher fail"))
+		return nil, r.close(errs.Wrap(err, "create notify watcher failed"))
 	}
 	_ = r.watcher.Add(filepath)
 

@@ -3,8 +3,6 @@ package boot
 import (
 	"errors"
 	"fmt"
-	"github.com/goccy/go-yaml/ast"
-	"github.com/goccy/go-yaml/parser"
 	"os"
 	"os/signal"
 	"runtime"
@@ -24,6 +22,8 @@ import (
 	"github.com/donkeywon/golib/util/signals"
 	"github.com/donkeywon/golib/util/v"
 	"github.com/goccy/go-yaml"
+	"github.com/goccy/go-yaml/ast"
+	"github.com/goccy/go-yaml/parser"
 )
 
 type DaemonType string
@@ -43,12 +43,12 @@ func Boot(opt ...Option) {
 	_b = New(opt...)
 	err := runner.Init(_b)
 	if err != nil {
-		_b.Error("boot init fail", err)
+		_b.Error("boot init failed", err)
 		os.Exit(1)
 	}
 	err = v.Struct(_b)
 	if err != nil {
-		_b.Error("boot validate fail", err)
+		_b.Error("boot validate failed", err)
 		os.Exit(1)
 	}
 	runner.StartBG(_b)
@@ -120,7 +120,7 @@ func (b *Booter) Init() error {
 	b.cfgMap["log"] = b.logCfg
 	b.flagParser, err = buildFlagParser(b.options, b.cfgMap)
 	if err != nil {
-		return errs.Wrap(err, "build flag parser fail")
+		return errs.Wrap(err, "build flag parser failed")
 	}
 
 	err = b.loadOptions()
@@ -144,21 +144,21 @@ func (b *Booter) Init() error {
 
 	err = b.loadCfg()
 	if err != nil {
-		return errs.Wrap(err, "load cfg fail")
+		return errs.Wrap(err, "load cfg failed")
 	}
 
 	err = b.validateCfg()
 	if err != nil {
-		return errs.Wrap(err, "validate cfg fail")
+		return errs.Wrap(err, "validate cfg failed")
 	}
 
 	l, err := b.buildLogger()
 	if err != nil {
-		return errs.Wrap(err, "build logger fail")
+		return errs.Wrap(err, "build logger failed")
 	}
 	ok := reflects.SetFirstMatchedField(b.Runner, l.WithLoggerName(b.Name()))
 	if !ok {
-		panic("boot set logger fail")
+		panic("boot set logger failed")
 	}
 
 	for name, cfg := range b.cfgMap {
@@ -229,7 +229,7 @@ func (b *Booter) loadOptions() error {
 		Prefix: b.options.EnvPrefix,
 	})
 	if err != nil {
-		return errs.Wrap(err, "parse env to boot options fail")
+		return errs.Wrap(err, "parse env to boot options failed")
 	}
 	return nil
 }
@@ -248,7 +248,7 @@ func (b *Booter) loadCfgFromEnv() error {
 			Prefix: b.options.EnvPrefix,
 		})
 		if err != nil {
-			return errs.Wrapf(err, "parse env tocfg fail: %s", path)
+			return errs.Wrapf(err, "parse env tocfg failed: %s", path)
 		}
 	}
 	return nil
@@ -267,12 +267,12 @@ func (b *Booter) loadCfgFromFile() error {
 
 	f, err := os.ReadFile(cfgPath)
 	if err != nil {
-		return errs.Wrap(err, "read cfg file fail")
+		return errs.Wrap(err, "read cfg file failed")
 	}
 
 	af, err := parser.ParseBytes(f, 0)
 	if err != nil {
-		return errs.Wrap(err, "parse cfg file fail")
+		return errs.Wrap(err, "parse cfg file failed")
 	}
 
 	var (

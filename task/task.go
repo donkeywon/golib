@@ -106,7 +106,7 @@ func (t *Task) Init() error {
 	for i, cfg := range t.Cfg.Steps {
 		step, er := t.createStep(i, cfg, false)
 		if er != nil {
-			return errs.Wrapf(er, "create step(%d) %s fail", i, cfg.Type)
+			return errs.Wrapf(er, "create step(%d) %s failed", i, cfg.Type)
 		}
 		t.steps = append(t.steps, step)
 	}
@@ -114,7 +114,7 @@ func (t *Task) Init() error {
 	for i, cfg := range t.Cfg.DeferSteps {
 		step, er := t.createStep(i, cfg, true)
 		if er != nil {
-			return errs.Wrapf(er, "create defer step(%d) %s fail", i, cfg.Type)
+			return errs.Wrapf(er, "create defer step(%d) %s failed", i, cfg.Type)
 		}
 		t.deferSteps = append(t.deferSteps, step)
 	}
@@ -122,14 +122,14 @@ func (t *Task) Init() error {
 	for i := t.Cfg.CurStepIdx; i < len(t.steps); i++ {
 		err = runner.Init(t.steps[i])
 		if err != nil {
-			return errs.Wrapf(err, "init step(%d) %s fail", i, t.steps[i].Type())
+			return errs.Wrapf(err, "init step(%d) %s failed", i, t.steps[i].Type())
 		}
 	}
 
 	for i := len(t.Cfg.DeferSteps) - 1 - t.Cfg.CurDeferStepIdx; i >= 0; i-- {
 		err = runner.Init(t.deferSteps[i])
 		if err != nil {
-			return errs.Wrapf(err, "init defer step(%d) %s fail", i, t.deferSteps[i].Type())
+			return errs.Wrapf(err, "init defer step(%d) %s failed", i, t.deferSteps[i].Type())
 		}
 	}
 
@@ -278,7 +278,7 @@ func (t *Task) runSteps() {
 		}
 		err := step.Err()
 		if err != nil {
-			t.AppendError(errs.Wrapf(err, "run step(%d) %s fail", t.CurStepIdx, step.Type()))
+			t.AppendError(errs.Wrapf(err, "run step(%d) %s failed", t.CurStepIdx, step.Type()))
 			return
 		}
 	}
@@ -324,7 +324,7 @@ func (t *Task) runDeferSteps() {
 			}
 			err := deferStep.Err()
 			if err != nil {
-				t.AppendError(errs.Wrapf(err, "run defer(%d) step %s fail", t.CurDeferStepIdx, deferStep.Type()))
+				t.AppendError(errs.Wrapf(err, "run defer(%d) step %s failed", t.CurDeferStepIdx, deferStep.Type()))
 			}
 		}()
 	}

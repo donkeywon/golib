@@ -91,16 +91,16 @@ func (s *SQLiteKVS) Open() error {
 	var err error
 	s.pool, err = sqlitex.NewPool(s.Path, sqlitex.PoolOptions{PoolSize: s.PoolSize})
 	if err != nil {
-		return errs.Wrap(err, "open sqlite3 db fail")
+		return errs.Wrap(err, "open sqlite3 db failed")
 	}
 	conn, err := s.getConn()
 	if err != nil {
-		return errs.Wrap(err, "get conn fail")
+		return errs.Wrap(err, "get conn failed")
 	}
 	defer s.putConn(conn)
 	err = sqlitex.Execute(conn, s.prepareSQL(defaultDDL), &sqlitex.ExecOptions{})
 	if err != nil {
-		return errs.Wrap(err, "exec ddl fail")
+		return errs.Wrap(err, "exec ddl failed")
 	}
 	return nil
 }
@@ -108,7 +108,7 @@ func (s *SQLiteKVS) Open() error {
 func (s *SQLiteKVS) Close() error {
 	err := s.pool.Close()
 	if err != nil {
-		return errs.Wrap(err, "close sqlite3 db fail")
+		return errs.Wrap(err, "close sqlite3 db failed")
 	}
 	return nil
 }
@@ -116,12 +116,12 @@ func (s *SQLiteKVS) Close() error {
 func (s *SQLiteKVS) insert(k string, v any, insertSQL string) (int64, error) {
 	str, err := conv.ToString(v)
 	if err != nil {
-		return 0, errs.Wrap(err, "convert value to string fail")
+		return 0, errs.Wrap(err, "convert value to string failed")
 	}
 
 	conn, err := s.getConn()
 	if err != nil {
-		return 0, errs.Wrap(err, "get conn fail")
+		return 0, errs.Wrap(err, "get conn failed")
 	}
 	defer s.putConn(conn)
 
@@ -129,7 +129,7 @@ func (s *SQLiteKVS) insert(k string, v any, insertSQL string) (int64, error) {
 		Args: []any{k, str, time.Now().UnixNano()},
 	})
 	if err != nil {
-		return 0, errs.Wrap(err, "sqlite3 insert fail")
+		return 0, errs.Wrap(err, "sqlite3 insert failed")
 	}
 	return int64(conn.Changes()), nil
 }
@@ -137,7 +137,7 @@ func (s *SQLiteKVS) insert(k string, v any, insertSQL string) (int64, error) {
 func (s *SQLiteKVS) query(k string) (*DBModel, error) {
 	conn, err := s.getConn()
 	if err != nil {
-		return nil, errs.Wrap(err, "get conn fail")
+		return nil, errs.Wrap(err, "get conn failed")
 	}
 	defer s.putConn(conn)
 
@@ -155,7 +155,7 @@ func (s *SQLiteKVS) query(k string) (*DBModel, error) {
 		},
 	})
 	if err != nil {
-		return nil, errs.Wrap(err, "query fail")
+		return nil, errs.Wrap(err, "query failed")
 	}
 
 	return m, nil
@@ -181,7 +181,7 @@ func (s *SQLiteKVS) StoreAsString(k string, v any) error {
 func (s *SQLiteKVS) Load(k string) (any, bool, error) {
 	m, err := s.query(k)
 	if err != nil {
-		return nil, false, errs.Wrap(err, "sqlite3 get fail")
+		return nil, false, errs.Wrap(err, "sqlite3 get failed")
 	}
 	if m == nil {
 		return nil, false, nil
@@ -223,7 +223,7 @@ func (s *SQLiteKVS) LoadAndDelete(k string) (any, bool, error) {
 func (s *SQLiteKVS) Del(k string) error {
 	conn, err := s.getConn()
 	if err != nil {
-		return errs.Wrap(err, "get conn fail")
+		return errs.Wrap(err, "get conn failed")
 	}
 	defer s.putConn(conn)
 	return sqlitex.Execute(conn, s.prepareSQL(deleteSQL), &sqlitex.ExecOptions{
@@ -283,7 +283,7 @@ func (s *SQLiteKVS) Range(f func(k string, v any) bool) error {
 	for {
 		conn, err := s.getConn()
 		if err != nil {
-			return errs.Wrap(err, "get conn fail")
+			return errs.Wrap(err, "get conn failed")
 		}
 
 		result = result[:0]
@@ -302,7 +302,7 @@ func (s *SQLiteKVS) Range(f func(k string, v any) bool) error {
 		s.putConn(conn)
 
 		if err != nil {
-			return errs.Wrap(err, "sqlite3 page query fail")
+			return errs.Wrap(err, "sqlite3 page query failed")
 		}
 
 		if len(result) == 0 {

@@ -61,7 +61,7 @@ func (f *FileRW) Init() error {
 	}
 
 	if err != nil {
-		return errs.Wrap(err, "open file fail")
+		return errs.Wrap(err, "open file failed")
 	}
 
 	return f.RW.Init()

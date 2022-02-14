@@ -24,19 +24,19 @@ func NewReader() *Reader {
 func (r *Reader) Init() error {
 	err := r.Client.Init()
 	if err != nil {
-		return errs.Wrap(err, "init ftp client fail")
+		return errs.Wrap(err, "init ftp client failed")
 	}
 
 	err = retry.Do(
 		func() error {
 			err = r.TransType("I")
 			if err != nil {
-				return errs.Wrap(err, "change transfer type fail")
+				return errs.Wrap(err, "change transfer type failed")
 			}
 
 			r.dataConn, err = r.Client.cmdDataConn("RETR %s", r.Path)
 			if err != nil {
-				return errs.Wrap(err, "RETR fail")
+				return errs.Wrap(err, "RETR failed")
 			}
 			return nil
 		},
