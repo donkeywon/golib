@@ -15,6 +15,10 @@ func Exists(pid int) bool {
 }
 
 func WaitProcExit(ctx context.Context, pid int, interval time.Duration, count int) bool {
+	if !Exists(pid) {
+		return true
+	}
+
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 

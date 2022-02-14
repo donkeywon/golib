@@ -1,6 +1,7 @@
 package upd
 
 import (
+	"github.com/donkeywon/golib/pipeline/rw"
 	"os"
 	"sync/atomic"
 	"time"
@@ -178,19 +179,19 @@ func (u *Upd) upgrade(vi *VerInfo) bool {
 	return true
 }
 
-func downloadPackage(downloadDstPath string, storeCfg *pipeline.RWCfg) error {
+func downloadPackage(downloadDstPath string, storeCfg *rw.Cfg) error {
 	cfg := pipeline.NewCfg().
 		AddCfg(storeCfg).
 		Add(
-			pipeline.RWRoleStarter,
-			pipeline.RWTypeCopy,
-			&pipeline.CopyRWCfg{BufSize: 64 * 1024},
+			rw.RoleStarter,
+			rw.TypeCopy,
+			&rw.CopyCfg{BufSize: 64 * 1024},
 			nil,
 		).
 		Add(
-			pipeline.RWRoleWriter,
-			pipeline.RWTypeFile,
-			&pipeline.FileRWCfg{Path: downloadDstPath},
+			rw.RoleWriter,
+			rw.TypeFile,
+			&rw.FileCfg{Path: downloadDstPath},
 			nil,
 		)
 

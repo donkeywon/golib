@@ -1,8 +1,10 @@
 package pipeline
 
 import (
+	"context"
 	"errors"
 	"github.com/donkeywon/golib/errs"
+	"github.com/donkeywon/golib/pipeline/rw"
 	"github.com/donkeywon/golib/plugin"
 	"github.com/donkeywon/golib/runner"
 )
@@ -12,44 +14,44 @@ func init() {
 	plugin.RegCfg(PluginTypeRWGroup, func() any { return NewRWGroupCfg() })
 }
 
-const PluginTypeRWGroup plugin.Type = "rwgroup"
+const PluginTypeRWGroup plugin.Type = "rwg"
 
 type RWGroupCfg struct {
-	Readers []*RWCfg `json:"readers" yaml:"readers"`
-	Starter *RWCfg   `json:"starter" yaml:"starter"`
-	Writers []*RWCfg `json:"writers" yaml:"writers"`
+	Readers []*rw.Cfg `json:"readers" yaml:"readers"`
+	Starter *rw.Cfg   `json:"starter" yaml:"starter"`
+	Writers []*rw.Cfg `json:"writers" yaml:"writers"`
 }
 
 func NewRWGroupCfg() *RWGroupCfg {
 	return &RWGroupCfg{}
 }
 
-func (c *RWGroupCfg) SetStarter(typ RWType, cfg any, commonCfg *RWCommonCfg) *RWGroupCfg {
-	c.Starter = &RWCfg{
-		Type:      typ,
-		Cfg:       cfg,
-		CommonCfg: commonCfg,
-		Role:      RWRoleStarter,
+func (c *RWGroupCfg) SetStarter(typ rw.Type, cfg any, commonCfg *rw.ExtraCfg) *RWGroupCfg {
+	c.Starter = &rw.Cfg{
+		Type:     typ,
+		Cfg:      cfg,
+		ExtraCfg: commonCfg,
+		Role:     rw.RoleStarter,
 	}
 	return c
 }
 
-func (c *RWGroupCfg) FromReader(typ RWType, cfg any, commonCfg *RWCommonCfg) *RWGroupCfg {
-	c.Readers = append(c.Readers, &RWCfg{
-		Type:      typ,
-		Cfg:       cfg,
-		CommonCfg: commonCfg,
-		Role:      RWRoleReader,
+func (c *RWGroupCfg) FromReader(typ rw.Type, cfg any, commonCfg *rw.ExtraCfg) *RWGroupCfg {
+	c.Readers = append(c.Readers, &rw.Cfg{
+		Type:     typ,
+		Cfg:      cfg,
+		ExtraCfg: commonCfg,
+		Role:     rw.RoleReader,
 	})
 	return c
 }
 
-func (c *RWGroupCfg) ToWriter(typ RWType, cfg any, commonCfg *RWCommonCfg) *RWGroupCfg {
-	c.Writers = append(c.Writers, &RWCfg{
-		Type:      typ,
-		Cfg:       cfg,
-		CommonCfg: commonCfg,
-		Role:      RWRoleWriter,
+func (c *RWGroupCfg) ToWriter(typ rw.Type, cfg any, commonCfg *rw.ExtraCfg) *RWGroupCfg {
+	c.Writers = append(c.Writers, &rw.Cfg{
+		Type:     typ,
+		Cfg:      cfg,
+		ExtraCfg: commonCfg,
+		Role:     rw.RoleWriter,
 	})
 	return c
 }
@@ -58,14 +60,14 @@ type RWGroup struct {
 	runner.Runner
 	*RWGroupCfg
 
-	readers []RW
-	starter RW
-	writers []RW
+	readers []rw.RW
+	starter rw.RW
+	writers []rw.RW
 }
 
 func NewRWGroup() *RWGroup {
 	return &RWGroup{
-		Runner:     runner.Create("rwg"),
+		Runner:     runner.Create(string(PluginTypeRWGroup)),
 		RWGroupCfg: NewRWGroupCfg(),
 	}
 }
@@ -77,7 +79,7 @@ func (g *RWGroup) Init() error {
 		return errs.Wrapf(err, "create starter rw(%s) failed", g.RWGroupCfg.Starter.Type)
 	}
 
-	g.readers = make([]RW, len(g.RWGroupCfg.Readers))
+	g.readers = make([]rw.RW, len(g.RWGroupCfg.Readers))
 	for i, cfg := range g.RWGroupCfg.Readers {
 		g.readers[i], err = g.createRW(cfg)
 		if err != nil {
@@ -85,7 +87,7 @@ func (g *RWGroup) Init() error {
 		}
 	}
 
-	g.writers = make([]RW, len(g.RWGroupCfg.Writers))
+	g.writers = make([]rw.RW, len(g.RWGroupCfg.Writers))
 	for i, cfg := range g.RWGroupCfg.Writers {
 		g.writers[i], err = g.createRW(cfg)
 		if err != nil {
@@ -151,7 +153,12 @@ func (g *RWGroup) Start() error {
 
 	runner.Start(g.starter)
 
-	return g.starter.Err()
+	err = g.starter.Err()
+	if !errors.Is(err, context.Canceled) {
+		return errs.Wrap(err, "starter failed")
+	}
+
+	return nil
 }
 
 func (g *RWGroup) Stop() error {
@@ -163,34 +170,34 @@ func (g *RWGroup) Size() int {
 	return len(g.readers) + 1 + len(g.writers)
 }
 
-func (g *RWGroup) Starter() RW {
+func (g *RWGroup) Starter() rw.RW {
 	return g.starter
 }
 
-func (g *RWGroup) Readers() []RW {
+func (g *RWGroup) Readers() []rw.RW {
 	return g.readers
 }
 
-func (g *RWGroup) Writers() []RW {
+func (g *RWGroup) Writers() []rw.RW {
 	return g.writers
 }
 
-func (g *RWGroup) LastWriter() RW {
+func (g *RWGroup) LastWriter() rw.RW {
 	if len(g.writers) == 0 {
 		return nil
 	}
 	return g.writers[len(g.writers)-1]
 }
 
-func (g *RWGroup) FirstReader() RW {
+func (g *RWGroup) FirstReader() rw.RW {
 	if len(g.readers) == 0 {
 		return nil
 	}
 	return g.readers[0]
 }
 
-func (g *RWGroup) createRW(rwCfg *RWCfg) (RW, error) {
-	rw, err := CreateRW(rwCfg)
+func (g *RWGroup) createRW(rwCfg *rw.Cfg) (rw.RW, error) {
+	rw, err := rw.CreateRW(rwCfg)
 	if err != nil {
 		return nil, errs.Wrapf(err, "create rw(%s) failed", rwCfg.Type)
 	}
@@ -210,12 +217,7 @@ func (g *RWGroup) initReaders() error {
 
 		err = runner.Init(g.readers[i])
 		if err != nil {
-			err = errs.Wrapf(err, "init reader(%d) %s failed", i, g.readers[i].Type())
-			cerr := g.readers[i].Close()
-			if cerr != nil {
-				err = errors.Join(err, errs.Wrapf(cerr, "close reader(%s) failed", g.readers[i].Type()))
-			}
-			return err
+			return errs.Wrapf(err, "init reader(%d) %s failed", i, g.readers[i].Type())
 		}
 	}
 
@@ -234,12 +236,7 @@ func (g *RWGroup) initWriters() error {
 
 		err = runner.Init(g.writers[i])
 		if err != nil {
-			err = errs.Wrapf(err, "init writer(%d) %s failed", i, g.writers[i].Type())
-			cerr := g.writers[i].Close()
-			if cerr != nil {
-				err = errors.Join(err, errs.Wrapf(cerr, "close writer(%d) failed", i))
-			}
-			return err
+			return errs.Wrapf(err, "init writer(%d) %s failed", i, g.writers[i].Type())
 		}
 	}
 	return nil

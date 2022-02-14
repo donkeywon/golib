@@ -26,6 +26,7 @@ type Runner interface {
 	Ctx() context.Context
 	SetCtx(context.Context)
 	Cancel()
+	setCtxAndCancel(context.Context)
 
 	Inherit(Runner)
 
@@ -87,6 +88,12 @@ func Start(r Runner) {
 	if !r.markStarted() {
 		r.Info("already started")
 		return
+	}
+
+	if r.Ctx() == nil {
+		r.setCtxAndCancel(context.Background())
+	} else {
+		r.setCtxAndCancel(r.Ctx())
 	}
 
 	defer func() {
@@ -323,13 +330,17 @@ func (br *baseRunner) SetCtx(ctx context.Context) {
 	if ctx == nil {
 		panic("nil context")
 	}
-	br.ctx, br.cancel = context.WithCancel(ctx)
+	br.ctx = ctx
 }
 
 func (br *baseRunner) Cancel() {
 	br.cancelOnce.Do(func() {
 		br.cancel()
 	})
+}
+
+func (br *baseRunner) setCtxAndCancel(ctx context.Context) {
+	br.ctx, br.cancel = context.WithCancel(ctx)
 }
 
 func (br *baseRunner) Ctx() context.Context {

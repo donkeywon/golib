@@ -1,4 +1,4 @@
-package pipeline
+package rw
 
 import (
 	"context"
@@ -11,29 +11,29 @@ import (
 )
 
 func init() {
-	plugin.RegWithCfg(RWTypeCmd, func() any { return NewCmdRW() }, func() any { return NewCmdRWCfg() })
+	plugin.RegWithCfg(TypeCmd, func() any { return NewCmd() }, func() any { return NewCmdCfg() })
 }
 
-const RWTypeCmd RWType = "cmd"
+const TypeCmd Type = "cmd"
 
-func NewCmdRWCfg() *cmd.Cfg {
+func NewCmdCfg() *cmd.Cfg {
 	return &cmd.Cfg{}
 }
 
-type CmdRW struct {
+type Cmd struct {
 	RW
 	*cmd.Cfg
 
 	cmd *exec.Cmd
 }
 
-func NewCmdRW() *CmdRW {
-	return &CmdRW{
-		RW: CreateBaseRW(string(RWTypeCmd)),
+func NewCmd() *Cmd {
+	return &Cmd{
+		RW: CreateBase(string(TypeCmd)),
 	}
 }
 
-func (c *CmdRW) Init() error {
+func (c *Cmd) Init() error {
 	if !c.IsStarter() {
 		return errs.New("cmd rw must be Starter")
 	}
@@ -43,7 +43,7 @@ func (c *CmdRW) Init() error {
 	return c.RW.Init()
 }
 
-func (c *CmdRW) Start() error {
+func (c *Cmd) Start() error {
 	result, err := cmd.RunCmd(context.Background(), c.cmd, c.Cfg, func(cmd *exec.Cmd) error {
 		if c.Writer() != nil {
 			cmd.Stdout = c.Writer()
@@ -54,7 +54,6 @@ func (c *CmdRW) Start() error {
 		}
 		return nil
 	})
-	c.Info("cmd exit", "result", result)
 
 	if result != nil {
 		c.Store(consts.FieldCmdStderr, result.Stderr)
@@ -63,11 +62,6 @@ func (c *CmdRW) Start() error {
 		c.Store(consts.FieldStartTimeNano, result.StartTimeNano)
 		c.Store(consts.FieldStopTimeNano, result.StopTimeNano)
 		c.Store(consts.FieldCmdSignaled, result.Signaled)
-	}
-
-	err = c.Close()
-	if err != nil {
-		c.Error("close failed after cmd exit", err)
 	}
 
 	if result != nil && result.Signaled {
@@ -86,14 +80,17 @@ func (c *CmdRW) Start() error {
 	return nil
 }
 
-func (c *CmdRW) Stop() error {
-	return cmd.MustStop(context.Background(), c.cmd)
+func (c *Cmd) Stop() error {
+	if c.cmd == nil || c.cmd.Process == nil {
+		return nil
+	}
+	return c.cmd.Process.Kill()
 }
 
-func (c *CmdRW) Type() any {
-	return RWTypeCmd
+func (c *Cmd) Type() any {
+	return TypeCmd
 }
 
-func (c *CmdRW) GetCfg() any {
+func (c *Cmd) GetCfg() any {
 	return c.Cfg
 }

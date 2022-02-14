@@ -17,7 +17,7 @@ func MustStop(ctx context.Context, pid int) error {
 		return nil
 	}
 
-	err := syscall.Kill(pid, syscall.SIGINT)
+	err := syscall.Kill(pid, syscall.SIGTERM)
 	if err != nil {
 		return err
 	}
@@ -26,7 +26,7 @@ func MustStop(ctx context.Context, pid int) error {
 		return nil
 	}
 
-	err = Stop(pid)
+	err = syscall.Kill(pid, syscall.SIGINT)
 	if err != nil {
 		return err
 	}

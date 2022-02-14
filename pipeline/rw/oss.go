@@ -1,4 +1,4 @@
-package pipeline
+package rw
 
 import (
 	"github.com/donkeywon/golib/errs"
@@ -7,17 +7,17 @@ import (
 )
 
 func init() {
-	plugin.RegWithCfg(RWTypeOss, func() any { return NewOssRW() }, func() any { return NewOssRWCfg() })
+	plugin.RegWithCfg(TypeOss, func() any { return NewOSS() }, func() any { return NewOSSCfg() })
 }
 
 const (
-	RWTypeOss RWType = "oss"
+	TypeOss Type = "oss"
 
 	defaultOssTimeout = 600
 	defaultOssRetry   = 3
 )
 
-type OssRWCfg struct {
+type OSSCfg struct {
 	URL     string `json:"url"      validate:"required" yaml:"url"`
 	Ak      string `json:"ak"       validate:"required" yaml:"ak"`
 	Sk      string `json:"sk"       validate:"required" yaml:"sk"`
@@ -27,37 +27,37 @@ type OssRWCfg struct {
 	Retry   int    `json:"retry"    yaml:"retry"`
 }
 
-func NewOssRWCfg() *OssRWCfg {
-	return &OssRWCfg{
+func NewOSSCfg() *OSSCfg {
+	return &OSSCfg{
 		Timeout: defaultOssTimeout,
 		Retry:   defaultOssRetry,
 	}
 }
 
-type OssRW struct {
+type OSS struct {
 	RW
-	*OssRWCfg
+	*OSSCfg
 }
 
-func NewOssRW() RW {
-	return &OssRW{
-		RW: CreateBaseRW(string(RWTypeOss)),
+func NewOSS() RW {
+	return &OSS{
+		RW: CreateBase(string(TypeOss)),
 	}
 }
 
-func (o *OssRW) Init() error {
+func (o *OSS) Init() error {
 	if o.IsStarter() {
 		return errs.New("oss rw must not be Starter")
 	}
 
 	if o.IsReader() {
-		r := createOssReader(o.OssRWCfg)
+		r := createOssReader(o.OSSCfg)
 		o.NestReader(r)
 	} else {
-		if o.OssRWCfg.Append {
-			o.NestWriter(createOssAppendWriter(o.OssRWCfg))
+		if o.OSSCfg.Append {
+			o.NestWriter(createOssAppendWriter(o.OSSCfg))
 		} else {
-			o.NestWriter(createOssMultipartWriter(o.OssRWCfg))
+			o.NestWriter(createOssMultipartWriter(o.OSSCfg))
 		}
 	}
 	o.HookRead(o.hookLogRead)
@@ -66,27 +66,27 @@ func (o *OssRW) Init() error {
 	return o.RW.Init()
 }
 
-func (o *OssRW) Type() any {
-	return RWTypeOss
+func (o *OSS) Type() any {
+	return TypeOss
 }
 
-func (o *OssRW) GetCfg() any {
-	return o.OssRWCfg
+func (o *OSS) GetCfg() any {
+	return o.OSSCfg
 }
 
-func (o *OssRW) hookLogWrite(n int, bs []byte, err error, cost int64, misc ...any) error {
+func (o *OSS) hookLogWrite(n int, bs []byte, err error, cost int64, misc ...any) error {
 	o.Info("write", "bs_len", len(bs), "bs_cap", cap(bs), "nw", n, "cost", cost,
 		"async_chan_len", o.AsyncChanLen(), "async_chan_cap", o.AsyncChanCap(), "misc", misc, "err", err)
 	return nil
 }
 
-func (o *OssRW) hookLogRead(n int, bs []byte, err error, cost int64, misc ...any) error {
+func (o *OSS) hookLogRead(n int, bs []byte, err error, cost int64, misc ...any) error {
 	o.Info("read", "bs_len", len(bs), "bs_cap", cap(bs), "nr", n, "cost", cost,
 		"async_chan_len", o.AsyncChanLen(), "async_chan_cap", o.AsyncChanCap(), "misc", misc, "err", err)
 	return nil
 }
 
-func createOssCfg(ossCfg *OssRWCfg) *oss.Cfg {
+func createOSSCfg(ossCfg *OSSCfg) *oss.Cfg {
 	return &oss.Cfg{
 		URL:     ossCfg.URL,
 		Ak:      ossCfg.Ak,
@@ -97,20 +97,20 @@ func createOssCfg(ossCfg *OssRWCfg) *oss.Cfg {
 	}
 }
 
-func createOssReader(ossCfg *OssRWCfg) *oss.Reader {
+func createOssReader(ossCfg *OSSCfg) *oss.Reader {
 	r := oss.NewReader()
-	r.Cfg = createOssCfg(ossCfg)
+	r.Cfg = createOSSCfg(ossCfg)
 	return r
 }
 
-func createOssAppendWriter(ossCfg *OssRWCfg) *oss.AppendWriter {
+func createOssAppendWriter(ossCfg *OSSCfg) *oss.AppendWriter {
 	w := oss.NewAppendWriter()
-	w.Cfg = createOssCfg(ossCfg)
+	w.Cfg = createOSSCfg(ossCfg)
 	return w
 }
 
-func createOssMultipartWriter(ossCfg *OssRWCfg) *oss.MultiPartWriter {
+func createOssMultipartWriter(ossCfg *OSSCfg) *oss.MultiPartWriter {
 	w := oss.NewMultiPartWriter()
-	w.Cfg = createOssCfg(ossCfg)
+	w.Cfg = createOSSCfg(ossCfg)
 	return w
 }
