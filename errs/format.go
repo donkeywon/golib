@@ -26,7 +26,7 @@ type anotherWrappedErrs interface {
 }
 
 type stackTracer interface {
-	StackTrace() StackTrace
+	Stack() []uintptr
 }
 
 type errFmtState struct{ *buffer }
