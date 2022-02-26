@@ -222,8 +222,8 @@ func (td *Taskd) createInit(taskCfg *task.Cfg) (*task.Task, error) {
 		return t, errs.Wrap(err, "create task failed")
 	}
 
-	t.RegisterStepDoneHook(td.stepDoneHooks...)
-	t.RegisterDeferStepDoneHook(td.deferStepDoneHooks...)
+	t.HookStepDone(td.stepDoneHooks...)
+	t.HookDeferStepDone(td.deferStepDoneHooks...)
 
 	err = td.initTask(t)
 	td.hookTask(t, err, td.initHooks, "init", nil)
