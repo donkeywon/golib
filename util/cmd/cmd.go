@@ -67,11 +67,11 @@ func Start(cmd *exec.Cmd, beforeRun ...func(cmd *exec.Cmd) error) *Result {
 	}
 
 	if cmd.Stdout == nil {
-		r.stdoutBuf = bufferpool.GetBuffer()
+		r.stdoutBuf = bufferpool.Get()
 		cmd.Stdout = r.stdoutBuf
 	}
 	if cmd.Stderr == nil {
-		r.stderrBuf = bufferpool.GetBuffer()
+		r.stderrBuf = bufferpool.Get()
 		cmd.Stderr = r.stderrBuf
 	}
 	r.StartTimeNano = time.Now().UnixNano()

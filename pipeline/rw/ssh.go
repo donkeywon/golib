@@ -73,7 +73,7 @@ func (s *SSH) Init() error {
 	} else {
 		return errs.Errorf("ssh rw must has Reader or Writer")
 	}
-	s.sshStderrBuf = bufferpool.GetBuffer()
+	s.sshStderrBuf = bufferpool.Get()
 	s.sshSess.Stderr = s.sshStderrBuf
 
 	s.HookRead(s.hookLogRead)

@@ -4,46 +4,47 @@ import (
 	"testing"
 	"time"
 
+	"github.com/donkeywon/golib/pipeline/rw"
 	"github.com/donkeywon/golib/runner"
-	"github.com/donkeywon/golib/util/cmd"
 	"github.com/donkeywon/golib/util/tests"
 	"github.com/stretchr/testify/require"
 )
 
 func TestGroup(t *testing.T) {
-	cfg := NewRWGroupCfg().SetStarter(RWTypeCopy, &CopyRWCfg{BufSize: 32 * 1024}, nil).
-		// FromReader(RWTypeCompress, &CompressRWCfg{Type: CompressTypeZstd, Level: CompressLevelFast, Concurrency: 1}, nil).
-		// FromReader(RWTypeFile, &FileRWCfg{Path: "/root/test.file.compress"}, nil).
-		FromReader(RWTypeTail, &TailRWCfg{Path: "/root/test.file"}, nil).
-		// ToWriter(RWTypeCompress, &CompressRWCfg{Type: CompressTypeZstd, Level: CompressLevelFast, Concurrency: 1}, nil).
-		ToWriter(RWTypeFile, &FileRWCfg{Path: "/root/test.file"}, nil)
+	cfg := NewRWGroupCfg().
+		//SetStarter(TypeCopy, &CopyCfg{BufSize: 32 * 1024}, nil).
+		// FromReader(TypeCompress, &CompressCfg{Type: CompressTypeZstd, Level: CompressLevelFast, Concurrency: 1}, nil).
+		// FromReader(TypeFile, &FileCfg{Path: "/root/test.file.compress"}, nil).
+		//FromReader(TypeTail, &TailCfg{Path: "/root/test.file"}, nil).
+		//ToWriter(TypeCompress, &CompressCfg{Type: CompressTypeZstd, Level: CompressLevelBetter, Concurrency: 1}, nil).
+		ToWriter(rw.TypeFile, &rw.FileCfg{Path: "/dev/null"}, nil)
 
 	g := NewRWGroup()
 	g.RWGroupCfg = cfg
-	tests.DebugInit(g)
+	tests.Init(g)
 
 	err := runner.Init(g)
 	require.NoError(t, err)
 
-	go func() {
-		time.Sleep(time.Second * 3)
-		runner.Stop(g)
-	}()
+	//go func() {
+	//	time.Sleep(time.Second * 1)
+	//	runner.Stop(g)
+	//}()
 
 	runner.Start(g)
 	require.NoError(t, g.Err())
 }
 
 func TestStore(t *testing.T) {
-	cfg := NewRWGroupCfg().SetStarter(RWTypeSSH, &SSHRWCfg{
+	cfg := NewRWGroupCfg().SetStarter(rw.TypeSSH, &rw.SSHCfg{
 		Addr:    "127.0.0.1:22",
 		User:    "",
 		Pwd:     "",
 		Path:    "/root/test.file1",
 		Timeout: 1,
 	}, nil).
-		FromReader(RWTypeTail, &TailRWCfg{Path: "/root/test.file"}, nil)
-		// ToWriter(RWTypeFile, &FileRWCfg{Path: "/root/test.file"}, nil)
+		FromReader(rw.TypeTail, &rw.TailCfg{Path: "/root/test.file"}, nil)
+	// ToWriter(TypeFile, &FileCfg{Path: "/root/test.file"}, nil)
 
 	g := NewRWGroup()
 	g.RWGroupCfg = cfg
@@ -61,9 +62,9 @@ func TestStore(t *testing.T) {
 }
 
 func TestFtp(t *testing.T) {
-	cfg := NewRWGroupCfg().SetStarter(RWTypeCopy, &CopyRWCfg{BufSize: 32 * 1024}, nil).
-		FromReader(RWTypeFile, &FileRWCfg{Path: "/root/test.file"}, nil).
-		ToWriter(RWTypeFtp, &FtpRWCfg{
+	cfg := NewRWGroupCfg().SetStarter(rw.TypeCopy, &rw.CopyCfg{BufSize: 32 * 1024}, nil).
+		FromReader(rw.TypeFile, &rw.FileCfg{Path: "/root/test.file"}, nil).
+		ToWriter(rw.TypeFtp, &rw.FtpCfg{
 			Addr:    "127.0.0.1:21",
 			User:    "",
 			Pwd:     "",
@@ -83,16 +84,16 @@ func TestFtp(t *testing.T) {
 }
 
 func TestOSS(t *testing.T) {
-	cfg := NewRWGroupCfg().SetStarter(RWTypeCopy, &CopyRWCfg{BufSize: 1024 * 1024}, nil).
-		FromReader(RWTypeFile, &FileRWCfg{Path: "/root/test.file.zst"}, nil).
-		ToWriter(RWTypeOss, &OssRWCfg{
+	cfg := NewRWGroupCfg().SetStarter(rw.TypeCopy, &rw.CopyCfg{BufSize: 1024 * 1024}, nil).
+		FromReader(rw.TypeFile, &rw.FileCfg{Path: "/root/test.file.zst"}, nil).
+		ToWriter(rw.TypeOss, &rw.OSSCfg{
 			Ak:      "",
 			Sk:      "",
 			Append:  false,
 			URL:     "",
 			Retry:   1,
 			Timeout: 10,
-		}, &RWCommonCfg{
+		}, &rw.ExtraCfg{
 			BufSize:          1024 * 1024,
 			AsyncChanBufSize: 5,
 			EnableAsync:      true,
@@ -101,33 +102,6 @@ func TestOSS(t *testing.T) {
 	g := NewRWGroup()
 	g.RWGroupCfg = cfg
 	tests.DebugInit(g)
-
-	require.NoError(t, runner.Init(g))
-
-	runner.Start(g)
-	require.NoError(t, g.Err())
-}
-
-func TestCmd(t *testing.T) {
-	cfg := NewRWGroupCfg().SetStarter(RWTypeCmd, &cmd.Cfg{
-		Command: []string{""},
-	}, nil).ToWriter(RWTypeCompress, &CompressRWCfg{
-		Type:        CompressTypeZstd,
-		Level:       CompressLevelFast,
-		Concurrency: 8,
-	}, nil).ToWriter(RWTypeOss, &OssRWCfg{
-		URL:    "http://127.0.0.1:9100/test-bucket/backup.mb.zst",
-		Ak:     "",
-		Sk:     "",
-		Region: "test-region",
-	}, &RWCommonCfg{
-		BufSize:        10 * 1024 * 1024,
-		EnableCalcHash: true,
-	})
-
-	g := NewRWGroup()
-	g.RWGroupCfg = cfg
-	tests.Init(g)
 
 	require.NoError(t, runner.Init(g))
 

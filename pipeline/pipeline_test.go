@@ -5,49 +5,49 @@ import (
 	"testing"
 	"time"
 
+	"github.com/donkeywon/golib/pipeline/rw"
 	"github.com/donkeywon/golib/runner"
-	"github.com/donkeywon/golib/util/cmd"
 	"github.com/donkeywon/golib/util/tests"
 	"github.com/stretchr/testify/require"
 )
 
 func TestGroupByStarter(t *testing.T) {
-	rws := []*RWCfg{}
+	rws := []*rw.Cfg{}
 	g := groupRWCfgByStarter(rws)
 	require.Empty(t, g)
 
-	rws = []*RWCfg{
-		{Role: RWRoleReader},
+	rws = []*rw.Cfg{
+		{Role: rw.RoleReader},
 	}
 	g = groupRWCfgByStarter(rws)
 	require.Len(t, g, 1)
 	require.Len(t, g[0], 1)
 
-	rws = []*RWCfg{
-		{Role: RWRoleReader},
-		{Role: RWRoleStarter},
-		{Role: RWRoleWriter},
+	rws = []*rw.Cfg{
+		{Role: rw.RoleReader},
+		{Role: rw.RoleStarter},
+		{Role: rw.RoleWriter},
 	}
 	g = groupRWCfgByStarter(rws)
 	require.Len(t, g, 1)
 	require.Len(t, g[0], 3)
 
-	rws = []*RWCfg{
-		{Role: RWRoleReader},
-		{Role: RWRoleReader},
+	rws = []*rw.Cfg{
+		{Role: rw.RoleReader},
+		{Role: rw.RoleReader},
 	}
 	g = groupRWCfgByStarter(rws)
 	require.Len(t, g, 1)
 	require.Len(t, g[0], 2)
 
-	rws = []*RWCfg{
-		{Role: RWRoleReader},
-		{Role: RWRoleReader},
-		{Role: RWRoleStarter},
-		{Role: RWRoleStarter},
-		{Role: RWRoleWriter},
-		{Role: RWRoleWriter},
-		{Role: RWRoleStarter},
+	rws = []*rw.Cfg{
+		{Role: rw.RoleReader},
+		{Role: rw.RoleReader},
+		{Role: rw.RoleStarter},
+		{Role: rw.RoleStarter},
+		{Role: rw.RoleWriter},
+		{Role: rw.RoleWriter},
+		{Role: rw.RoleStarter},
 	}
 	g = groupRWCfgByStarter(rws)
 	require.Len(t, g, 3)
@@ -58,24 +58,25 @@ func TestGroupByStarter(t *testing.T) {
 
 func TestMultiGroupPipeline(t *testing.T) {
 	cfg := NewCfg().
-		Add(RWRoleReader, RWTypeFile, &FileRWCfg{Path: "/root/test.file"}, nil).
-		Add(RWRoleStarter, RWTypeCopy, &CopyRWCfg{BufSize: 32 * 1024}, nil).
-		Add(RWRoleWriter, RWTypeCompress, &CompressRWCfg{Type: CompressTypeZstd, Level: CompressLevelFast}, nil).
-		Add(RWRoleStarter, RWTypeCmd, &cmd.Cfg{Command: []string{"bash", "-c", "cat > /root/test.file1"}}, nil)
+		//Add(RoleReader, TypeFile, &FileCfg{Path: "/root/test.file"}, nil).
+		//Add(RoleWriter, TypeCompress, &CompressCfg{Type: CompressTypeZstd, Level: CompressLevelBetter, Concurrency: 1}, nil).
+		//Add(rw.RoleStarter, rw.TypeCmd, &cmd.Cfg{Command: []string{"zstd"}}, nil).
+		Add(rw.RoleStarter, rw.TypeCopy, &rw.CopyCfg{}, nil).
+		Add(rw.RoleWriter, rw.TypeFile, &rw.FileCfg{Path: "/dev/null"}, nil)
 
 	p := New()
 	p.Cfg = cfg
-	tests.DebugInit(p)
+	tests.Init(p)
 	err := runner.Init(p)
 	require.NoError(t, err)
 
-	p.rwGroups[0].LastWriter().HookWrite(func(n int, bs []byte, err error, cost int64, misc ...any) error {
-		time.Sleep(time.Second)
-		return nil
-	})
-
+	//p.rwGroups[0].LastWriter().HookWrite(func(n int, bs []byte, err error, cost int64, misc ...any) error {
+	//	time.Sleep(time.Second)
+	//	return nil
+	//})
+	//
 	go func() {
-		time.Sleep(time.Second * 3)
+		time.Sleep(time.Second * 1)
 		runner.Stop(p)
 	}()
 
@@ -85,10 +86,10 @@ func TestMultiGroupPipeline(t *testing.T) {
 
 func TestCompress(t *testing.T) {
 	cfg := NewCfg().
-		Add(RWRoleReader, RWTypeFile, &FileRWCfg{Path: "test.file.zst"}, nil).
-		Add(RWRoleReader, RWTypeCompress, &CompressRWCfg{Type: CompressTypeZstd}, nil).
-		Add(RWRoleStarter, RWTypeCopy, &CopyRWCfg{BufSize: 32 * 1024}, nil).
-		Add(RWRoleWriter, RWTypeFile, &FileRWCfg{Path: "test.file"}, nil)
+		Add(rw.RoleReader, rw.TypeFile, &rw.FileCfg{Path: "test.file.zst"}, nil).
+		Add(rw.RoleReader, rw.TypeCompress, &rw.CompressCfg{Type: rw.CompressTypeZstd}, nil).
+		Add(rw.RoleStarter, rw.TypeCopy, &rw.CopyCfg{BufSize: 32 * 1024}, nil).
+		Add(rw.RoleWriter, rw.TypeFile, &rw.FileCfg{Path: "test.file"}, nil)
 
 	p := New()
 	p.Cfg = cfg

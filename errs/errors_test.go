@@ -6,49 +6,28 @@ import (
 	"testing"
 )
 
-func errA() error {
-	return errors.New("errA")
+func nestErr(i, max int) error {
+	if i == max {
+		return fmt.Errorf("err%d", i)
+	}
+	return Wrapf(nestErr(i+1, max), "err%d", i)
 }
 
-func errB() error {
-	e := errA()
-	_ = e
-	return Wrap(e, "errB")
-}
-
-func errC() error {
-	e := errB()
-	_ = e
-	return Wrap(e, "errC")
-}
-
-func errD() error {
-	e := errC()
-	_ = e
-	return Wrap(e, "errD")
-}
-
-func errE() error {
-	e1 := errD()
-	e2 := errC()
-	return Wrap(errors.Join(e1, e2), "errE")
-}
-
-func errF() error {
-	e := errE()
-	_ = e
-	return Wrap(e, "errF")
+func errS() error {
+	e1 := nestErr(0, 1)
+	e2 := nestErr(0, 2)
+	return Wrap(errors.Join(e1, e2), "errS")
 }
 
 func TestErr(t *testing.T) {
-	err := errF()
+	err := errS()
 	fmt.Printf("%+v", err)
 }
 
 func TestFormat(t *testing.T) {
 	buf := getBuffer()
 	defer buf.free()
-	e := errC()
+	e := nestErr(0, 3)
 	ErrToStack(e, buf, 0)
 	t.Log(buf.String())
 }

@@ -52,7 +52,7 @@ func (cp *Copy) Init() error {
 }
 
 func (cp *Copy) Start() error {
-	buf := bytespool.GetBytesN(cp.BufSize)
+	buf := bytespool.GetN(cp.BufSize)
 	defer buf.Free()
 
 	_, err := io.CopyBuffer(cp.Writer(), cp, buf.B())

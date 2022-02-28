@@ -74,9 +74,9 @@ func (s *SSHStep) Start() error {
 		}
 	}()
 
-	stdoutBuf := bufferpool.GetBuffer()
+	stdoutBuf := bufferpool.Get()
 	defer stdoutBuf.Free()
-	stderrBuf := bufferpool.GetBuffer()
+	stderrBuf := bufferpool.Get()
 	defer stderrBuf.Free()
 
 	cmd := s.SSHStepCfg.Cmd
