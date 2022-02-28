@@ -13,6 +13,8 @@ const (
 
 type consoleLiteEncoder struct {
 	zapcore.Encoder
+
+	cfg zapcore.EncoderConfig
 }
 
 func NewConsoleLiteEncoder(cfg zapcore.EncoderConfig) (zapcore.Encoder, error) {
@@ -22,6 +24,7 @@ func NewConsoleLiteEncoder(cfg zapcore.EncoderConfig) (zapcore.Encoder, error) {
 	cfg.EncodeName = zapcore.FullNameEncoder
 	return &consoleLiteEncoder{
 		Encoder: zapcore.NewConsoleEncoder(cfg),
+		cfg:     cfg,
 	}, nil
 }
 
@@ -38,7 +41,7 @@ func (c consoleLiteEncoder) EncodeEntry(ent zapcore.Entry, fields []zapcore.Fiel
 		t := ent.Time.AppendFormat(lite.AvailableBuffer(), liteTimeEncoderLayout)
 		lite.Write(t)
 	}
-	lite.WriteByte('\t')
+	lite.WriteString(c.cfg.ConsoleSeparator)
 	lite.WriteString(ent.LoggerName)
 	if ent.Caller.Defined {
 		if ent.LoggerName != "" {
