@@ -2,17 +2,12 @@ package httpd
 
 import (
 	"context"
-	"github.com/donkeywon/golib/util/v"
 	"net/http"
 
 	"github.com/donkeywon/golib/errs"
 	"github.com/donkeywon/golib/util/httpu"
-	"github.com/ggicci/httpin"
+	"github.com/donkeywon/golib/util/v"
 )
-
-type RestReqCreator func() any
-
-var _restReqCreatorMap = make(map[string]RestReqCreator)
 
 type RawHandler func(http.ResponseWriter, *http.Request) []byte
 
@@ -26,41 +21,44 @@ func (ah APIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	httpu.RespOk(ah(w, r), w)
 }
 
-type RESTHandler func(context.Context, any) (any, error)
+type RESTHandler[I any, O any] func(context.Context, I) (O, error)
 
-func (rh RESTHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (rh RESTHandler[I, O]) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	defer func() {
 		p := recover()
 		if p != nil {
-			httpu.RespJSONFail(Resp{
+			httpu.RespJSONFail(&Resp{
 				Code: RespCodeFail,
 				Msg:  errs.ErrToStackString(errs.PanicToErr(p)),
 			}, w)
 		}
 	}()
 
-	var req any
-	if reqCreator, ok := _restReqCreatorMap[r.Pattern]; ok {
-		req = reqCreator()
-		err := httpin.DecodeTo(r, req)
-		if err != nil {
-			httpu.RespJSONFail(Resp{
-				Code: RespCodeFail,
-				Msg:  "parse request fail: " + err.Error(),
-			}, w)
-			return
-		}
-
-		err = v.Struct(req)
-		if err != nil {
-			httpu.RespJSONFail(Resp{
-				Code: RespCodeFail,
-				Msg:  "validate request fail: " + err.Error(),
-			}, w)
-		}
+	var i I
+	err := httpu.ReqTo(r, &i)
+	if err != nil {
+		w.Header().Set(httpu.HeaderContentType, r.Header.Get(httpu.HeaderContentType))
+		w.WriteHeader(http.StatusBadRequest)
+		httpu.RespTo(w, &Resp{
+			Code: RespCodeFail,
+			Msg:  "parse request fail: " + err.Error(),
+		})
+		return
 	}
 
-	result, err := rh(r.Context(), req)
+	err = v.Struct(i)
+	if err != nil {
+		w.Header().Set(httpu.HeaderContentType, r.Header.Get(httpu.HeaderContentType))
+		w.WriteHeader(http.StatusBadRequest)
+		httpu.RespTo(w, &Resp{
+			Code: RespCodeFail,
+			Msg:  "validate request fail: " + err.Error(),
+		})
+		return
+	}
+
+	// TODO
+	o, err := rh(r.Context(), i)
 	if err != nil {
 		httpu.RespJSONFail(Resp{
 			Code: RespCodeFail,
@@ -71,6 +69,6 @@ func (rh RESTHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	httpu.RespJSONOk(Resp{
 		Code: RespCodeOk,
-		Data: result,
+		Data: o,
 	}, w)
 }

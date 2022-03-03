@@ -25,7 +25,10 @@ var (
 	ErrTaskNotPausing      = errors.New("task not pausing")
 )
 
-var _td = New()
+var (
+	_td        = New()
+	D   *Taskd = _td
+)
 
 type Taskd struct {
 	runner.Runner
@@ -46,10 +49,6 @@ type Taskd struct {
 	doneHooks          []task.Hook
 	stepDoneHooks      []task.StepHook
 	deferStepDoneHooks []task.StepHook
-}
-
-func D() *Taskd {
-	return _td
 }
 
 func New() *Taskd {

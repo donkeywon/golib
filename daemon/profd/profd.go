@@ -16,15 +16,14 @@ import (
 
 const DaemonTypeProfd boot.DaemonType = "profd"
 
-var _p = New()
+var (
+	_p        = New()
+	D  *Profd = _p
+)
 
 type Profd struct {
 	runner.Runner
 	*Cfg
-}
-
-func D() *Profd {
-	return _p
 }
 
 func New() *Profd {
@@ -67,22 +66,22 @@ func (p *Profd) Init() error {
 		if err != nil {
 			p.Error("init statsviz failed", err)
 		} else {
-			httpd.D().Handle("/debug/statsviz/", srv.Index())
-			httpd.D().HandleFunc("/debug/statsviz/ws", srv.Ws())
+			httpd.D.Handle("/debug/statsviz/", srv.Index())
+			httpd.D.HandleFunc("/debug/statsviz/ws", srv.Ws())
 		}
 	}
 
 	if p.Cfg.EnableHTTPProf {
-		httpd.D().HandleRaw("/debug/prof/start/{mode}", p.startProf)
-		httpd.D().HandleRaw("/debug/prof/stop", p.stopProf)
+		httpd.D.Handle("/debug/prof/start/{mode}", httpd.RawHandler(p.startProf))
+		httpd.D.Handle("/debug/prof/stop", httpd.RawHandler(p.stopProf))
 	}
 
 	if p.Cfg.EnableWebProf {
-		httpd.D().HandleFunc("/debug/pprof/", pprof.Index)
-		httpd.D().HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
-		httpd.D().HandleFunc("/debug/pprof/profile", pprof.Profile)
-		httpd.D().HandleFunc("/debug/pprof/symbol", pprof.Symbol)
-		httpd.D().HandleFunc("/debug/pprof/trace", pprof.Trace)
+		httpd.D.HandleFunc("/debug/pprof/", pprof.Index)
+		httpd.D.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
+		httpd.D.HandleFunc("/debug/pprof/profile", pprof.Profile)
+		httpd.D.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
+		httpd.D.HandleFunc("/debug/pprof/trace", pprof.Trace)
 	}
 
 	if p.Cfg.EnableGoPs {

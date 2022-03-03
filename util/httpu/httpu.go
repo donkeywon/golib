@@ -110,6 +110,39 @@ func RespJSON(statusCode int, data any, w http.ResponseWriter, headersKV ...stri
 	RespRaw(statusCode, bs, w, headersKV...)
 }
 
+func RespTo(w http.ResponseWriter, obj any) error {
+	contentType := w.Header().Get(HeaderContentType)
+	switch contentType {
+	case MIMEJSON, MIMEJSONUTF8:
+		return jsons.NewEncoder(w).Encode(obj)
+	case MIMEXML, MIMEXML2:
+		return xml.NewEncoder(w).Encode(obj)
+	case MIMEYAML, MIMEYAML2:
+		return yaml.NewEncoder(w).Encode(obj)
+	case MIMETOML:
+		return toml.NewEncoder(w).Encode(obj)
+	case MIMEPROTOBUF:
+		msg, ok := obj.(proto.Message)
+		if !ok {
+			return errors.New("obj is not proto.Message")
+		}
+		bs, err := proto.Marshal(msg)
+		if err != nil {
+			return err
+		}
+
+		_, err = w.Write(bs)
+		return err
+	default:
+		s, err := conv.ToString(obj)
+		if err != nil {
+			return err
+		}
+		_, err = w.Write(conv.String2Bytes(s))
+		return err
+	}
+}
+
 func setHeaders(w http.ResponseWriter, headersKV ...string) {
 	for i := 1; i < len(headersKV); i += 2 {
 		w.Header().Add(headersKV[i-1], headersKV[i])
@@ -142,7 +175,7 @@ func ReqToTOML(r *http.Request, obj any) error {
 func ReqToPB(r *http.Request, obj any) error {
 	msg, ok := obj.(proto.Message)
 	if !ok {
-		return errors.New("obj is not proto.Message type")
+		return errors.New("obj is not proto.Message")
 	}
 
 	buf, err := io.ReadAll(r.Body)
@@ -151,4 +184,22 @@ func ReqToPB(r *http.Request, obj any) error {
 	}
 
 	return proto.Unmarshal(buf, msg)
+}
+
+func ReqTo(r *http.Request, obj any) error {
+	contentType := r.Header.Get(HeaderContentType)
+	switch contentType {
+	case MIMEJSON, MIMEJSONUTF8:
+		return ReqToJSON(r, obj)
+	case MIMEXML, MIMEXML2:
+		return ReqToXML(r, obj)
+	case MIMEYAML, MIMEYAML2:
+		return ReqToYAML(r, obj)
+	case MIMETOML:
+		return ReqToTOML(r, obj)
+	case MIMEPROTOBUF:
+		return ReqToPB(r, obj)
+	default:
+		return ReqToJSON(r, obj)
+	}
 }
