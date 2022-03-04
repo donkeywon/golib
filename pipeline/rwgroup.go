@@ -3,6 +3,7 @@ package pipeline
 import (
 	"context"
 	"errors"
+
 	"github.com/donkeywon/golib/errs"
 	"github.com/donkeywon/golib/pipeline/rw"
 	"github.com/donkeywon/golib/plugin"
@@ -73,26 +74,16 @@ func NewRWGroup() *RWGroup {
 }
 
 func (g *RWGroup) Init() error {
-	var err error
-	g.starter, err = g.createRW(g.RWGroupCfg.Starter)
-	if err != nil {
-		return errs.Wrapf(err, "create starter rw(%s) failed", g.RWGroupCfg.Starter.Type)
-	}
+	g.starter = g.createRW(g.RWGroupCfg.Starter)
 
 	g.readers = make([]rw.RW, len(g.RWGroupCfg.Readers))
 	for i, cfg := range g.RWGroupCfg.Readers {
-		g.readers[i], err = g.createRW(cfg)
-		if err != nil {
-			return errs.Wrapf(err, "create %d reader rw(%s) failed", i, cfg.Type)
-		}
+		g.readers[i] = g.createRW(cfg)
 	}
 
 	g.writers = make([]rw.RW, len(g.RWGroupCfg.Writers))
 	for i, cfg := range g.RWGroupCfg.Writers {
-		g.writers[i], err = g.createRW(cfg)
-		if err != nil {
-			return errs.Wrapf(err, "create %d writer rw(%s) failed", i, cfg.Type)
-		}
+		g.writers[i] = g.createRW(cfg)
 	}
 
 	return g.Runner.Init()
@@ -190,13 +181,10 @@ func (g *RWGroup) FirstReader() rw.RW {
 	return g.readers[0]
 }
 
-func (g *RWGroup) createRW(rwCfg *rw.Cfg) (rw.RW, error) {
-	rw, err := rw.CreateRW(rwCfg)
-	if err != nil {
-		return nil, errs.Wrapf(err, "create rw(%s) failed", rwCfg.Type)
-	}
+func (g *RWGroup) createRW(rwCfg *rw.Cfg) rw.RW {
+	rw := rw.CreateRW(rwCfg)
 	rw.Inherit(g)
-	return rw, nil
+	return rw
 }
 
 func (g *RWGroup) initReaders() error {

@@ -7,6 +7,7 @@ import (
 
 	"github.com/donkeywon/golib/pipeline/rw"
 	"github.com/donkeywon/golib/runner"
+	"github.com/donkeywon/golib/util/jsons"
 	"github.com/donkeywon/golib/util/tests"
 	"github.com/stretchr/testify/require"
 )
@@ -101,4 +102,55 @@ func TestCompress(t *testing.T) {
 	require.NoError(t, p.Err())
 
 	fmt.Println(p.RWGroups()[0].Readers()[1].Type())
+}
+
+func TestUnmarshal(t *testing.T) {
+	str := `{
+  "rws": [
+    {
+      "type": "file",
+      "cfg": {
+        "path": "/root/test",
+        "perm": 755
+      },
+      "role": "reader",
+      "extraCfg": {
+        "rateLimiterCfg": {
+          "type": "host",
+          "cfg": {
+            "nic": "eth0",
+            "monitorInterval": 10
+          }
+        }
+      }
+    },
+    {
+      "type": "copy",
+      "cfg": {
+        "bufSize": 1024
+      },
+      "role": "starter"
+    },
+    {
+      "type": "compress",
+      "cfg": {
+        "type": "zstd",
+        "level": "fast",
+        "concurrency": 1
+      }
+    },
+    {
+      "type": "cmd",
+      "cfg": {
+        "command": ["bash", "-c", "test"],
+        "runAsUser": "abc"
+      }
+    }
+  ]
+}
+`
+
+	cfg := NewCfg()
+	err := jsons.Unmarshal([]byte(str), cfg)
+	require.NoError(t, err)
 }

@@ -1,4 +1,4 @@
-package task
+package step
 
 import (
 	"context"
@@ -12,10 +12,10 @@ import (
 )
 
 func init() {
-	plugin.RegWithCfg(StepTypeCmd, func() any { return NewCmdStep() }, func() any { return NewCmdStepCfg() })
+	plugin.RegWithCfg(TypeCmd, func() any { return NewCmdStep() }, func() any { return NewCmdStepCfg() })
 }
 
-const StepTypeCmd StepType = "cmd"
+const TypeCmd Type = "cmd"
 
 func NewCmdStepCfg() *cmd.Cfg {
 	return &cmd.Cfg{}
@@ -30,7 +30,7 @@ type CmdStep struct {
 
 func NewCmdStep() *CmdStep {
 	return &CmdStep{
-		Step: newBase(string(StepTypeCmd)),
+		Step: CreateBase(string(TypeCmd)),
 		Cfg:  NewCmdStepCfg(),
 	}
 }
@@ -84,7 +84,7 @@ func (c *CmdStep) Stop() error {
 }
 
 func (c *CmdStep) Type() any {
-	return StepTypeCmd
+	return TypeCmd
 }
 
 func (c *CmdStep) GetCfg() any {

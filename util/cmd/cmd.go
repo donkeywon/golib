@@ -10,7 +10,7 @@ import (
 	"github.com/donkeywon/golib/util/bufferpool"
 	"github.com/donkeywon/golib/util/proc"
 )
-
+ 
 type Cfg struct {
 	Command    []string          `json:"command"    validate:"required" yaml:"command"`
 	Env        map[string]string `json:"env"        yaml:"env"`

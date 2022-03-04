@@ -1,4 +1,4 @@
-package task
+package step
 
 import (
 	"github.com/donkeywon/golib/consts"
@@ -9,10 +9,10 @@ import (
 )
 
 func init() {
-	plugin.RegWithCfg(StepTypeFtp, func() any { return NewFtpStep() }, func() any { return NewFtpStepCfg })
+	plugin.RegWithCfg(TypeFtp, func() any { return NewFtpStep() }, func() any { return NewFtpStepCfg })
 }
 
-const StepTypeFtp StepType = "ftp"
+const TypeFtp Type = "ftp"
 
 type FtpStepCfg struct {
 	Addr    string `json:"addr"    yaml:"addr" validate:"required"`
@@ -38,7 +38,7 @@ type FtpStep struct {
 
 func NewFtpStep() *FtpStep {
 	return &FtpStep{
-		Step: CreateBaseStep(string(StepTypeFtp)),
+		Step: CreateBase(string(TypeFtp)),
 	}
 }
 
@@ -100,7 +100,7 @@ func (f *FtpStep) Stop() error {
 }
 
 func (f *FtpStep) Type() any {
-	return StepTypeFtp
+	return TypeFtp
 }
 
 func (f *FtpStep) GetCfg() any {

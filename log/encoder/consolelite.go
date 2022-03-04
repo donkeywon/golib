@@ -30,6 +30,7 @@ func NewConsoleLiteEncoder(cfg zapcore.EncoderConfig) (zapcore.Encoder, error) {
 func (c consoleLiteEncoder) Clone() zapcore.Encoder {
 	return consoleLiteEncoder{
 		Encoder: c.Encoder.Clone(),
+		cfg:     c.cfg,
 	}
 }
 

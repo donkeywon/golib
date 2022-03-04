@@ -162,11 +162,9 @@ func PanicToErrWithMsg(p any, msg string) error {
 
 // for zero dep.
 func bytes2String(bs []byte) string {
-	return *(*string)(unsafe.Pointer(&bs))
+	return unsafe.String(unsafe.SliceData(bs), len(bs))
 }
 
 func string2Bytes(s string) []byte {
-	x := (*[2]uintptr)(unsafe.Pointer(&s))
-	h := [3]uintptr{x[0], x[1], x[1]}
-	return *(*[]byte)(unsafe.Pointer(&h))
+	return unsafe.Slice(unsafe.StringData(s), len(s))
 }

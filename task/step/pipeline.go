@@ -1,4 +1,4 @@
-package task
+package step
 
 import (
 	"github.com/donkeywon/golib/consts"
@@ -10,10 +10,10 @@ import (
 )
 
 func init() {
-	plugin.RegWithCfg(StepTypePipeline, func() any { return NewPipelineStep() }, func() any { return NewPipelineCfg() })
+	plugin.RegWithCfg(TypePipeline, func() any { return NewPipelineStep() }, func() any { return NewPipelineCfg() })
 }
 
-const StepTypePipeline StepType = "pipeline"
+const TypePipeline Type = "pipeline"
 
 func NewPipelineCfg() *pipeline.Cfg {
 	return pipeline.NewCfg()
@@ -28,7 +28,7 @@ type PipelineStep struct {
 
 func NewPipelineStep() *PipelineStep {
 	return &PipelineStep{
-		Step: newBase(string(StepTypePipeline)),
+		Step: CreateBase(string(TypePipeline)),
 	}
 }
 
@@ -61,7 +61,7 @@ func (p *PipelineStep) Stop() error {
 }
 
 func (p *PipelineStep) Type() any {
-	return StepTypePipeline
+	return TypePipeline
 }
 
 func (p *PipelineStep) GetCfg() any {
