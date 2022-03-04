@@ -9,6 +9,7 @@ import (
 	"github.com/donkeywon/golib/plugin"
 	"github.com/donkeywon/golib/runner"
 	"github.com/donkeywon/golib/task"
+	"github.com/donkeywon/golib/task/step"
 	"github.com/donkeywon/golib/util/rands"
 	"github.com/donkeywon/golib/util/tests"
 	"github.com/stretchr/testify/require"
@@ -76,7 +77,7 @@ func TestPause(t *testing.T) {
 	td.Info("task result", "result", tsk.Result())
 }
 
-const stepTypeTick task.StepType = "tick"
+const stepTypeTick step.Type = "tick"
 
 type tickStepCfg struct {
 	Interval int
@@ -84,13 +85,13 @@ type tickStepCfg struct {
 }
 
 type tickStep struct {
-	task.Step
+	step.Step
 	Cfg *tickStepCfg
 }
 
 func newTickStep() *tickStep {
 	return &tickStep{
-		Step: task.CreateBaseStep(string(stepTypeTick)),
+		Step: step.CreateBase(string(stepTypeTick)),
 	}
 }
 
