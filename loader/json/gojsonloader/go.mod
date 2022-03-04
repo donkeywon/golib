@@ -7,6 +7,4 @@ require (
 	github.com/goccy/go-json v0.10.5
 )
 
-require github.com/jinzhu/copier v0.4.0 // indirect
-
 replace github.com/donkeywon/golib => ../../../
