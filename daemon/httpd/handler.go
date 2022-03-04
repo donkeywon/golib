@@ -37,7 +37,6 @@ func (rh RESTHandler[I, O]) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	var i I
 	err := httpu.ReqTo(r, &i)
 	if err != nil {
-		w.Header().Set(httpu.HeaderContentType, r.Header.Get(httpu.HeaderContentType))
 		httpu.RespJSON(w, http.StatusBadRequest, &Resp{
 			Code: RespCodeFail,
 			Msg:  "parse request fail: " + err.Error(),
@@ -47,7 +46,6 @@ func (rh RESTHandler[I, O]) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	err = v.Struct(i)
 	if err != nil {
-		w.Header().Set(httpu.HeaderContentType, r.Header.Get(httpu.HeaderContentType))
 		httpu.RespJSON(w, http.StatusBadRequest, &Resp{
 			Code: RespCodeFail,
 			Msg:  "validate request fail: " + err.Error(),
