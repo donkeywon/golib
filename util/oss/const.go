@@ -41,11 +41,11 @@ const (
 type Type string
 
 const (
-	OssTypeUnknown Type = "unknown"
-	OssTypeAmz     Type = "amz"
-	OssTypeBlob    Type = "blob"
-	OssTypeObs     Type = "obs"
-	OssTypeAliOss  Type = "alioss"
+	TypeUnknown Type = "unknown"
+	TypeAmz     Type = "amz"
+	TypeBlob    Type = "blob"
+	TypeObs     Type = "obs"
+	TypeAliOSS  Type = "alioss"
 )
 
 var (
