@@ -14,6 +14,7 @@ const DaemonTypeDB boot.DaemonType = "db"
 
 var (
 	_d = New()
+	D  = _d
 
 	fqNamespace    = string(DaemonTypeDB)
 	fqSubsystem    = "pool_stats"
@@ -36,10 +37,6 @@ type DB struct {
 	*Cfg
 
 	dbs map[string]*sql.DB
-}
-
-func D() *DB {
-	return _d
 }
 
 func New() *DB {

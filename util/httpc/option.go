@@ -125,7 +125,7 @@ func ToBytesBuffer(buf *bytes.Buffer) Option {
 func ToJSON(v any) Option {
 	return RespOptionFunc(func(resp *http.Response) error {
 		err := jsons.NewDecoder(resp.Body).Decode(v)
-		if err != nil {
+		if err != nil && !errors.Is(err, io.EOF) {
 			return errs.Wrap(err, "decode response body failed")
 		}
 		return nil
