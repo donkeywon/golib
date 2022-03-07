@@ -19,16 +19,19 @@ type Namespace string
 type Module string
 type Name string
 
-var (
-	_s = &svcd{
-		Runner:      runner.Create("svc"),
-		svcCreators: make([]svcCreatorWithFQN, 0, 64),
-		svcMap:      make(map[string]any),
-		svcCfgMap:   make(map[string]any),
-	}
+var D Svcd = &svcd{
+	Runner:      runner.Create("svc"),
+	svcCreators: make([]svcCreatorWithFQN, 0, 64),
+	svcMap:      make(map[string]any),
+	svcCfgMap:   make(map[string]any),
+}
 
-	D boot.Daemon = _s
-)
+type Svcd interface {
+	runner.Runner
+	Get(ns Namespace, m Module, n Name) Svc
+	Reg(ns Namespace, m Module, n Name, creator Creator)
+	RegWithCfg(ns Namespace, m Module, n Name, creator Creator, cfgCreator CfgCreator)
+}
 
 type svcCreatorWithFQN struct {
 	fqn     string
@@ -117,18 +120,6 @@ func (s *svcd) Type() any {
 
 func (s *svcd) GetCfg() any {
 	return s.Cfg
-}
-
-func Reg(ns Namespace, m Module, n Name, creator Creator) {
-	_s.Reg(ns, m, n, creator)
-}
-
-func RegWithCfg(ns Namespace, m Module, n Name, creator Creator, cfgCreator CfgCreator) {
-	_s.RegWithCfg(ns, m, n, creator, cfgCreator)
-}
-
-func Get(ns Namespace, m Module, n Name) Svc {
-	return _s.Get(ns, m, n)
 }
 
 func buildFQN(ns Namespace, m Module, n Name) string {

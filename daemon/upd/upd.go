@@ -18,13 +18,15 @@ import (
 
 const DaemonTypeUpd boot.DaemonType = "upd"
 
-var (
-	_u      = New()
-	D  *Upd = _u
-)
+var D Upd = New()
 
-// Upd must be first daemon
-type Upd struct {
+type Upd interface {
+	runner.Runner
+	Upgrade(vi *VerInfo)
+}
+
+// upd must be first daemon
+type upd struct {
 	runner.Runner
 	*Cfg
 
@@ -33,15 +35,15 @@ type Upd struct {
 	allDoneExceptMe    chan struct{}
 }
 
-func New() *Upd {
-	return &Upd{
+func New() *upd {
+	return &upd{
 		Runner:             runner.Create(string(DaemonTypeUpd)),
 		upgradingBlockChan: make(chan struct{}),
 		allDoneExceptMe:    make(chan struct{}),
 	}
 }
 
-func (u *Upd) Stop() error {
+func (u *upd) Stop() error {
 	u.Cancel()
 	if u.isUpgrading() {
 		// at this point, all daemon done except upd
@@ -51,27 +53,27 @@ func (u *Upd) Stop() error {
 	return u.Runner.Stop()
 }
 
-func (u *Upd) Type() any {
+func (u *upd) Type() any {
 	return DaemonTypeUpd
 }
 
-func (u *Upd) GetCfg() any {
+func (u *upd) GetCfg() any {
 	return u.Cfg
 }
 
-func (u *Upd) markUpgrading() bool {
+func (u *upd) markUpgrading() bool {
 	return u.upgrading.CompareAndSwap(false, true)
 }
 
-func (u *Upd) unmarkUpgrading() {
+func (u *upd) unmarkUpgrading() {
 	u.upgrading.Store(false)
 }
 
-func (u *Upd) isUpgrading() bool {
+func (u *upd) isUpgrading() bool {
 	return u.upgrading.Load()
 }
 
-func (u *Upd) Upgrade(vi *VerInfo) {
+func (u *upd) Upgrade(vi *VerInfo) {
 	go func() {
 		success := u.upgrade(vi)
 
@@ -88,7 +90,7 @@ func (u *Upd) Upgrade(vi *VerInfo) {
 	}()
 }
 
-func (u *Upd) upgrade(vi *VerInfo) bool {
+func (u *upd) upgrade(vi *VerInfo) bool {
 	if !u.markUpgrading() {
 		u.Warn("already upgrading")
 		return false

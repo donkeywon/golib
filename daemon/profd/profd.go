@@ -19,12 +19,13 @@ import (
 
 const DaemonTypeProfd boot.DaemonType = "profd"
 
-var (
-	_p = New()
-	D  = _p
-)
+var D Profd = New()
 
-type Profd struct {
+type Profd interface {
+	runner.Runner
+}
+
+type profd struct {
 	runner.Runner
 	*Cfg
 
@@ -32,13 +33,13 @@ type Profd struct {
 	prettystackLastTime time.Time
 }
 
-func New() *Profd {
-	return &Profd{
+func New() Profd {
+	return &profd{
 		Runner: runner.Create(string(DaemonTypeProfd)),
 	}
 }
 
-func (p *Profd) Init() error {
+func (p *profd) Init() error {
 	if p.Cfg.EnableStartupProfiling {
 		filepath, done, err := prof.Start(p.Cfg.StartupProfilingMode, p.Cfg.ProfOutputDir, p.Cfg.StartupProfilingSec)
 		if err != nil {
@@ -101,7 +102,7 @@ func (p *Profd) Init() error {
 	return p.Runner.Init()
 }
 
-func (p *Profd) Stop() error {
+func (p *profd) Stop() error {
 	if p.Cfg.EnableStartupProfiling && prof.IsRunning() {
 		err := prof.Stop()
 		if err != nil {
@@ -111,15 +112,15 @@ func (p *Profd) Stop() error {
 	return nil
 }
 
-func (p *Profd) Type() any {
+func (p *profd) Type() any {
 	return DaemonTypeProfd
 }
 
-func (p *Profd) GetCfg() any {
+func (p *profd) GetCfg() any {
 	return p.Cfg
 }
 
-func (p *Profd) startProf(w http.ResponseWriter, r *http.Request) []byte {
+func (p *profd) startProf(w http.ResponseWriter, r *http.Request) []byte {
 	paramDir := r.URL.Query().Get("dir")
 	if paramDir == "" {
 		paramDir = p.Cfg.ProfOutputDir
@@ -144,7 +145,7 @@ func (p *Profd) startProf(w http.ResponseWriter, r *http.Request) []byte {
 	return []byte(filepath)
 }
 
-func (p *Profd) stopProf(w http.ResponseWriter, r *http.Request) []byte {
+func (p *profd) stopProf(w http.ResponseWriter, r *http.Request) []byte {
 	err := prof.Stop()
 	if err != nil {
 		return []byte(err.Error())
@@ -152,7 +153,7 @@ func (p *Profd) stopProf(w http.ResponseWriter, r *http.Request) []byte {
 	return []byte("stopped")
 }
 
-func (p *Profd) prettystack(w http.ResponseWriter, req *http.Request) {
+func (p *profd) prettystack(w http.ResponseWriter, req *http.Request) {
 	p.prettystackMu.Lock()
 	defer p.prettystackMu.Unlock()
 

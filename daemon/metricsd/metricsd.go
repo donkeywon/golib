@@ -14,7 +14,21 @@ import (
 
 const DaemonTypeMetricsd boot.DaemonType = "metricsd"
 
-type Metricsd struct {
+type Metricsd interface {
+	runner.Runner
+	SetGauge(name string, v float64)
+	AddGauge(name string, v float64)
+	SubGauge(name string, v float64)
+	IncGauge(name string)
+	DecGauge(name string)
+	IncCounter(name string)
+	AddCounter(name string, v float64)
+	Register(c prometheus.Collector) error
+	MustRegister(c ...prometheus.Collector)
+	RegisterMetric(m prometheus.Metric) error
+}
+
+type metricsd struct {
 	runner.Runner
 	*Cfg
 
@@ -23,20 +37,17 @@ type Metricsd struct {
 	reg *prometheus.Registry
 }
 
-var (
-	_m           = New()
-	D  *Metricsd = _m
-)
+var D Metricsd = New()
 
-func New() *Metricsd {
-	return &Metricsd{
+func New() Metricsd {
+	return &metricsd{
 		Runner: runner.Create(string(DaemonTypeMetricsd)),
 		reg:    prometheus.NewRegistry(),
 		m:      make(map[string]prometheus.Metric),
 	}
 }
 
-func (p *Metricsd) Init() error {
+func (p *metricsd) Init() error {
 	if !p.DisableGoCollector {
 		p.reg.MustRegister(collectors.NewGoCollector())
 	}
@@ -48,47 +59,47 @@ func (p *Metricsd) Init() error {
 	return p.Runner.Init()
 }
 
-func (p *Metricsd) Type() any {
+func (p *metricsd) Type() any {
 	return DaemonTypeMetricsd
 }
 
-func (p *Metricsd) GetCfg() any {
+func (p *metricsd) GetCfg() any {
 	return p.Cfg
 }
 
-func (p *Metricsd) registerHTTPHandler() {
+func (p *metricsd) registerHTTPHandler() {
 	httpd.D.Handle(p.Cfg.HTTPEndpointPath, promhttp.HandlerFor(p.reg, promhttp.HandlerOpts{Registry: p.reg}))
 }
 
-func (p *Metricsd) SetGauge(name string, v float64) {
+func (p *metricsd) SetGauge(name string, v float64) {
 	p.opGauge(name, func(g prometheus.Gauge) { g.Set(v) })
 }
 
-func (p *Metricsd) AddGauge(name string, v float64) {
+func (p *metricsd) AddGauge(name string, v float64) {
 	p.opGauge(name, func(g prometheus.Gauge) { g.Add(v) })
 }
 
-func (p *Metricsd) SubGauge(name string, v float64) {
+func (p *metricsd) SubGauge(name string, v float64) {
 	p.opGauge(name, func(g prometheus.Gauge) { g.Sub(v) })
 }
 
-func (p *Metricsd) IncGauge(name string) {
+func (p *metricsd) IncGauge(name string) {
 	p.opGauge(name, func(g prometheus.Gauge) { g.Inc() })
 }
 
-func (p *Metricsd) DecGauge(name string) {
+func (p *metricsd) DecGauge(name string) {
 	p.opGauge(name, func(g prometheus.Gauge) { g.Dec() })
 }
 
-func (p *Metricsd) IncCounter(name string) {
+func (p *metricsd) IncCounter(name string) {
 	p.opCounter(name, func(c prometheus.Counter) { c.Inc() })
 }
 
-func (p *Metricsd) AddCounter(name string, v float64) {
+func (p *metricsd) AddCounter(name string, v float64) {
 	p.opCounter(name, func(c prometheus.Counter) { c.Add(v) })
 }
 
-func (p *Metricsd) loadOrStore(name string, creator func() prometheus.Metric) prometheus.Metric {
+func (p *metricsd) loadOrStore(name string, creator func() prometheus.Metric) prometheus.Metric {
 	p.mu.RLock()
 	m, exists := p.m[name]
 	if exists {
@@ -116,7 +127,7 @@ func (p *Metricsd) loadOrStore(name string, creator func() prometheus.Metric) pr
 	return m
 }
 
-func (p *Metricsd) opGauge(name string, op func(g prometheus.Gauge)) {
+func (p *metricsd) opGauge(name string, op func(g prometheus.Gauge)) {
 	g := p.loadOrStore(name, func() prometheus.Metric { return prometheus.NewGauge(prometheus.GaugeOpts{Name: name}) })
 
 	if gg, ok := g.(prometheus.Gauge); ok {
@@ -126,7 +137,7 @@ func (p *Metricsd) opGauge(name string, op func(g prometheus.Gauge)) {
 	p.Warn("metrics type not match", "name", name, "wanted", "Gauge", "actual", reflect.TypeOf(g))
 }
 
-func (p *Metricsd) opCounter(name string, op func(c prometheus.Counter)) {
+func (p *metricsd) opCounter(name string, op func(c prometheus.Counter)) {
 	c := p.loadOrStore(name, func() prometheus.Metric { return prometheus.NewCounter(prometheus.CounterOpts{Name: name}) })
 
 	if cc, ok := c.(prometheus.Counter); ok {
@@ -136,14 +147,14 @@ func (p *Metricsd) opCounter(name string, op func(c prometheus.Counter)) {
 	p.Warn("metrics type not match", "name", name, "wanted", "Counter", "actual", reflect.TypeOf(c))
 }
 
-func (p *Metricsd) Register(c prometheus.Collector) error {
+func (p *metricsd) Register(c prometheus.Collector) error {
 	return p.reg.Register(c)
 }
 
-func (p *Metricsd) MustRegister(c ...prometheus.Collector) {
+func (p *metricsd) MustRegister(c ...prometheus.Collector) {
 	p.reg.MustRegister(c...)
 }
 
-func (p *Metricsd) RegisterMetric(m prometheus.Metric) error {
+func (p *metricsd) RegisterMetric(m prometheus.Metric) error {
 	return p.Register(m.(prometheus.Collector))
 }

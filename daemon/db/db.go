@@ -13,8 +13,7 @@ import (
 const DaemonTypeDB boot.DaemonType = "db"
 
 var (
-	_d = New()
-	D  = _d
+	D DB = New()
 
 	fqNamespace    = string(DaemonTypeDB)
 	fqSubsystem    = "pool_stats"
@@ -32,21 +31,26 @@ var (
 	maxLifetimeClosedDesc = prometheus.NewDesc(prometheus.BuildFQName(fqNamespace, fqSubsystem, "max_life_time_closed"), "The total number of connections closed due to SetConnMaxLifeTime.", variableLabels, nil)
 )
 
-type DB struct {
+type DB interface {
+	runner.Runner
+	Get(string) *sql.DB
+}
+
+type db struct {
 	runner.Runner
 	*Cfg
 
 	dbs map[string]*sql.DB
 }
 
-func New() *DB {
-	return &DB{
+func New() DB {
+	return &db{
 		Runner: runner.Create(string(DaemonTypeDB)),
 		dbs:    make(map[string]*sql.DB),
 	}
 }
 
-func (d *DB) Init() error {
+func (d *db) Init() error {
 	for _, dbCfg := range d.Cfg.DB {
 		db, err := sql.Open(dbCfg.Type, dbCfg.DSN)
 		if err != nil {
@@ -65,7 +69,7 @@ func (d *DB) Init() error {
 	return d.Runner.Init()
 }
 
-func (d *DB) Stop() error {
+func (d *db) Stop() error {
 	for _, dbCfg := range d.Cfg.DB {
 		db := d.dbs[dbCfg.Name]
 		err := db.Close()
@@ -76,15 +80,15 @@ func (d *DB) Stop() error {
 	return nil
 }
 
-func (d *DB) GetCfg() any {
+func (d *db) GetCfg() any {
 	return d.Cfg
 }
 
-func (d *DB) Type() any {
+func (d *db) Type() any {
 	return DaemonTypeDB
 }
 
-func (d *DB) Describe(ch chan<- *prometheus.Desc) {
+func (d *db) Describe(ch chan<- *prometheus.Desc) {
 	ch <- maxOpenConnectionsDesc
 	ch <- openConnectionsDesc
 	ch <- inUseConnectionsDesc
@@ -96,7 +100,7 @@ func (d *DB) Describe(ch chan<- *prometheus.Desc) {
 	ch <- maxLifetimeClosedDesc
 }
 
-func (d *DB) Collect(ch chan<- prometheus.Metric) {
+func (d *db) Collect(ch chan<- prometheus.Metric) {
 	for _, dbCfg := range d.Cfg.DB {
 		db := d.dbs[dbCfg.Name]
 		stats := db.Stats()
@@ -114,6 +118,6 @@ func (d *DB) Collect(ch chan<- prometheus.Metric) {
 	}
 }
 
-func (d *DB) Get(name string) *sql.DB {
+func (d *db) Get(name string) *sql.DB {
 	return d.dbs[name]
 }
