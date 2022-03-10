@@ -20,7 +20,7 @@ func TestGet(t *testing.T) {
 		WithHeaders("test-header", "test-value"),
 		WithBody(reqBody),
 		CheckStatusCode(http.StatusOK),
-		ToBytesBuffer(respBody),
+		ToBytesBuffer(nil, respBody),
 	)
 
 	require.NoError(t, err)
@@ -42,7 +42,7 @@ func TestPostJSON(t *testing.T) {
 		WithHeaders("test-header", "test-value"),
 		WithBodyJSON(reqBody),
 		CheckStatusCode(http.StatusOK),
-		ToBytesBuffer(respBody),
+		ToBytesBuffer(nil, respBody),
 	)
 
 	require.NoError(t, err)
@@ -66,7 +66,7 @@ func BenchmarkHttpc(b *testing.B) {
 	buf := bytes.NewBuffer(make([]byte, 64))
 	for range b.N {
 		buf.Reset()
-		Post(context.Background(), time.Second, s.URL, WithBody(body), WithHeaders("test", "value"), CheckStatusCode(200), ToWriter(buf))
+		Post(context.Background(), time.Second, s.URL, WithBody(body), WithHeaders("test", "value"), CheckStatusCode(200), ToWriter(nil, buf))
 	}
 }
 

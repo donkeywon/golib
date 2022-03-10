@@ -103,7 +103,11 @@ func CheckStatusCode(statusCode ...int) Option {
 func ToBytes(n *int, b []byte) Option {
 	return RespOptionFunc(func(r *http.Response) error {
 		var err error
-		*n, err = r.Body.Read(b)
+		if n == nil {
+			_, err = r.Body.Read(b)
+		} else {
+			*n, err = r.Body.Read(b)
+		}
 		if err != nil {
 			return errs.Wrap(err, "read response body failed")
 		}
@@ -111,9 +115,14 @@ func ToBytes(n *int, b []byte) Option {
 	})
 }
 
-func ToBytesBuffer(buf *bytes.Buffer) Option {
+func ToBytesBuffer(n *int64, buf *bytes.Buffer) Option {
 	return RespOptionFunc(func(resp *http.Response) error {
-		_, err := io.Copy(buf, resp.Body)
+		var err error
+		if n == nil {
+			_, err = io.Copy(buf, resp.Body)
+		} else {
+			*n, err = io.Copy(buf, resp.Body)
+		}
 		if err != nil {
 			return errs.Wrap(err, "read response body failed")
 		}
@@ -122,8 +131,12 @@ func ToBytesBuffer(buf *bytes.Buffer) Option {
 }
 
 func ToJSON(v any) Option {
-	return RespOptionFunc(func(resp *http.Response) error {
-		err := jsons.NewDecoder(resp.Body).Decode(v)
+	return ToAnyDecode(v, func(r io.Reader) httpu.Decoder { return jsons.NewDecoder(r) })
+}
+
+func ToAnyDecode(v any, newDecoder httpu.NewDecoder) Option {
+	return RespOptionFunc(func(r *http.Response) error {
+		err := newDecoder(r.Body).Decode(v)
 		if err != nil && !errors.Is(err, io.EOF) {
 			return errs.Wrap(err, "decode response body failed")
 		}
@@ -145,9 +158,14 @@ func ToAnyUnmarshal(v any, unmarshaler func(bs []byte, v any) error) Option {
 	})
 }
 
-func ToWriter(w io.Writer) Option {
+func ToWriter(n *int64, w io.Writer) Option {
 	return RespOptionFunc(func(resp *http.Response) error {
-		_, err := io.Copy(w, resp.Body)
+		var err error
+		if n == nil {
+			_, err = io.Copy(w, resp.Body)
+		} else {
+			*n, err = io.Copy(w, resp.Body)
+		}
 		if err != nil {
 			return errs.Wrap(err, "read response body to writer failed")
 		}

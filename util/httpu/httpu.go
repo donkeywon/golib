@@ -17,6 +17,7 @@ import (
 const (
 	HeaderContentType   = "Content-Type"
 	HeaderContentLength = "Content-Length"
+	HeaderAcceptRanges  = "Accept-Ranges"
 
 	MIMEHTML              = "text/html"
 	MIMEHTMLUTF8          = "text/html; charset=utf-8"
@@ -41,6 +42,12 @@ type Encoder interface {
 }
 
 type NewEncoder func(w io.Writer) Encoder
+
+type Decoder interface {
+	Decode(v any) error
+}
+
+type NewDecoder func(r io.Reader) Decoder
 
 func RespOk(data any, w http.ResponseWriter, headersKV ...string) {
 	Resp(w, http.StatusOK, data, headersKV...)
