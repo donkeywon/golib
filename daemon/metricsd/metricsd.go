@@ -26,6 +26,8 @@ type Metricsd interface {
 	Register(c prometheus.Collector) error
 	MustRegister(c ...prometheus.Collector)
 	RegisterMetric(m prometheus.Metric) error
+
+	SetHTTPD(d httpd.HTTPD)
 }
 
 type metricsd struct {
@@ -35,6 +37,8 @@ type metricsd struct {
 	mu  sync.RWMutex
 	m   map[string]prometheus.Metric
 	reg *prometheus.Registry
+
+	httpd httpd.HTTPD
 }
 
 var D Metricsd = New()
@@ -48,6 +52,10 @@ func New() Metricsd {
 }
 
 func (p *metricsd) Init() error {
+	if p.httpd == nil {
+		p.httpd = httpd.D
+	}
+
 	if !p.DisableGoCollector {
 		p.reg.MustRegister(collectors.NewGoCollector())
 	}
@@ -68,7 +76,7 @@ func (p *metricsd) GetCfg() any {
 }
 
 func (p *metricsd) registerHTTPHandler() {
-	httpd.D.Handle(p.Cfg.HTTPEndpointPath, promhttp.HandlerFor(p.reg, promhttp.HandlerOpts{Registry: p.reg}))
+	p.httpd.Handle(p.Cfg.HTTPEndpointPath, promhttp.HandlerFor(p.reg, promhttp.HandlerOpts{Registry: p.reg}))
 }
 
 func (p *metricsd) SetGauge(name string, v float64) {
@@ -157,4 +165,8 @@ func (p *metricsd) MustRegister(c ...prometheus.Collector) {
 
 func (p *metricsd) RegisterMetric(m prometheus.Metric) error {
 	return p.Register(m.(prometheus.Collector))
+}
+
+func (p *metricsd) SetHTTPD(d httpd.HTTPD) {
+	p.httpd = d
 }
