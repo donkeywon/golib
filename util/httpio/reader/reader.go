@@ -282,3 +282,7 @@ func (r *Reader) get(opts ...httpc.Option) (*http.Response, error) {
 	allOpts = append(allOpts, r.reqOptions...)
 	return httpc.Get(r.ctx, r.timeout, r.url, allOpts...)
 }
+
+func (r *Reader) Pos() int64 {
+	return r.beginPos
+}
