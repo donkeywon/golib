@@ -157,6 +157,7 @@ type RW interface {
 
 	Hash() string
 
+	// TODO EnableProgressLog
 	EnableMonitorSpeed()
 	EnableCalcHash(hashAlgo string)
 	EnableChecksum(checksum string, hashAlgo string)

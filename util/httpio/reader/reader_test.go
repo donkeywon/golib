@@ -1,4 +1,4 @@
-package httpc
+package reader
 
 import (
 	"bytes"
@@ -89,7 +89,7 @@ func TestNoRangeRead(t *testing.T) {
 }
 
 func testRead(t *testing.T, s *httptest.Server) {
-	r := NewReader(nil, time.Second, s.URL, PartSize(4))
+	r := New(nil, time.Second, s.URL, PartSize(4))
 	defer r.Close()
 	bs := make([]byte, 4)
 	nr, err := r.Read(bs)
@@ -109,7 +109,7 @@ func TestNoRangeWriteTo(t *testing.T) {
 }
 
 func testWriteTo(t *testing.T, s *httptest.Server) {
-	r := NewReader(nil, time.Second, s.URL, PartSize(4))
+	r := New(nil, time.Second, s.URL, PartSize(4))
 	defer r.Close()
 	buf := bytes.NewBuffer(nil)
 	nr, err := io.Copy(buf, r)

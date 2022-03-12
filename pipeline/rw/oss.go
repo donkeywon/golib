@@ -1,20 +1,22 @@
 package rw
 
 import (
+	"context"
+
 	"github.com/donkeywon/golib/errs"
 	"github.com/donkeywon/golib/oss"
 	"github.com/donkeywon/golib/plugin"
 )
 
 func init() {
-	plugin.RegWithCfg(TypeOss, func() any { return NewOSS() }, func() any { return NewOSSCfg() })
+	plugin.RegWithCfg(TypeOSS, func() any { return NewOSS() }, func() any { return NewOSSCfg() })
 }
 
 const (
-	TypeOss Type = "oss"
+	TypeOSS Type = "oss"
 
-	defaultOssTimeout = 600
-	defaultOssRetry   = 3
+	defaultOSSTimeout = 600
+	defaultOSSRetry   = 3
 )
 
 type OSSCfg struct {
@@ -29,8 +31,8 @@ type OSSCfg struct {
 
 func NewOSSCfg() *OSSCfg {
 	return &OSSCfg{
-		Timeout: defaultOssTimeout,
-		Retry:   defaultOssRetry,
+		Timeout: defaultOSSTimeout,
+		Retry:   defaultOSSRetry,
 	}
 }
 
@@ -41,7 +43,7 @@ type OSS struct {
 
 func NewOSS() RW {
 	return &OSS{
-		RW: CreateBase(string(TypeOss)),
+		RW: CreateBase(string(TypeOSS)),
 	}
 }
 
@@ -51,39 +53,25 @@ func (o *OSS) Init() error {
 	}
 
 	if o.IsReader() {
-		r := createOssReader(o.OSSCfg)
+		r := createOSSReader(o.Ctx(), o.OSSCfg)
 		o.NestReader(r)
 	} else {
 		if o.OSSCfg.Append {
-			o.NestWriter(createOssAppendWriter(o.OSSCfg))
+			o.NestWriter(createOSSAppendWriter(o.OSSCfg))
 		} else {
-			o.NestWriter(createOssMultipartWriter(o.OSSCfg))
+			o.NestWriter(createOSSMultipartWriter(o.OSSCfg))
 		}
 	}
-	o.HookRead(o.hookLogRead)
-	o.HookWrite(o.hookLogWrite)
 
 	return o.RW.Init()
 }
 
 func (o *OSS) Type() any {
-	return TypeOss
+	return TypeOSS
 }
 
 func (o *OSS) GetCfg() any {
 	return o.OSSCfg
-}
-
-func (o *OSS) hookLogWrite(n int, bs []byte, err error, cost int64, misc ...any) error {
-	o.Info("write", "bs_len", len(bs), "bs_cap", cap(bs), "nw", n, "cost", cost,
-		"async_chan_len", o.AsyncChanLen(), "async_chan_cap", o.AsyncChanCap(), "misc", misc, "err", err)
-	return nil
-}
-
-func (o *OSS) hookLogRead(n int, bs []byte, err error, cost int64, misc ...any) error {
-	o.Info("read", "bs_len", len(bs), "bs_cap", cap(bs), "nr", n, "cost", cost,
-		"async_chan_len", o.AsyncChanLen(), "async_chan_cap", o.AsyncChanCap(), "misc", misc, "err", err)
-	return nil
 }
 
 func createOSSCfg(ossCfg *OSSCfg) *oss.Cfg {
@@ -97,19 +85,18 @@ func createOSSCfg(ossCfg *OSSCfg) *oss.Cfg {
 	}
 }
 
-func createOssReader(ossCfg *OSSCfg) *oss.Reader {
-	r := oss.NewReader()
-	r.Cfg = createOSSCfg(ossCfg)
+func createOSSReader(ctx context.Context, ossCfg *OSSCfg) *oss.Reader {
+	r := oss.NewReader(ctx, createOSSCfg(ossCfg))
 	return r
 }
 
-func createOssAppendWriter(ossCfg *OSSCfg) *oss.AppendWriter {
+func createOSSAppendWriter(ossCfg *OSSCfg) *oss.AppendWriter {
 	w := oss.NewAppendWriter()
 	w.Cfg = createOSSCfg(ossCfg)
 	return w
 }
 
-func createOssMultipartWriter(ossCfg *OSSCfg) *oss.MultiPartWriter {
+func createOSSMultipartWriter(ossCfg *OSSCfg) *oss.MultiPartWriter {
 	w := oss.NewMultiPartWriter()
 	w.Cfg = createOSSCfg(ossCfg)
 	return w

@@ -63,8 +63,6 @@ func (f *Ftp) Init() error {
 		f.NestWriter(w)
 	}
 
-	f.HookRead(f.hookLogRead)
-	f.HookWrite(f.hookLogWrite)
 	return f.RW.Init()
 }
 
@@ -74,18 +72,6 @@ func (f *Ftp) Type() any {
 
 func (f *Ftp) GetCfg() any {
 	return f.FtpCfg
-}
-
-func (f *Ftp) hookLogWrite(n int, bs []byte, err error, cost int64, misc ...any) error {
-	f.Info("write", "bs_len", len(bs), "bs_cap", cap(bs), "nw", n, "cost", cost,
-		"async_chan_len", f.AsyncChanLen(), "async_chan_cap", f.AsyncChanCap(), "misc", misc, "err", err)
-	return nil
-}
-
-func (f *Ftp) hookLogRead(n int, bs []byte, err error, cost int64, misc ...any) error {
-	f.Info("read", "bs_len", len(bs), "bs_cap", cap(bs), "nr", n, "cost", cost,
-		"async_chan_len", f.AsyncChanLen(), "async_chan_cap", f.AsyncChanCap(), "misc", misc, "err", err)
-	return nil
 }
 
 func createFtpCfg(ftpCfg *FtpCfg) *ftp.Cfg {

@@ -76,9 +76,6 @@ func (s *SSH) Init() error {
 	s.sshStderrBuf = bufferpool.Get()
 	s.sshSess.Stderr = s.sshStderrBuf
 
-	s.HookRead(s.hookLogRead)
-	s.HookWrite(s.hookLogWrite)
-
 	return s.RW.Init()
 }
 
@@ -114,18 +111,6 @@ func (s *SSH) Type() any {
 
 func (s *SSH) GetCfg() any {
 	return s.SSHCfg
-}
-
-func (s *SSH) hookLogWrite(n int, bs []byte, err error, cost int64, misc ...any) error {
-	s.Info("write", "bs_len", len(bs), "bs_cap", cap(bs), "nw", n, "cost", cost,
-		"async_chan_len", s.AsyncChanLen(), "async_chan_cap", s.AsyncChanCap(), "misc", misc, "err", err)
-	return nil
-}
-
-func (s *SSH) hookLogRead(n int, bs []byte, err error, cost int64, misc ...any) error {
-	s.Info("read", "bs_len", len(bs), "bs_cap", cap(bs), "nr", n, "cost", cost,
-		"async_chan_len", s.AsyncChanLen(), "async_chan_cap", s.AsyncChanCap(), "misc", misc, "err", err)
-	return nil
 }
 
 func sshReadCmd(path string) string {

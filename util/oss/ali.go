@@ -14,19 +14,19 @@ import (
 )
 
 const (
-	productOss = "oss"
+	productOSS = "oss"
 
-	aliOssDomainSuffix = ".aliyuncs.com"
+	aliOSSDomainSuffix = ".aliyuncs.com"
 )
 
-var aliOssURLRegex = regexp.MustCompile(`([a-z0-9\-]{3,63})\.[^\.]+\.aliyuncs\.com(\/.*)`)
+var aliOSSURLRegex = regexp.MustCompile(`([a-z0-9\-]{3,63})\.[^\.]+\.aliyuncs\.com(\/.*)`)
 
-func IsAliOss(url string) bool {
-	return strings.Contains(url, aliOssDomainSuffix)
+func IsAliOSS(url string) bool {
+	return strings.Contains(url, aliOSSDomainSuffix)
 }
 
-func ParseAliOssURL(url string) (bool, string, string) {
-	matchRes := aliOssURLRegex.FindStringSubmatch(url)
+func ParseAliOSSURL(url string) (bool, string, string) {
+	matchRes := aliOSSURLRegex.FindStringSubmatch(url)
 	if len(matchRes) != 3 {
 		return false, "", ""
 	}
@@ -51,13 +51,13 @@ func AliSign(req *http.Request, ak, sk, region string) error {
 
 	sanitizeHostForHeader(req)
 
-	credentialScope := aliBuildScope(nowShortFormat, region, productOss)
+	credentialScope := aliBuildScope(nowShortFormat, region, productOSS)
 	credentialStr := ak + "/" + credentialScope
 
 	canonicalString := aliCalcCanonicalRequest(req, nil)
 
 	strToSign := aliBuildStringToSign(nowFormat, credentialScope, canonicalString)
-	signingSignature := aliCalcSignature(sk, nowShortFormat, region, productOss, strToSign)
+	signingSignature := aliCalcSignature(sk, nowShortFormat, region, productOSS, strToSign)
 
 	headers.Set(AuthorizationHeader, aliBuildAuthorizationHeader(credentialStr, signingSignature))
 	return nil
@@ -86,7 +86,7 @@ func aliBuildAuthorizationHeader(credentialStr string, signature string) string 
 }
 
 func aliIsDefaultSignedHeader(low string) bool {
-	if strings.HasPrefix(low, HeaderAliOssPrefix) ||
+	if strings.HasPrefix(low, HeaderAliOSSPrefix) ||
 		low == "content-type" ||
 		low == "content-md5" {
 		return true
@@ -106,7 +106,7 @@ func aliCalcCanonicalRequest(req *http.Request, additionalHeaders []string) stri
 	*/
 
 	// Canonical Uri
-	_, bucket, _ := ParseAliOssURL(req.URL.String())
+	_, bucket, _ := ParseAliOSSURL(req.URL.String())
 	canonicalURI := escapePath("/"+bucket+getURIPath(req.URL), false)
 
 	// Canonical Query
