@@ -10,11 +10,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/donkeywon/golib/util/httpu"
-
 	"github.com/avast/retry-go/v4"
 	"github.com/donkeywon/golib/errs"
 	"github.com/donkeywon/golib/util/httpc"
+	"github.com/donkeywon/golib/util/httpu"
 	"github.com/donkeywon/golib/util/oss"
 	"github.com/google/uuid"
 )
