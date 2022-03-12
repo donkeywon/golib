@@ -33,7 +33,7 @@ func BeginPos(pos int64) Option {
 
 func EndPos(pos int64) Option {
 	return func(r *Reader) {
-		r.endPos = pos
+		r.total = pos
 	}
 }
 
@@ -82,7 +82,6 @@ type Reader struct {
 	noRangeRespBody io.ReadCloser
 
 	beginPos   int64
-	endPos     int64
 	partSize   int64
 	reqOptions []httpc.Option
 	retry      int
@@ -238,16 +237,18 @@ func (r *Reader) head() error {
 	}
 
 	if resp.Header.Get(httpu.HeaderAcceptRanges) == "bytes" && resp.ContentLength >= 0 {
-		r.total = resp.ContentLength
+		if r.total <= 0 {
+			r.total = resp.ContentLength
+		}
 		r.supportRange = true
 	}
 
 	return nil
 }
 
-func (r *Reader) getPart(start int64, n int64, opts ...httpc.Option) (*http.Response, error) {
-	end := min(start+n-1, r.total-1)
-	ranges := fmt.Sprintf("bytes=%d-%d", start, end)
+func (r *Reader) getPart(begin int64, n int64, opts ...httpc.Option) (*http.Response, error) {
+	end := min(begin+n-1, r.total-1)
+	ranges := fmt.Sprintf("bytes=%d-%d", begin, end)
 
 	allOpts := make([]httpc.Option, 0, len(r.reqOptions)+len(opts)+2)
 	allOpts = append(allOpts, httpc.WithHeaders("Range", ranges), httpc.CheckStatusCode(http.StatusOK, http.StatusPartialContent))
