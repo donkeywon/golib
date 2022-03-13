@@ -7,7 +7,6 @@ import (
 	"encoding/xml"
 	"fmt"
 	"net/http"
-	"strconv"
 	"sync"
 	"time"
 
@@ -250,9 +249,8 @@ func (w *MultiPartWriter) upload(partNo int, uploadID string, body []byte) (stri
 	}
 
 	resp, err := httpc.Put(w.ctx, time.Second*time.Duration(w.Timeout), url,
-		httpc.WithHeaders(httpu.HeaderContentLength, strconv.Itoa(len(body))),
-		httpc.ReqOptionFunc(w.addAuth),
 		httpc.WithBody(body),
+		httpc.ReqOptionFunc(w.addAuth),
 		httpc.CheckStatusCode(checkStatus),
 		httpc.ToBytesBuffer(nil, respBody),
 	)
