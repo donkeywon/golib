@@ -125,8 +125,9 @@ func WithBodyMarshal(v any, contentType string, marshal func(v any) ([]byte, err
 			return errs.Wrap(err, "marshal request body failed")
 		}
 		r.Header.Set(httpu.HeaderContentType, contentType)
-		r.ContentLength = int64(len(bs))
 		r.Body = io.NopCloser(bytes.NewReader(bs))
+		r.ContentLength = int64(len(bs))
+		r.Header.Set(httpu.HeaderContentLength, strconv.FormatInt(r.ContentLength, 10))
 		return nil
 	})
 }
@@ -137,9 +138,10 @@ func WithBodyForm(form url.Values) Option {
 			return nil
 		}
 		s := form.Encode()
-		r.ContentLength = int64(len(s))
 		r.Body = io.NopCloser(strings.NewReader(s))
 		r.Header.Set(httpu.HeaderContentType, httpu.MIMEPOSTForm)
+		r.ContentLength = int64(len(s))
+		r.Header.Set(httpu.HeaderContentLength, strconv.FormatInt(r.ContentLength, 10))
 		return nil
 	})
 }
