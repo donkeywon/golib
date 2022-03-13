@@ -1,19 +1,6 @@
 package oss
 
 const (
-	HeaderAuthorization     = "Authorization"
-	HeaderDate              = "Date"
-	HeaderContentLength     = "Content-Length"
-	HeaderContentEncoding   = "Content-Encoding"
-	HeaderContentLanguage   = "Content-Language"
-	HeaderContentType       = "Content-Type"
-	HeaderContentMD5        = "Content-MD5"
-	HeaderIfModifiedSince   = "If-Modified-Since"
-	HeaderIfMatch           = "If-Match"
-	HeaderIfNoneMatch       = "If-None-Match"
-	HeaderIfUnmodifiedSince = "If-Unmodified-Since"
-	HeaderRange             = "Range"
-
 	HeaderXmsDate      = "X-Ms-Date"
 	HeaderXmsVersion   = "X-Ms-Version"
 	HeaderXmsRequestID = "X-Ms-Request-Id"

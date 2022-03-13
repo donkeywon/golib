@@ -16,6 +16,7 @@ import (
 
 	"github.com/donkeywon/golib/errs"
 	"github.com/donkeywon/golib/util/httpc"
+	"github.com/donkeywon/golib/util/httpu"
 )
 
 var azblobURLSuffix = "core.windows.net"
@@ -43,8 +44,8 @@ func azblobSignOption(ak, sk string) httpc.Option {
 
 func AzblobSign(req *http.Request, account string, key string) error {
 	req.Header.Set(HeaderXmsDate, time.Now().UTC().Format(http.TimeFormat))
-	if req.Header.Get(HeaderContentLength) == "" {
-		req.Header.Set(HeaderContentLength, strconv.Itoa(int(req.ContentLength)))
+	if req.Header.Get(httpu.HeaderContentLength) == "" {
+		req.Header.Set(httpu.HeaderContentLength, strconv.Itoa(int(req.ContentLength)))
 	}
 	req.Header.Set(HeaderXmsVersion, "2023-11-03")
 
@@ -65,7 +66,7 @@ func AzblobSign(req *http.Request, account string, key string) error {
 	}
 
 	sign := base64.StdEncoding.EncodeToString(mac.Sum(nil))
-	req.Header.Set(HeaderAuthorization, fmt.Sprintf("SharedKey %s:%s", account, sign))
+	req.Header.Set(httpu.HeaderAuthorization, fmt.Sprintf("SharedKey %s:%s", account, sign))
 	return nil
 }
 
@@ -78,7 +79,7 @@ func IsAzblob(url string) bool {
 func azblobBuildStringToSign(req *http.Request, accountName string) (string, error) {
 	// https://docs.microsoft.com/en-us/rest/api/storageservices/authentication-for-the-azure-storage-services
 	headers := req.Header
-	contentLength := getHeader(HeaderContentLength, headers)
+	contentLength := getHeader(httpu.HeaderContentLength, headers)
 	if contentLength == "0" {
 		contentLength = ""
 	}
@@ -90,17 +91,17 @@ func azblobBuildStringToSign(req *http.Request, accountName string) (string, err
 
 	stringToSign := strings.Join([]string{
 		req.Method,
-		getHeader(HeaderContentEncoding, headers),
-		getHeader(HeaderContentLanguage, headers),
+		getHeader(httpu.HeaderContentEncoding, headers),
+		getHeader(httpu.HeaderContentLanguage, headers),
 		contentLength,
-		getHeader(HeaderContentMD5, headers),
-		getHeader(HeaderContentType, headers),
+		getHeader(httpu.HeaderContentMD5, headers),
+		getHeader(httpu.HeaderContentType, headers),
 		"", // Empty date because x-ms-date is expected (as per web page above)
-		getHeader(HeaderIfModifiedSince, headers),
-		getHeader(HeaderIfMatch, headers),
-		getHeader(HeaderIfNoneMatch, headers),
-		getHeader(HeaderIfUnmodifiedSince, headers),
-		getHeader(HeaderRange, headers),
+		getHeader(httpu.HeaderIfModifiedSince, headers),
+		getHeader(httpu.HeaderIfMatch, headers),
+		getHeader(httpu.HeaderIfNoneMatch, headers),
+		getHeader(httpu.HeaderIfUnmodifiedSince, headers),
+		getHeader(httpu.HeaderRange, headers),
 		azblobBuildCanonicalizedHeader(headers),
 		canonicalizedResource,
 	}, "\n")
