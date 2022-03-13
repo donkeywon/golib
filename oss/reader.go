@@ -24,12 +24,12 @@ func NewReader(ctx context.Context, cfg *Cfg, opts ...httpc.Option) *Reader {
 		BeginPos: cfg.BeginPos,
 	}
 	allOpts := make([]httpc.Option, 0, 1+len(opts))
+	allOpts = append(allOpts, opts...)
 	allOpts = append(allOpts,
 		httpc.ReqOptionFunc(func(r *http.Request) error {
 			return oss.Sign(r, cfg.Ak, cfg.Sk, cfg.Region)
 		}),
 	)
-	allOpts = append(allOpts, opts...)
 
 	r.Reader = httpio.New(ctx,
 		time.Second*time.Duration(cfg.Timeout),
