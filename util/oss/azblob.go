@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"net/url"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 
@@ -44,9 +43,6 @@ func azblobSignOption(ak, sk string) httpc.Option {
 
 func AzblobSign(req *http.Request, account string, key string) error {
 	req.Header.Set(HeaderXmsDate, time.Now().UTC().Format(http.TimeFormat))
-	if req.Header.Get(httpu.HeaderContentLength) == "" {
-		req.Header.Set(httpu.HeaderContentLength, strconv.Itoa(int(req.ContentLength)))
-	}
 	req.Header.Set(HeaderXmsVersion, "2023-11-03")
 
 	stringToSign, err := azblobBuildStringToSign(req, account)

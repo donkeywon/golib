@@ -13,7 +13,7 @@ import (
 
 type Reader struct {
 	*Cfg
-	io.Reader
+	io.ReadCloser
 }
 
 func NewReader(ctx context.Context, cfg *Cfg, opts ...httpc.Option) *Reader {
@@ -25,12 +25,14 @@ func NewReader(ctx context.Context, cfg *Cfg, opts ...httpc.Option) *Reader {
 	allOpts = append(allOpts,
 		httpio.BeginPos(cfg.BeginPos),
 		httpio.Retry(cfg.Retry),
-		httpio.WithHTTPOptions(httpc.ReqOptionFunc(func(r *http.Request) error {
-			return oss.Sign(r, cfg.Ak, cfg.Sk, cfg.Region)
-		})),
+		httpio.WithHTTPOptions(
+			httpc.ReqOptionFunc(func(r *http.Request) error {
+				return oss.Sign(r, cfg.Ak, cfg.Sk, cfg.Region)
+			}),
+		),
 	)
 
-	r.Reader = httpio.NewReader(ctx,
+	r.ReadCloser = httpio.NewReader(ctx,
 		time.Second*time.Duration(cfg.Timeout),
 		cfg.URL,
 		httpio.BeginPos(cfg.BeginPos),
