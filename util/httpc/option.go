@@ -14,10 +14,6 @@ import (
 	"github.com/donkeywon/golib/util/jsons"
 )
 
-var (
-	ErrRespStatusCodeNotExpected = errors.New("response status code not expected")
-)
-
 // Option must implement reqOption or respOption.
 type Option any
 
@@ -51,13 +47,26 @@ func WithHeaders(headerKvs ...string) Option {
 }
 
 func WithBody(body []byte) Option {
-	return WithBodyReader(bytes.NewReader(body), int64(len(body)))
+	return WithBodyReader(bytes.NewReader(body))
 }
 
-func WithBodyReader(reader io.Reader, size int64) Option {
+func WithBodyReader(reader io.Reader) Option {
 	return ReqOptionFunc(func(r *http.Request) error {
+		switch rt := reader.(type) {
+		case io.Seeker:
+			size, err := rt.Seek(0, io.SeekEnd)
+			if err != nil {
+				return errs.Wrap(err, "get size by seek failed")
+			}
+			r.ContentLength = size
+			_, err = rt.Seek(0, io.SeekStart)
+			if err != nil {
+				return errs.Wrap(err, "get size by seek failed")
+			}
+		default:
+		}
+
 		r.Body = io.NopCloser(reader)
-		r.ContentLength = size
 		return nil
 	})
 }
@@ -97,10 +106,10 @@ func CheckStatusCode(statusCode ...int) Option {
 		if len(statusCode) == 0 {
 			return nil
 		}
-		if slices.Contains(statusCode, resp.StatusCode) {
-			return nil
+		if !slices.Contains(statusCode, resp.StatusCode) {
+			return errs.Errorf("response status code not expected: %d", resp.StatusCode)
 		}
-		return ErrRespStatusCodeNotExpected
+		return nil
 	})
 }
 
