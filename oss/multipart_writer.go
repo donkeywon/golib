@@ -162,8 +162,8 @@ func (w *MultiPartWriter) Complete() error {
 
 	resp, err = retry.DoWithData(func() (*http.Response, error) {
 		return httpc.Do(nil, time.Second*time.Duration(w.Timeout), method, url,
-			httpc.ReqOptionFunc(w.addAuth),
 			httpc.WithBodyMarshal(body, contentType, xml.Marshal),
+			httpc.ReqOptionFunc(w.addAuth),
 			httpc.CheckStatusCode(checkStatus),
 			httpc.ToBytesBuffer(nil, respBody),
 		)
