@@ -29,8 +29,7 @@ type reader struct {
 	headOnce  sync.Once
 	closeOnce sync.Once
 
-	pos             int64
-	total           int64
+	limit           int64
 	supportRange    bool
 	noRangeRespBody io.ReadCloser
 
@@ -54,15 +53,34 @@ func NewReader(ctx context.Context, timeout time.Duration, url string, opts ...O
 
 	r.ctx, r.cancel = context.WithCancel(ctx)
 
-	if r.opt.endPos > 0 {
-		r.total = r.opt.endPos
+	if r.opt.n > 0 {
+		r.limit = r.opt.offset + r.opt.n
 	}
-	r.pos = r.opt.beginPos
 
 	return r
 }
 
 func (r *reader) Read(p []byte) (int, error) {
+	nr, err := r.read(p, r.opt.offset)
+	r.opt.offset += int64(nr)
+	if err != nil {
+		return nr, err
+	}
+	if r.reachLimit() {
+		return nr, io.EOF
+	}
+	return nr, nil
+}
+
+func (r *reader) ReadAt(p []byte, offset int64) (int, error) {
+	return r.read(p, offset)
+}
+
+func (r *reader) reachLimit() bool {
+	return r.supportRange && r.opt.offset >= r.limit
+}
+
+func (r *reader) read(p []byte, offset int64) (int, error) {
 	select {
 	case <-r.ctx.Done():
 		return 0, ErrAlreadyClosed
@@ -78,27 +96,23 @@ func (r *reader) Read(p []byte) (int, error) {
 		return 0, err
 	}
 
-	if r.supportRange {
-		var nr int
-		_, err := r.getPart(r.pos, int64(len(p)), httpc.ToBytes(&nr, p))
-		r.pos += int64(nr)
-		if err != nil {
-			return nr, err
+	if !r.supportRange {
+		if r.noRangeRespBody == nil {
+			r.noRangeRespBody, err = r.retryGetNoRange()
+			if err != nil {
+				return 0, err
+			}
 		}
-		if r.pos == r.total {
-			return nr, io.EOF
-		}
-		return nr, nil
+
+		return r.noRangeRespBody.Read(p)
 	}
 
-	if r.noRangeRespBody == nil {
-		r.noRangeRespBody, err = r.retryGetNoRange()
-		if err != nil {
-			return 0, err
-		}
+	var nr int
+	_, err = r.getPart(offset, int64(len(p)), httpc.ToBytes(&nr, p))
+	if err != nil {
+		return 0, err
 	}
-
-	return r.noRangeRespBody.Read(p)
+	return nr, nil
 }
 
 func (r *reader) Close() error {
@@ -125,7 +139,7 @@ func (r *reader) WriteTo(w io.Writer) (int64, error) {
 	}
 
 	if !r.supportRange {
-		_, err := retry.DoWithData(
+		_, err = retry.DoWithData(
 			func() (*http.Response, error) {
 				return r.get(httpc.ToWriter(&nw, w))
 			},
@@ -141,23 +155,23 @@ func (r *reader) WriteTo(w io.Writer) (int64, error) {
 		nw = 0
 		_, err = retry.DoWithData(
 			func() (*http.Response, error) {
-				return r.getPart(r.pos, r.opt.partSize, httpc.ToWriter(&nw, w))
+				return r.getPart(r.opt.offset, r.opt.partSize, httpc.ToWriter(&nw, w))
 			},
 			retry.Attempts(uint(r.opt.retry)),
 			retry.RetryIf(func(err error) bool {
 				return err != nil && nw == 0
 			}),
 		)
-		r.pos += nw
+		r.opt.offset += nw
 		total += nw
 		if err != nil {
 			break
 		}
-		if nw < r.opt.partSize {
-			err = io.ErrShortWrite
+		if r.opt.offset >= r.limit {
 			break
 		}
-		if r.pos == r.total {
+		if nw < r.opt.partSize {
+			err = io.ErrShortWrite
 			break
 		}
 	}
@@ -182,15 +196,15 @@ func (r *reader) retryHead() error {
 func (r *reader) head() error {
 	resp, err := httpc.Head(r.ctx, r.timeout, r.url, r.opt.httpOptions...)
 	if err != nil {
-		return errs.Errorf("head failed, resp: %+v", resp)
+		return errs.Wrap(err, "head failed")
 	}
 	if resp.StatusCode >= 500 {
-		return errs.Errorf("head response failed, resp: %+v", resp)
+		return errs.Errorf("head response failed: %s", resp.Status)
 	}
 
 	if resp.Header.Get(httpu.HeaderAcceptRanges) == "bytes" && resp.ContentLength >= 0 {
-		if r.total <= 0 {
-			r.total = resp.ContentLength
+		if r.opt.n <= 0 {
+			r.limit = resp.ContentLength
 		}
 		r.supportRange = true
 	}
@@ -198,9 +212,9 @@ func (r *reader) head() error {
 	return nil
 }
 
-func (r *reader) getPart(begin int64, n int64, opts ...httpc.Option) (*http.Response, error) {
-	end := min(begin+n-1, r.total-1)
-	ranges := fmt.Sprintf("bytes=%d-%d", begin, end)
+func (r *reader) getPart(offset int64, n int64, opts ...httpc.Option) (*http.Response, error) {
+	end := min(offset+n-1, r.limit-1)
+	ranges := fmt.Sprintf("bytes=%d-%d", offset, end)
 
 	allOpts := make([]httpc.Option, 0, len(r.opt.httpOptions)+len(opts)+2)
 	allOpts = append(allOpts, httpc.WithHeaders("Range", ranges), httpc.CheckStatusCode(http.StatusOK, http.StatusPartialContent))
@@ -233,6 +247,6 @@ func (r *reader) get(opts ...httpc.Option) (*http.Response, error) {
 	return httpc.Get(r.ctx, r.timeout, r.url, allOpts...)
 }
 
-func (r *reader) Pos() int64 {
-	return r.pos
+func (r *reader) Offset() int64 {
+	return r.opt.offset
 }
