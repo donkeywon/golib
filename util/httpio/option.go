@@ -15,7 +15,7 @@ type option struct {
 func newOption() *option {
 	return &option{
 		retry:    1,
-		partSize: 8 * 1024 * 1024,
+		partSize: 1024 * 1024,
 	}
 }
 
