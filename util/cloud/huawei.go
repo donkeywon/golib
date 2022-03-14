@@ -29,7 +29,7 @@ func GetHuaweiEcsMetadata() (*bytes.Buffer, error) {
 	resp := bytes.NewBuffer(nil)
 	_, err := httpc.Get(nil, cloudMetadataReqTimeout, "http://169.254.169.254/openstack/latest/meta_data.json",
 		httpc.CheckStatusCode(http.StatusOK),
-		httpc.ToBytesBuffer(nil, resp),
+		httpc.ToBytesBuffer(resp),
 	)
 	return resp, err
 }

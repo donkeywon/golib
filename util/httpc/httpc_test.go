@@ -20,7 +20,7 @@ func TestGet(t *testing.T) {
 		WithHeaders("test-header", "test-value"),
 		WithBody(reqBody),
 		CheckStatusCode(http.StatusOK),
-		ToBytesBuffer(nil, respBody),
+		ToBytesBuffer(respBody),
 	)
 
 	require.NoError(t, err)
@@ -42,7 +42,7 @@ func TestPostJSON(t *testing.T) {
 		WithHeaders("test-header", "test-value"),
 		WithBodyJSON(reqBody),
 		CheckStatusCode(http.StatusOK),
-		ToBytesBuffer(nil, respBody),
+		ToBytesBuffer(respBody),
 	)
 
 	require.NoError(t, err)

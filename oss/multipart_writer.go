@@ -1,6 +1,7 @@
 package oss
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/base64"
@@ -39,6 +40,50 @@ type BlockList struct {
 }
 
 type MultiPartWriter struct {
+	cfg  *Cfg
+	w    *multiPartWriter
+	bufw *bufio.Writer
+}
+
+func NewMultiPartWriter(ctx context.Context, cfg *Cfg) *MultiPartWriter {
+	cfg.setDefaults()
+	w := &multiPartWriter{
+		cfg: cfg,
+	}
+	w.timeout = time.Second * time.Duration(w.cfg.Timeout)
+	w.ctx, w.cancel = context.WithCancel(ctx)
+
+	return &MultiPartWriter{
+		cfg:  cfg,
+		w:    w,
+		bufw: bufio.NewWriterSize(w, int(w.cfg.PartSize)),
+	}
+}
+
+func (w *MultiPartWriter) Write(p []byte) (int, error) {
+	return w.bufw.Write(p)
+}
+
+func (w *MultiPartWriter) Close() error {
+	return errors.Join(w.bufw.Flush(), w.w.Close())
+}
+
+func (w *MultiPartWriter) ReadFrom(r io.Reader) (int64, error) {
+	select {
+	case <-w.w.ctx.Done():
+		return 0, httpio.ErrAlreadyClosed
+	default:
+	}
+
+	err := w.w.init()
+	if err != nil {
+		return 0, err
+	}
+
+	return io.Copy(w.bufw, r)
+}
+
+type multiPartWriter struct {
 	cfg *Cfg
 
 	timeout   time.Duration
@@ -57,17 +102,7 @@ type MultiPartWriter struct {
 	initialized bool
 }
 
-func NewMultiPartWriter(ctx context.Context, cfg *Cfg) *MultiPartWriter {
-	w := &MultiPartWriter{
-		cfg: cfg,
-	}
-	cfg.setDefaults()
-	w.timeout = time.Second * time.Duration(w.cfg.Timeout)
-	w.ctx, w.cancel = context.WithCancel(ctx)
-	return w
-}
-
-func (w *MultiPartWriter) Write(p []byte) (int, error) {
+func (w *multiPartWriter) Write(p []byte) (int, error) {
 	select {
 	case <-w.ctx.Done():
 		return 0, httpio.ErrAlreadyClosed
@@ -78,15 +113,9 @@ func (w *MultiPartWriter) Write(p []byte) (int, error) {
 		return 0, nil
 	}
 
-	var err error
-
-	if !oss.IsAzblob(w.cfg.URL) && !w.initialized {
-		w.uploadID, err = w.initMultiPart()
-		if err != nil {
-			return 0, errs.Wrap(err, "init multi part failed")
-		}
-		w.initialized = true
-		w.curPartNo = 1
+	err := w.init()
+	if err != nil {
+		return 0, err
 	}
 
 	err = w.uploadPart(httpc.WithBody(p))
@@ -100,7 +129,7 @@ func (w *MultiPartWriter) Write(p []byte) (int, error) {
 	return len(p), nil
 }
 
-func (w *MultiPartWriter) Close() error {
+func (w *multiPartWriter) Close() error {
 	var err error
 	w.closeOnce.Do(func() {
 		w.cancel()
@@ -114,70 +143,60 @@ func (w *MultiPartWriter) Close() error {
 	return err
 }
 
-type readerWrapper struct {
-	io.Reader
-	eof bool
-	nr  int64
-}
-
-func (r *readerWrapper) Read(p []byte) (int, error) {
-	nr, err := r.Reader.Read(p)
-	r.nr += int64(nr)
-	r.eof = errors.Is(err, io.EOF)
-	return nr, err
-}
-
-func (w *MultiPartWriter) ReadFrom(r io.Reader) (int64, error) {
-	var (
-		err error
-		rr  = &readerWrapper{Reader: r}
-	)
-
-	for {
-		lr := io.LimitReader(rr, w.cfg.PartSize)
-		err = retry.Do(
-			func() error {
-				return w.uploadPart(httpc.WithBodyReader(lr))
-			},
-			retry.Attempts(uint(w.cfg.Retry)),
-		)
-		if err != nil {
-			break
-		}
-		if rr.eof {
-			break
-		}
+func (w *multiPartWriter) init() error {
+	if w.initialized {
+		return nil
+	}
+	if oss.IsAzblob(w.cfg.URL) {
+		w.initialized = true
+		return nil
 	}
 
-	return rr.nr, err
+	var err error
+	w.uploadID, err = w.initMultiPart()
+	if err != nil {
+		return errs.Wrap(err, "init multi part failed")
+	}
+	w.initialized = true
+	w.curPartNo = 1
+	return nil
 }
 
-func (w *MultiPartWriter) Abort() error {
+func (w *multiPartWriter) Abort() error {
 	if oss.IsAzblob(w.cfg.URL) {
 		return nil
 	}
 
-	var respBody = bytes.NewBuffer(nil)
-	resp, err := retry.DoWithData(func() (*http.Response, error) {
-		return httpc.Delete(nil, w.timeout, w.cfg.URL+"?uploadId="+w.uploadID,
-			httpc.ReqOptionFunc(w.addAuth),
-			httpc.CheckStatusCode(http.StatusNoContent),
-			httpc.ToBytesBuffer(nil, respBody))
-	}, retry.Attempts(uint(w.cfg.Retry)))
+	var (
+		respBody   = bytes.NewBuffer(nil)
+		respStatus string
+	)
+	_, err := retry.DoWithData(
+		func() (*http.Response, error) {
+			respBody.Reset()
+			return httpc.Delete(context.TODO(), w.timeout, w.cfg.URL+"?uploadId="+w.uploadID,
+				httpc.ReqOptionFunc(w.addAuth),
+				httpc.ToStatus(&respStatus),
+				httpc.ToBytesBuffer(respBody),
+				httpc.CheckStatusCode(http.StatusNoContent),
+			)
+		},
+		retry.Attempts(uint(w.cfg.Retry)),
+	)
 
 	if err != nil {
-		return errs.Wrapf(err, "abort multipart fail, resp: %+v, body: %s", resp, respBody.String())
+		return errs.Wrapf(err, "abort multipart fail, resp status: %s, body: %s", respStatus, respBody.String())
 	}
 	return nil
 }
 
-func (w *MultiPartWriter) Complete() error {
+func (w *multiPartWriter) Complete() error {
 	var (
 		url         string
 		err         error
 		body        any
 		checkStatus int
-		resp        *http.Response
+		respStatus  string
 		respBody    = bytes.NewBuffer(nil)
 		contentType string
 		method      string
@@ -197,52 +216,66 @@ func (w *MultiPartWriter) Complete() error {
 		method = http.MethodPost
 	}
 
-	resp, err = retry.DoWithData(func() (*http.Response, error) {
-		return httpc.Do(nil, w.timeout, method, url,
-			httpc.WithBodyMarshal(body, contentType, xml.Marshal),
-			httpc.ReqOptionFunc(w.addAuth),
-			httpc.CheckStatusCode(checkStatus),
-			httpc.ToBytesBuffer(nil, respBody),
-		)
-	}, retry.Attempts(uint(w.cfg.Retry)))
+	_, err = retry.DoWithData(
+		func() (*http.Response, error) {
+			respBody.Reset()
+			return httpc.Do(context.TODO(), w.timeout, method, url,
+				httpc.WithBodyMarshal(body, contentType, xml.Marshal),
+				httpc.ReqOptionFunc(w.addAuth),
+				httpc.ToStatus(&respStatus),
+				httpc.ToBytesBuffer(respBody),
+				httpc.CheckStatusCode(checkStatus),
+			)
+		},
+		retry.LastErrorOnly(true),
+		retry.Attempts(uint(w.cfg.Retry)),
+	)
 
 	if err != nil {
-		return errs.Wrapf(err, "retry do complete multipart request fail, resp: %+v, body: %s", resp, respBody.String())
+		return errs.Wrapf(err, "retry do complete multipart request fail, resp status: %s, body: %s", respStatus, respBody.String())
 	}
 	return nil
 }
 
-func (w *MultiPartWriter) addAuth(req *http.Request) error {
+func (w *multiPartWriter) addAuth(req *http.Request) error {
 	return oss.Sign(req, w.cfg.Ak, w.cfg.Sk, w.cfg.Region)
 }
 
-func (w *MultiPartWriter) initMultiPart() (string, error) {
+func (w *multiPartWriter) initMultiPart() (string, error) {
+	var (
+		respStatus string
+		err        error
+	)
 	result := &InitiateMultipartUploadResult{}
-	resp, err := retry.DoWithData(
-		func() (*http.Response, error) {
-			return httpc.Post(w.ctx, w.timeout, w.cfg.URL+"?uploads",
+	err = retry.Do(
+		func() error {
+			_, err = httpc.Post(w.ctx, w.timeout, w.cfg.URL+"?uploads",
 				httpc.ReqOptionFunc(w.addAuth),
+				httpc.ToStatus(&respStatus),
 				httpc.CheckStatusCode(http.StatusOK),
 				httpc.ToAnyUnmarshal(result, xml.Unmarshal),
 			)
+			return err
 		},
 		retry.Attempts(uint(w.cfg.Retry)),
 	)
 
 	if err != nil {
-		return "", errs.Wrapf(err, "retry do init multipart request fail, resp: %+v", resp)
+		return "", errs.Wrapf(err, "retry do init multipart request fail, resp status: %s", respStatus)
 	}
 
 	return result.UploadID, nil
 }
 
-func (w *MultiPartWriter) uploadPart(opts ...httpc.Option) error {
+func (w *multiPartWriter) uploadPart(opts ...httpc.Option) error {
 	var (
 		url         string
 		checkStatus httpc.Option
+		resp        *http.Response
 		respStatus  string
 		respBody    = bytes.NewBuffer(nil)
 		etag        string
+		err         error
 	)
 	if oss.IsAzblob(w.cfg.URL) {
 		blockID := base64.StdEncoding.EncodeToString([]byte(uuid.NewString()))
@@ -254,9 +287,10 @@ func (w *MultiPartWriter) uploadPart(opts ...httpc.Option) error {
 		checkStatus = httpc.CheckStatusCode(http.StatusOK)
 	}
 
-	resp, err := retry.DoWithData(
+	resp, err = retry.DoWithData(
 		func() (*http.Response, error) {
-			return w.upload(url, append(opts, checkStatus)...)
+			respBody.Reset()
+			return w.upload(url, append(opts, httpc.ToStatus(&respStatus), httpc.ToBytesBuffer(respBody), checkStatus)...)
 		},
 		retry.Attempts(uint(w.cfg.Retry)),
 		retry.RetryIf(func(err error) bool {
@@ -269,10 +303,7 @@ func (w *MultiPartWriter) uploadPart(opts ...httpc.Option) error {
 		}),
 	)
 	if err != nil {
-		if resp != nil {
-			respStatus = resp.Status
-		}
-		return errs.Wrapf(err, "upload failed with max retry, status: %s, resp: %s", respStatus, respBody.String())
+		return errs.Wrapf(err, "upload failed with max retry, resp status: %s, resp: %s", respStatus, respBody.String())
 	}
 
 	if !oss.IsAzblob(w.cfg.URL) {
@@ -281,7 +312,7 @@ func (w *MultiPartWriter) uploadPart(opts ...httpc.Option) error {
 			etag = resp.Header.Get("ETag")
 		}
 		if etag == "" {
-			return errs.Errorf("etag not exists in resp header, status: %s, headers: %+v, respBody: %s", respStatus, resp.Header, respBody.String())
+			return errs.Errorf("etag not exists in resp header, resp status: %s, respBody: %s", respStatus, respBody.String())
 		}
 
 		w.parts = append(w.parts, &Part{
@@ -296,7 +327,7 @@ func (w *MultiPartWriter) uploadPart(opts ...httpc.Option) error {
 	return nil
 }
 
-func (w *MultiPartWriter) upload(url string, opts ...httpc.Option) (*http.Response, error) {
+func (w *multiPartWriter) upload(url string, opts ...httpc.Option) (*http.Response, error) {
 	allOpts := make([]httpc.Option, 0, len(opts)+1)
 	allOpts = append(allOpts, opts...)
 	allOpts = append(allOpts,

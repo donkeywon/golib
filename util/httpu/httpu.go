@@ -28,6 +28,7 @@ const (
 	HeaderIfNoneMatch       = "If-None-Match"
 	HeaderIfUnmodifiedSince = "If-Unmodified-Since"
 	HeaderRange             = "Range"
+	HeaderTransferEncoding  = "Transfer-Encoding"
 
 	MIMEHTML              = "text/html"
 	MIMEHTMLUTF8          = "text/html; charset=utf-8"

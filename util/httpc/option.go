@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/donkeywon/golib/errs"
+	"github.com/donkeywon/golib/util/conv"
 	"github.com/donkeywon/golib/util/httpu"
 	"github.com/donkeywon/golib/util/jsons"
 )
@@ -183,14 +184,9 @@ func readFull(r io.Reader, buf []byte) (n int, err error) {
 	return
 }
 
-func ToBytesBuffer(n *int64, buf *bytes.Buffer) Option {
+func ToBytesBuffer(buf *bytes.Buffer) Option {
 	return RespOptionFunc(func(resp *http.Response) error {
-		var err error
-		if n == nil {
-			_, err = io.Copy(buf, resp.Body)
-		} else {
-			*n, err = io.Copy(buf, resp.Body)
-		}
+		_, err := io.Copy(buf, resp.Body)
 		if err != nil {
 			return errs.Wrap(err, "read response body failed")
 		}
@@ -220,7 +216,7 @@ func ToAnyUnmarshal(v any, unmarshaler func(bs []byte, v any) error) Option {
 		}
 		err = unmarshaler(bs, v)
 		if err != nil {
-			return errs.Wrapf(err, "decode response body failed: %s", string(bs))
+			return errs.Wrapf(err, "decode response body failed: %s", conv.Bytes2String(bs))
 		}
 		return nil
 	})
@@ -237,6 +233,20 @@ func ToWriter(n *int64, w io.Writer) Option {
 		if err != nil {
 			return errs.Wrap(err, "read response body to writer failed")
 		}
+		return nil
+	})
+}
+
+func ToStatus(status *string) Option {
+	return RespOptionFunc(func(resp *http.Response) error {
+		*status = resp.Status
+		return nil
+	})
+}
+
+func ToStatusCode(statusCode *int) Option {
+	return RespOptionFunc(func(resp *http.Response) error {
+		*statusCode = resp.StatusCode
 		return nil
 	})
 }

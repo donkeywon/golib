@@ -127,6 +127,12 @@ func (r *Reader) Close() error {
 }
 
 func (r *Reader) WriteTo(w io.Writer) (int64, error) {
+	select {
+	case <-r.ctx.Done():
+		return 0, ErrAlreadyClosed
+	default:
+	}
+
 	var (
 		total int64
 		nw    int64

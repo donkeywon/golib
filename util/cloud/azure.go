@@ -17,7 +17,7 @@ func IsAzure() bool {
 func GetAzureVMInstanceMetadata() ([]byte, error) {
 	resp := bytes.NewBuffer(nil)
 	_, err := httpc.Get(nil, cloudMetadataReqTimeout, "http://169.254.169.254/metadata/instance?api-version=2021-02-01",
-		httpc.WithHeaders("Metadata", "true"), httpc.ToBytesBuffer(nil, resp))
+		httpc.WithHeaders("Metadata", "true"), httpc.ToBytesBuffer(resp))
 
 	return resp.Bytes(), err
 }
