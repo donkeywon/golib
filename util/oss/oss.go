@@ -13,6 +13,8 @@ import (
 
 var commonTimeout = 10 * time.Second
 
+// TODO extensible
+
 func Which(url string) Type {
 	if IsAzblob(url) {
 		return TypeBlob
@@ -27,6 +29,17 @@ func Which(url string) Type {
 		return TypeAliOSS
 	}
 	return TypeUnknown
+}
+
+func NeedContentLength(url string) bool {
+	switch Which(url) {
+	case TypeBlob, TypeObs, TypeAliOSS:
+		return false
+	case TypeAmz, TypeUnknown:
+		return true
+	default:
+		return true
+	}
 }
 
 func IsSupportAppend(url string) bool {
@@ -81,6 +94,7 @@ func Sign(req *http.Request, ak string, sk string, region string) error {
 func Delete(ctx context.Context, timeout time.Duration, url string, ak string, sk string, region string) error {
 	var (
 		checkStatus []int
+		respStatus  string
 		respBody    = bytes.NewBuffer(nil)
 	)
 	if IsAzblob(url) {
@@ -89,31 +103,39 @@ func Delete(ctx context.Context, timeout time.Duration, url string, ak string, s
 		checkStatus = []int{http.StatusNoContent}
 	}
 
-	resp, err := httpc.Delete(ctx, timeout, url,
+	_, err := httpc.Delete(ctx, timeout, url,
 		httpc.ReqOptionFunc(func(req *http.Request) error {
 			return Sign(req, ak, sk, region)
 		}),
 		httpc.CheckStatusCode(checkStatus...),
+		httpc.ToStatus(&respStatus),
 		httpc.ToBytesBuffer(respBody),
 	)
 
 	if err != nil {
-		return errs.Errorf("do http delete request fail, resp: %+v, respBody: %s", resp, respBody.String())
+		return errs.Errorf("do http delete request fail, respStatus: %s, respBody: %s", respStatus, respBody.String())
 	}
 
 	return nil
 }
 
 func Head(ctx context.Context, timeout time.Duration, url string, ak string, sk string, region string) (*http.Response, error) {
+	var (
+		respStatus string
+		respBody   = bytes.NewBuffer(nil)
+	)
+
 	resp, err := httpc.Head(ctx, timeout, url,
 		httpc.ReqOptionFunc(func(req *http.Request) error {
 			return Sign(req, ak, sk, region)
 		}),
 		httpc.CheckStatusCode(http.StatusOK),
+		httpc.ToStatus(&respStatus),
+		httpc.ToBytesBuffer(respBody),
 	)
 
 	if err != nil {
-		return nil, errs.Errorf("do http head request fail, resp: %+v", resp)
+		return nil, errs.Errorf("do http head request fail, respStatus: %s, respBody: %s", respStatus, respBody.String())
 	}
 
 	return resp, nil
