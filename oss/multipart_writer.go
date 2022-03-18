@@ -40,60 +40,69 @@ type BlockList struct {
 }
 
 type MultiPartWriter struct {
-	cfg               *Cfg
-	w                 *multiPartWriter
+	cfg *Cfg
+
+	timeout   time.Duration
+	ctx       context.Context
+	cancel    context.CancelFunc
+	closeOnce sync.Once
+
+	uploadID  string
+	curPartNo int
+
+	parts     []*Part
+	blockList []string
+
+	uploadErr error
+
 	bufw              *bufio.Writer
+	initialized       bool
 	needContentLength bool
+	isBlob            bool
 }
 
 func NewMultiPartWriter(ctx context.Context, cfg *Cfg) *MultiPartWriter {
 	cfg.setDefaults()
-	w := &multiPartWriter{
-		cfg:    cfg,
-		isBlob: oss.IsAzblob(cfg.URL),
-	}
-	w.timeout = time.Second * time.Duration(w.cfg.Timeout)
-	w.ctx, w.cancel = context.WithCancel(ctx)
-
-	return &MultiPartWriter{
+	w := &MultiPartWriter{
 		cfg:               cfg,
-		w:                 w,
+		timeout:           time.Second * time.Duration(cfg.Timeout),
+		isBlob:            oss.IsAzblob(cfg.URL),
 		needContentLength: oss.NeedContentLength(cfg.URL),
 	}
+	w.ctx, w.cancel = context.WithCancel(ctx)
+	return w
 }
 
-func (w *MultiPartWriter) Write(p []byte) (int, error) {
-	return w.w.Write(p)
-}
+type noReadFrom struct{}
 
-func (w *MultiPartWriter) Close() error {
-	if w.bufw != nil {
-		return errors.Join(w.bufw.Flush(), w.w.Close())
-	}
-	return w.w.Close()
+func (noReadFrom) ReadFrom(r io.Reader) (n int64, err error) { panic("can't happen") }
+
+type mpwWithoutReadFrom struct {
+	noReadFrom
+	*MultiPartWriter
 }
 
 func (w *MultiPartWriter) ReadFrom(r io.Reader) (int64, error) {
 	select {
-	case <-w.w.ctx.Done():
+	case <-w.ctx.Done():
 		return 0, httpio.ErrAlreadyClosed
 	default:
 	}
 
-	err := w.w.init()
+	err := w.init()
 	if err != nil {
 		return 0, err
 	}
 
 	if w.needContentLength {
-		w.bufw = bufio.NewWriterSize(w.w, int(w.cfg.PartSize))
+		w.bufw = bufio.NewWriterSize(mpwWithoutReadFrom{MultiPartWriter: w}, int(w.cfg.PartSize))
 		return io.Copy(w.bufw, r)
 	}
 
 	rr := &readerWrapper{Reader: r}
 	for {
 		lr := io.LimitReader(rr, w.cfg.PartSize)
-		err = w.w.uploadPart(httpc.WithBodyReader(lr))
+		err = w.uploadPart(httpc.WithBodyReader(lr))
 		if err != nil {
 			break
 		}
@@ -118,28 +127,7 @@ func (r *readerWrapper) Read(p []byte) (int, error) {
 	return nr, err
 }
 
-type multiPartWriter struct {
-	cfg *Cfg
-
-	timeout   time.Duration
-	ctx       context.Context
-	cancel    context.CancelFunc
-	closeOnce sync.Once
-
-	uploadID  string
-	curPartNo int
-
-	parts     []*Part
-	blockList []string
-
-	uploadErr error
-
-	initialized       bool
-	needContentLength bool
-	isBlob            bool
-}
-
-func (w *multiPartWriter) Write(p []byte) (int, error) {
+func (w *MultiPartWriter) Write(p []byte) (int, error) {
 	select {
 	case <-w.ctx.Done():
 		return 0, httpio.ErrAlreadyClosed
@@ -166,21 +154,23 @@ func (w *multiPartWriter) Write(p []byte) (int, error) {
 	return len(p), nil
 }
 
-func (w *multiPartWriter) Close() error {
+func (w *MultiPartWriter) Close() error {
 	var err error
+	if w.bufw != nil {
+		err = w.bufw.Flush()
+	}
 	w.closeOnce.Do(func() {
 		w.cancel()
-
 		if w.uploadErr == nil {
-			err = w.Complete()
+			err = errors.Join(err, w.complete())
 		} else {
-			err = w.Abort()
+			err = errors.Join(err, w.abort())
 		}
 	})
 	return err
 }
 
-func (w *multiPartWriter) init() error {
+func (w *MultiPartWriter) init() error {
 	if w.initialized {
 		return nil
 	}
@@ -202,7 +192,7 @@ func (w *multiPartWriter) init() error {
 	return nil
 }
 
-func (w *multiPartWriter) Abort() error {
+func (w *MultiPartWriter) abort() error {
 	if w.isBlob {
 		return nil
 	}
@@ -230,7 +220,7 @@ func (w *multiPartWriter) Abort() error {
 	return nil
 }
 
-func (w *multiPartWriter) Complete() error {
+func (w *MultiPartWriter) complete() error {
 	var (
 		url         string
 		err         error
@@ -277,11 +267,11 @@ func (w *multiPartWriter) Complete() error {
 	return nil
 }
 
-func (w *multiPartWriter) addAuth(req *http.Request) error {
+func (w *MultiPartWriter) addAuth(req *http.Request) error {
 	return oss.Sign(req, w.cfg.Ak, w.cfg.Sk, w.cfg.Region)
 }
 
-func (w *multiPartWriter) initMultiPart() (string, error) {
+func (w *MultiPartWriter) initMultiPart() (string, error) {
 	var (
 		respStatus string
 		respBody   = bytes.NewBuffer(nil)
@@ -313,7 +303,7 @@ func (w *multiPartWriter) initMultiPart() (string, error) {
 	return result.UploadID, nil
 }
 
-func (w *multiPartWriter) uploadPart(opts ...httpc.Option) error {
+func (w *MultiPartWriter) uploadPart(opts ...httpc.Option) error {
 	var (
 		url         string
 		checkStatus httpc.Option
@@ -373,7 +363,7 @@ func (w *multiPartWriter) uploadPart(opts ...httpc.Option) error {
 	return nil
 }
 
-func (w *multiPartWriter) upload(url string, opts ...httpc.Option) (*http.Response, error) {
+func (w *MultiPartWriter) upload(url string, opts ...httpc.Option) (*http.Response, error) {
 	allOpts := make([]httpc.Option, 0, len(opts)+1)
 	allOpts = append(allOpts, opts...)
 	allOpts = append(allOpts, httpc.ReqOptionFunc(w.addAuth))

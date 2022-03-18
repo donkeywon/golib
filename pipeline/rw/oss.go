@@ -57,7 +57,7 @@ func (o *OSS) Init() error {
 		o.NestReader(r)
 	} else {
 		if o.OSSCfg.Append {
-			o.NestWriter(createOSSAppendWriter(o.OSSCfg))
+			o.NestWriter(createOSSAppendWriter(o.Ctx(), o.OSSCfg))
 		} else {
 			o.NestWriter(createOSSMultipartWriter(o.Ctx(), o.OSSCfg))
 		}
@@ -90,9 +90,8 @@ func createOSSReader(ctx context.Context, ossCfg *OSSCfg) *oss.Reader {
 	return r
 }
 
-func createOSSAppendWriter(ossCfg *OSSCfg) *oss.AppendWriter {
-	w := oss.NewAppendWriter()
-	w.Cfg = createOSSCfg(ossCfg)
+func createOSSAppendWriter(ctx context.Context, ossCfg *OSSCfg) *oss.AppendWriter {
+	w := oss.NewAppendWriter(ctx, createOSSCfg(ossCfg))
 	return w
 }
 

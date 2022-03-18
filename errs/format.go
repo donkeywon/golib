@@ -90,7 +90,7 @@ func ErrToStack(err error, w io.Writer, errsDepth int) {
 		} else {
 			errs = terr.(anotherWrappedErrs).WrappedErrors()
 		}
-		if len(errs) < 1 {
+		if len(errs) == 0 {
 			return
 		} else if len(errs) == 1 {
 			ErrToStack(errs[0], w, errsDepth)
