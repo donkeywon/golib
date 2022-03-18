@@ -28,11 +28,12 @@ const (
 type Type string
 
 const (
-	TypeUnknown Type = "unknown"
-	TypeAmz     Type = "amz"
-	TypeBlob    Type = "blob"
-	TypeObs     Type = "obs"
-	TypeAliOSS  Type = "alioss"
+	TypeUnknown   Type = "unknown"
+	TypeAmazonS3  Type = "AmazonS3"
+	TypeBlob      Type = "Blob"
+	TypeOBS       Type = "OBS"
+	TypeAliyunOSS Type = "AliyunOSS"
+	TypeMinIO     Type = "MinIO"
 )
 
 var (
