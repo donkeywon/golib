@@ -49,7 +49,8 @@ type MultiPartWriter struct {
 func NewMultiPartWriter(ctx context.Context, cfg *Cfg) *MultiPartWriter {
 	cfg.setDefaults()
 	w := &multiPartWriter{
-		cfg: cfg,
+		cfg:    cfg,
+		isBlob: oss.IsAzblob(cfg.URL),
 	}
 	w.timeout = time.Second * time.Duration(w.cfg.Timeout)
 	w.ctx, w.cancel = context.WithCancel(ctx)
@@ -135,6 +136,7 @@ type multiPartWriter struct {
 
 	initialized       bool
 	needContentLength bool
+	isBlob            bool
 }
 
 func (w *multiPartWriter) Write(p []byte) (int, error) {
@@ -185,7 +187,7 @@ func (w *multiPartWriter) init() error {
 
 	w.needContentLength = oss.NeedContentLength(w.cfg.URL)
 
-	if oss.IsAzblob(w.cfg.URL) {
+	if w.isBlob {
 		w.initialized = true
 		return nil
 	}
@@ -201,7 +203,7 @@ func (w *multiPartWriter) init() error {
 }
 
 func (w *multiPartWriter) Abort() error {
-	if oss.IsAzblob(w.cfg.URL) {
+	if w.isBlob {
 		return nil
 	}
 
@@ -240,7 +242,7 @@ func (w *multiPartWriter) Complete() error {
 		method      string
 	)
 
-	if oss.IsAzblob(w.cfg.URL) {
+	if w.isBlob {
 		url = w.cfg.URL + "?comp=blocklist"
 		checkStatus = http.StatusCreated
 		body = &BlockList{Latest: w.blockList}
@@ -321,7 +323,7 @@ func (w *multiPartWriter) uploadPart(opts ...httpc.Option) error {
 		etag        string
 		err         error
 	)
-	if oss.IsAzblob(w.cfg.URL) {
+	if w.isBlob {
 		blockID := base64.StdEncoding.EncodeToString([]byte(uuid.NewString()))
 		etag = blockID
 		url = fmt.Sprintf("%s?comp=block&blockid=%s", w.cfg.URL, blockID)
@@ -350,7 +352,7 @@ func (w *multiPartWriter) uploadPart(opts ...httpc.Option) error {
 		return errs.Wrapf(err, "upload failed with max retry, respStatus: %s, respBody: %s", respStatus, respBody.String())
 	}
 
-	if !oss.IsAzblob(w.cfg.URL) {
+	if !w.isBlob {
 		etag = resp.Header.Get("Etag")
 		if etag == "" {
 			etag = resp.Header.Get("ETag")
@@ -374,9 +376,7 @@ func (w *multiPartWriter) uploadPart(opts ...httpc.Option) error {
 func (w *multiPartWriter) upload(url string, opts ...httpc.Option) (*http.Response, error) {
 	allOpts := make([]httpc.Option, 0, len(opts)+1)
 	allOpts = append(allOpts, opts...)
-	allOpts = append(allOpts,
-		httpc.ReqOptionFunc(w.addAuth),
-	)
+	allOpts = append(allOpts, httpc.ReqOptionFunc(w.addAuth))
 
 	return httpc.Put(w.ctx, w.timeout, url, allOpts...)
 }

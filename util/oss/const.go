@@ -7,7 +7,7 @@ const (
 	HeaderXmsBlobType  = "X-Ms-Blob-Type"
 
 	HeaderOSSAppendNextPositionHeader    = "X-Rgw-Next-Append-Position"
-	HeaderObsAppendNextPositionHeader    = "X-Obs-Next-Append-Position"
+	HeaderOBSAppendNextPositionHeader    = "X-Obs-Next-Append-Position"
 	HeaderAliOSSAppendNextPositionHeader = "X-Oss-Next-Append-Position"
 	HeaderAzblobAppendOffsetHeader       = "X-Ms-Blob-Append-Offset"
 	HeaderAzblobAppendPositionHeader     = "X-Ms-Blob-Condition-Appendpos"

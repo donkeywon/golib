@@ -86,7 +86,7 @@ func GetNextPositionFromResponse(resp *http.Response) (int, bool, error) {
 
 	nextPositionHeader := resp.Header.Get(HeaderOSSAppendNextPositionHeader)
 	if nextPositionHeader == "" {
-		nextPositionHeader = resp.Header.Get(HeaderObsAppendNextPositionHeader)
+		nextPositionHeader = resp.Header.Get(HeaderOBSAppendNextPositionHeader)
 	}
 	if nextPositionHeader == "" {
 		nextPositionHeader = resp.Header.Get(HeaderAliOSSAppendNextPositionHeader)
