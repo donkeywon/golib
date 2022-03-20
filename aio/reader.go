@@ -4,14 +4,16 @@ import (
 	"errors"
 	"io"
 	"sync"
+
+	"github.com/donkeywon/golib/util/buffer"
 )
 
 type AsyncReader struct {
 	r   io.Reader
 	opt *option
 
-	buf   *buf
-	queue chan *buf
+	buf   *buffer.FixedBuffer
+	queue chan *buffer.FixedBuffer
 
 	asyncReadOnce sync.Once
 	closeOnce     sync.Once
@@ -29,7 +31,7 @@ func NewAsyncReader(r io.Reader, opts ...Option) *AsyncReader {
 	for _, o := range opts {
 		o.apply(ar.opt)
 	}
-	ar.queue = make(chan *buf, ar.opt.queueSize)
+	ar.queue = make(chan *buffer.FixedBuffer, ar.opt.queueSize)
 	return ar
 }
 
@@ -44,12 +46,11 @@ func (ar *AsyncReader) Read(p []byte) (int, error) {
 		return 0, nil
 	}
 
-	ar.asyncReadOnce.Do(func() {
-		go ar.asyncRead()
-	})
+	ar.initOnce()
 
 	var (
 		n   int
+		nn  int
 		err error
 		l   = len(p)
 	)
@@ -59,7 +60,8 @@ func (ar *AsyncReader) Read(p []byte) (int, error) {
 			break
 		}
 
-		n += ar.buf.writeToBytes(p)
+		nn, _ = ar.buf.Read(p[n:])
+		n += nn
 	}
 	return n, err
 }
@@ -72,21 +74,19 @@ func (ar *AsyncReader) Close() error {
 			if b == nil {
 				break
 			}
-			b.free()
+			b.Free()
 		}
 		if ar.buf != nil {
-			ar.buf.free()
+			ar.buf.Free()
 		}
 	})
 	return nil
 }
 
 func (ar *AsyncReader) WriteTo(w io.Writer) (n int64, err error) {
-	ar.asyncReadOnce.Do(func() {
-		go ar.asyncRead()
-	})
+	ar.initOnce()
 
-	var nn int
+	var nn int64
 	for {
 		err = ar.prepareBuf()
 		if err != nil {
@@ -95,16 +95,22 @@ func (ar *AsyncReader) WriteTo(w io.Writer) (n int64, err error) {
 			}
 			return n, err
 		}
-		nn, err = ar.buf.writeTo(w)
-		n += int64(nn)
+		nn, err = ar.buf.WriteTo(w)
+		n += nn
 		if err != nil {
 			return n, err
 		}
 	}
 }
 
+func (ar *AsyncReader) initOnce() {
+	ar.asyncReadOnce.Do(func() {
+		go ar.asyncRead()
+	})
+}
+
 func (ar *AsyncReader) prepareBuf() error {
-	if ar.buf != nil && !ar.buf.isReadCompletely() {
+	if ar.buf != nil && !ar.buf.HasRemaining() {
 		return nil
 	}
 
@@ -114,7 +120,7 @@ func (ar *AsyncReader) prepareBuf() error {
 	}
 
 	if ar.buf != nil {
-		ar.buf.free()
+		ar.buf.Free()
 	}
 	ar.buf = b
 	return nil
@@ -128,12 +134,19 @@ func (ar *AsyncReader) asyncRead() {
 		default:
 		}
 
-		b := newBuf(ar.opt.bufSize)
-		nr, err := b.readFill(ar.r)
+		b := buffer.NewFixedBuffer(ar.opt.bufSize)
+		nr, err := b.ReadFrom(ar.r)
 		if nr == 0 {
-			b.free()
+			b.Free()
 		} else {
 			ar.queue <- b
+		}
+
+		if err == nil {
+			err = io.EOF
+		} else if err == io.ErrShortWrite {
+			// buf full and not EOF
+			err = nil
 		}
 
 		if err != nil {
