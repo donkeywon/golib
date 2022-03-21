@@ -110,7 +110,7 @@ func (ar *AsyncReader) initOnce() {
 }
 
 func (ar *AsyncReader) prepareBuf() error {
-	if ar.buf != nil && !ar.buf.HasRemaining() {
+	if ar.buf != nil && ar.buf.HasRemaining() {
 		return nil
 	}
 
@@ -144,7 +144,7 @@ func (ar *AsyncReader) asyncRead() {
 
 		if err == nil {
 			err = io.EOF
-		} else if err == io.ErrShortWrite {
+		} else if err == buffer.ErrFull {
 			// buf full and not EOF
 			err = nil
 		}

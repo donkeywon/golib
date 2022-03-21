@@ -58,9 +58,10 @@ func (aw *AsyncWriter) Write(p []byte) (n int, err error) {
 		aw.prepareBuf()
 		nn, err = aw.bufWrite(p)
 		p = p[nn:]
+		n += nn
 
 		// buf full
-		if err == io.ErrShortWrite {
+		if err == buffer.ErrFull {
 			err = aw.Flush()
 			if err != nil {
 				break
@@ -105,17 +106,17 @@ func (aw *AsyncWriter) ReadFrom(r io.Reader) (n int64, err error) {
 		aw.prepareBuf()
 		nn, err = aw.bufReadFrom(r)
 		n += nn
+
 		// buf full
-		if err == io.ErrShortWrite {
+		if err == buffer.ErrFull {
 			err = aw.Flush()
 			if err != nil {
 				return
 			}
+			continue
 		}
 
-		if err != nil {
-			return
-		}
+		return
 	}
 }
 

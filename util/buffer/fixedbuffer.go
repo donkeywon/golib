@@ -1,11 +1,14 @@
 package buffer
 
 import (
+	"errors"
 	"io"
 
 	"github.com/donkeywon/golib/util/bytespool"
 	"github.com/donkeywon/golib/util/iou"
 )
+
+var ErrFull = errors.New("buffer full")
 
 type FixedBuffer struct {
 	b    *bytespool.Bytes
@@ -34,13 +37,13 @@ func (b *FixedBuffer) HasRemaining() bool {
 // Write writes len(p) bytes from p to buf.
 // It returns the number of bytes written from p (0 <= n <= len(p))
 // and any error encountered that caused the write to stop early.
-// io.ErrShortWrite means buf is full.
+// ErrFull means buf is full.
 func (b *FixedBuffer) Write(p []byte) (n int, err error) {
 	n = copy(b.wremain(), p)
 	b.woff += n
-	if n < len(p) {
+	if n <= len(p) {
 		// buf full
-		err = io.ErrShortWrite
+		err = ErrFull
 	}
 
 	return
@@ -50,13 +53,13 @@ func (b *FixedBuffer) Write(p []byte) (n int, err error) {
 // The return value n is the number of bytes read. Any error except io.EOF
 // encountered during the read is also returned
 // nil err means Reader io.EOF
-// io.ErrShortWrite means buf full and Reader not io.EOF.
+// ErrFull means buf full and Reader not io.EOF.
 func (b *FixedBuffer) ReadFrom(r io.Reader) (int64, error) {
 	nr, err := iou.ReadFill(r, b.wremain())
 	b.woff += nr
 	if err == nil {
 		// buf full and not EOF
-		err = io.ErrShortWrite
+		err = ErrFull
 	}
 	if err == io.EOF {
 		err = nil
