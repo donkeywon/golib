@@ -46,6 +46,7 @@ func NewReader(ctx context.Context, timeout time.Duration, url string, opts ...O
 		url:     url,
 		timeout: timeout,
 		opt:     newOption(),
+		len:     -1,
 	}
 
 	for _, o := range opts {
@@ -263,7 +264,7 @@ func (r *Reader) Offset() int64 {
 	return r.opt.offset
 }
 
-// Len returns content length need read, 0 means unknown.
+// Len returns content length need read, -1 means unknown.
 func (r *Reader) Len() int64 {
 	return r.len
 }
