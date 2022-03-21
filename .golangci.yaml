@@ -242,7 +242,7 @@ linters:
     - errname # checks that sentinel errors are prefixed with the Err and error types are suffixed with the Error
     - errorlint # finds code that will cause problems with the error wrapping scheme introduced in Go 1.13
     - exhaustive # checks exhaustiveness of enum switch statements
-    - exportloopref # checks for pointers to enclosing loop variables
+    - copyloopvar
     - fatcontext # detects nested contexts in loops
     - forbidigo # forbids identifiers
     - funlen # tool for detection of long functions
@@ -284,7 +284,7 @@ linters:
     - spancheck # checks for mistakes with OpenTelemetry/Census spans
     - sqlclosecheck # checks that sql.Rows and sql.Stmt are closed
     - stylecheck # is a replacement for golint
-    - tenv # detects using os.Setenv instead of t.Setenv since Go1.17
+    - usetesting
     - testableexamples # checks if examples are testable (have an expected output)
     - testifylint # checks usage of github.com/stretchr/testify
     - tparallel # detects inappropriate usage of t.Parallel() method in your Go test codes
@@ -309,6 +309,8 @@ linters:
     #- wrapcheck # checks that errors returned from external packages are wrapped
     #- zerologlint # detects the wrong usage of zerolog that a user forgets to dispatch zerolog.Event
     #- tagalign # checks that struct tags are well aligned
+    #- exportloopref # checks for pointers to enclosing loop variables
+    #- tenv # detects using os.Setenv instead of t.Setenv since Go1.17
 
     ## disabled
     #- containedctx # detects struct contained context.Context field
