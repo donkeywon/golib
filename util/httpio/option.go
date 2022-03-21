@@ -6,7 +6,7 @@ import (
 
 type option struct {
 	offset      int64
-	n           int64
+	limit       int64
 	partSize    int64
 	retry       int
 	httpOptions []httpc.Option
@@ -31,9 +31,9 @@ func Offset(offset int64) Option {
 	}
 }
 
-func N(n int64) Option {
+func Limit(n int64) Option {
 	return func(r *option) {
-		r.n = n
+		r.limit = n
 	}
 }
 

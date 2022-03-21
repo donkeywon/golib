@@ -29,7 +29,8 @@ type Reader struct {
 	headOnce  sync.Once
 	closeOnce sync.Once
 
-	limit           int64
+	len             int64
+	end             int64
 	supportRange    bool
 	noRangeRespBody io.ReadCloser
 
@@ -53,8 +54,8 @@ func NewReader(ctx context.Context, timeout time.Duration, url string, opts ...O
 
 	r.ctx, r.cancel = context.WithCancel(ctx)
 
-	if r.opt.n > 0 {
-		r.limit = r.opt.offset + r.opt.n
+	if r.opt.limit > 0 {
+		r.end = r.opt.offset + r.opt.limit
 	}
 
 	return r
@@ -66,7 +67,7 @@ func (r *Reader) Read(p []byte) (int, error) {
 	if err != nil {
 		return nr, err
 	}
-	if r.reachLimit() {
+	if r.reachEnd() {
 		return nr, io.EOF
 	}
 	return nr, nil
@@ -76,8 +77,8 @@ func (r *Reader) ReadAt(p []byte, offset int64) (int, error) {
 	return r.read(p, offset)
 }
 
-func (r *Reader) reachLimit() bool {
-	return r.supportRange && r.opt.offset >= r.limit
+func (r *Reader) reachEnd() bool {
+	return r.supportRange && r.opt.offset >= r.end
 }
 
 func (r *Reader) read(p []byte, offset int64) (int, error) {
@@ -173,7 +174,7 @@ func (r *Reader) WriteTo(w io.Writer) (int64, error) {
 		if err != nil {
 			break
 		}
-		if r.opt.offset >= r.limit {
+		if r.reachEnd() {
 			break
 		}
 		if nw < r.opt.partSize {
@@ -209,17 +210,21 @@ func (r *Reader) head() error {
 	}
 
 	if resp.Header.Get(httpu.HeaderAcceptRanges) == "bytes" && resp.ContentLength >= 0 {
-		if r.opt.n <= 0 {
-			r.limit = resp.ContentLength
+		if r.opt.limit <= 0 {
+			r.end = resp.ContentLength
 		}
 		r.supportRange = true
+	}
+
+	if r.end > 0 {
+		r.len = r.end - r.opt.offset
 	}
 
 	return nil
 }
 
 func (r *Reader) getPart(offset int64, n int64, opts ...httpc.Option) (*http.Response, error) {
-	end := min(offset+n-1, r.limit-1)
+	end := min(offset+n-1, r.end-1)
 	ranges := fmt.Sprintf("bytes=%d-%d", offset, end)
 
 	allOpts := make([]httpc.Option, 0, len(r.opt.httpOptions)+len(opts)+2)
@@ -253,6 +258,12 @@ func (r *Reader) get(opts ...httpc.Option) (*http.Response, error) {
 	return httpc.Get(r.ctx, r.timeout, r.url, allOpts...)
 }
 
+// Offset is current offset of read.
 func (r *Reader) Offset() int64 {
 	return r.opt.offset
+}
+
+// Len returns content length need read, 0 means unknown.
+func (r *Reader) Len() int64 {
+	return r.len
 }
