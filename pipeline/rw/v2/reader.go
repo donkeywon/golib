@@ -14,8 +14,8 @@ type Reader interface {
 	runner.Runner
 	plugin.Plugin
 
-	Tee(w ...io.Writer)
-	Wrap(func(io.ReadCloser) io.ReadCloser)
+	Wrap(io.ReadCloser)
+	WithOptions(...Option)
 }
 
 type BaseReader struct {
@@ -23,28 +23,43 @@ type BaseReader struct {
 	io.ReadCloser
 
 	originReader io.ReadCloser
-	tees         []io.Writer
+	opt          *option
 }
 
-func NewBaseReader(name string) Reader {
-	return &BaseReader{
+func NewBaseReader(name string, opts ...Option) Reader {
+	r := &BaseReader{
 		Runner: runner.Create(name),
+		opt:    newOption(),
 	}
+	for _, opt := range opts {
+		opt(r.opt)
+	}
+	return r
 }
 
 func (b *BaseReader) Init() error {
-	if len(b.tees) > 0 {
+	if len(b.opt.tees) > 0 {
 		b.originReader = b.ReadCloser
-		b.ReadCloser = io.NopCloser(io.TeeReader(b.ReadCloser, io.MultiWriter(b.tees...)))
+		b.ReadCloser = io.NopCloser(io.TeeReader(b.ReadCloser, io.MultiWriter(b.opt.tees...)))
 	}
 
 	return b.Runner.Init()
 }
 
-func (b *BaseReader) Tee(w ...io.Writer) {
-	b.tees = append(b.tees, w...)
+func (b *BaseReader) Wrap(r io.ReadCloser) {
+	if r == nil {
+		panic(ErrWrapNil)
+	}
+	if b.ReadCloser != nil {
+		panic(ErrWrapTwice)
+	}
+	b.ReadCloser = r
 }
 
-func (b *BaseReader) Wrap(f func(io.ReadCloser) io.ReadCloser) {
-	b.ReadCloser = f(b.ReadCloser)
+func (b *BaseReader) WithOptions(opts ...Option) {
+	b.opt.with(opts...)
 }
+
+func (b *BaseReader) Type() any { panic("not implemented") }
+
+func (b *BaseReader) GetCfg() any { panic("not implemented") }
