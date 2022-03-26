@@ -18,7 +18,7 @@ import (
 	"github.com/donkeywon/golib/util/oss"
 )
 
-var ErrAppendNotSupported = errors.New("append not supported")
+var ErrAppendUnsupported = errors.New("append unsupported")
 
 const appendURLSuffix = "?append"
 
@@ -59,7 +59,7 @@ func (w *AppendWriter) Write(p []byte) (int, error) {
 	}
 
 	if !w.supportAppend {
-		return 0, ErrAppendNotSupported
+		return 0, ErrAppendUnsupported
 	}
 
 	if len(p) == 0 {
@@ -108,7 +108,7 @@ func (w *AppendWriter) ReadFrom(r io.Reader) (int64, error) {
 	}
 
 	if !w.supportAppend {
-		return 0, ErrAppendNotSupported
+		return 0, ErrAppendUnsupported
 	}
 
 	err := w.init()
@@ -243,7 +243,7 @@ func (w *AppendWriter) appendPart(opts ...httpc.Option) error {
 
 func (w *AppendWriter) append(url string, opts ...httpc.Option) (*http.Response, error) {
 	if w.isBlob {
-		return httpc.Put(w.ctx, w.timeout, url, opts...)
+		return httpc.Put(w.ctx, 0, url, opts...)
 	}
-	return httpc.Post(w.ctx, w.timeout, url, opts...)
+	return httpc.Post(w.ctx, 0, url, opts...)
 }

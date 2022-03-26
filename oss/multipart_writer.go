@@ -368,5 +368,5 @@ func (w *MultiPartWriter) upload(url string, opts ...httpc.Option) (*http.Respon
 	allOpts = append(allOpts, opts...)
 	allOpts = append(allOpts, httpc.ReqOptionFunc(w.addAuth))
 
-	return httpc.Put(w.ctx, w.timeout, url, allOpts...)
+	return httpc.Put(w.ctx, 0, url, allOpts...)
 }
