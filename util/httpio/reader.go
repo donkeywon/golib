@@ -98,7 +98,7 @@ func (r *Reader) read(p []byte, offset int64) (int, error) {
 		return 0, err
 	}
 
-	if !r.supportRange {
+	if !r.supportRange || r.opt.noRange {
 		if r.noRangeRespBody == nil {
 			r.noRangeRespBody, err = r.retryGetNoRange()
 			if err != nil {
@@ -146,7 +146,7 @@ func (r *Reader) WriteTo(w io.Writer) (int64, error) {
 		return 0, err
 	}
 
-	if !r.supportRange {
+	if !r.supportRange || r.opt.noRange {
 		_, err = retry.DoWithData(
 			func() (*http.Response, error) {
 				return r.get(httpc.ToWriter(&nw, w))
