@@ -169,8 +169,8 @@ linters-settings:
     # Disable analyzers by name.
     # Run `go tool vet help` to see all analyzers.
     # Default: []
-    disable:
-      - fieldalignment # too strict
+    disable: []
+      #- fieldalignment # too strict
     # Settings per analyzer.
     settings:
       shadow:

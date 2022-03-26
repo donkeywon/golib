@@ -48,9 +48,11 @@ func Do(ctx context.Context, timeout time.Duration, method string, url string, o
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	var cancel context.CancelFunc
-	ctx, cancel = context.WithTimeout(ctx, timeout)
-	defer cancel()
+	if timeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, timeout)
+		defer cancel()
+	}
 
 	r, err := http.NewRequestWithContext(ctx, method, url, nil)
 	if err != nil {

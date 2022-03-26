@@ -26,21 +26,12 @@ func NewReader(ctx context.Context, cfg *Cfg, opts ...httpc.Option) *Reader {
 	}))
 	allHttpcOptions = append(allHttpcOptions, opts...)
 
-	allOptions := make([]httpio.Option, 0, 5)
-	allOptions = append(allOptions,
-		httpio.Offset(cfg.Offset),
-		httpio.PartSize(cfg.PartSize),
-		httpio.Retry(cfg.Retry),
-		httpio.WithHTTPOptions(allHttpcOptions...),
-	)
-	if cfg.NoRange {
-		allOptions = append(allOptions, httpio.NoRange())
-	}
-
 	r.Reader = httpio.NewReader(ctx,
 		time.Second*time.Duration(cfg.Timeout),
 		cfg.URL,
-		allOptions...,
+		httpio.Offset(cfg.Offset),
+		httpio.Retry(cfg.Retry),
+		httpio.WithHTTPOptions(allHttpcOptions...),
 	)
 	return r
 }

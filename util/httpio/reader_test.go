@@ -110,7 +110,7 @@ func TestNoRangeWriteTo(t *testing.T) {
 }
 
 func testWriteTo(t *testing.T, s *httptest.Server) {
-	r := NewReader(context.TODO(), time.Second, s.URL, PartSize(4))
+	r := NewReader(context.TODO(), time.Second, s.URL)
 	defer r.Close()
 	buf := bytes.NewBuffer(nil)
 	nr, err := io.Copy(buf, r)
