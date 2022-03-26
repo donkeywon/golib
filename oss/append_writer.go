@@ -18,8 +18,6 @@ import (
 	"github.com/donkeywon/golib/util/oss"
 )
 
-var ErrAppendUnsupported = errors.New("append unsupported")
-
 const appendURLSuffix = "?append"
 
 type AppendWriter struct {
@@ -30,8 +28,8 @@ type AppendWriter struct {
 	cancel    context.CancelFunc
 	closeOnce sync.Once
 
+	offset            int64
 	needContentLength bool
-	supportAppend     bool
 	isBlob            bool
 	blobCreated       bool
 
@@ -45,9 +43,9 @@ func NewAppendWriter(ctx context.Context, cfg *Cfg) *AppendWriter {
 		timeout:           time.Second * time.Duration(cfg.Timeout),
 		needContentLength: oss.NeedContentLength(cfg.URL),
 		isBlob:            oss.IsAzblob(cfg.URL),
-		supportAppend:     oss.IsSupportAppend(cfg.URL),
 	}
 	w.ctx, w.cancel = context.WithCancel(ctx)
+	w.offset = cfg.Offset
 	return w
 }
 
@@ -56,10 +54,6 @@ func (w *AppendWriter) Write(p []byte) (int, error) {
 	case <-w.ctx.Done():
 		return 0, ErrAlreadyClosed
 	default:
-	}
-
-	if !w.supportAppend {
-		return 0, ErrAppendUnsupported
 	}
 
 	if len(p) == 0 {
@@ -77,7 +71,7 @@ func (w *AppendWriter) Write(p []byte) (int, error) {
 	}
 
 	if w.isBlob {
-		w.cfg.Offset += int64(len(p))
+		w.offset += int64(len(p))
 	}
 
 	return len(p), nil
@@ -105,10 +99,6 @@ func (w *AppendWriter) ReadFrom(r io.Reader) (int64, error) {
 	case <-w.ctx.Done():
 		return 0, ErrAlreadyClosed
 	default:
-	}
-
-	if !w.supportAppend {
-		return 0, ErrAppendUnsupported
 	}
 
 	err := w.init()
@@ -198,11 +188,11 @@ func (w *AppendWriter) appendPart(opts ...httpc.Option) error {
 	if w.isBlob {
 		url = w.cfg.URL + "?comp=appendblock"
 		allOpts = append(allOpts,
-			httpc.WithHeaders(oss.HeaderAzblobAppendPositionHeader, strconv.FormatInt(w.cfg.Offset, 10)),
+			httpc.WithHeaders(oss.HeaderAzblobAppendPositionHeader, strconv.FormatInt(w.offset, 10)),
 			httpc.CheckStatusCode(http.StatusCreated),
 		)
 	} else {
-		url = w.cfg.URL + appendURLSuffix + fmt.Sprintf("&position=%d", w.cfg.Offset)
+		url = w.cfg.URL + appendURLSuffix + fmt.Sprintf("&position=%d", w.offset)
 		allOpts = append(allOpts, httpc.CheckStatusCode(http.StatusOK))
 	}
 
@@ -237,7 +227,7 @@ func (w *AppendWriter) appendPart(opts ...httpc.Option) error {
 	if !exists {
 		return errs.Errorf("next position not exists in response")
 	}
-	w.cfg.Offset = int64(pos)
+	w.offset = int64(pos)
 	return nil
 }
 
@@ -246,4 +236,8 @@ func (w *AppendWriter) append(url string, opts ...httpc.Option) (*http.Response,
 		return httpc.Put(w.ctx, 0, url, opts...)
 	}
 	return httpc.Post(w.ctx, 0, url, opts...)
+}
+
+func (w *AppendWriter) Offset() int64 {
+	return w.offset
 }
