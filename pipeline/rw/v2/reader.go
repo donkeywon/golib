@@ -1,11 +1,20 @@
 package v2
 
 import (
+	"bufio"
+	"errors"
 	"io"
 
+	"github.com/donkeywon/golib/aio"
 	"github.com/donkeywon/golib/plugin"
 	"github.com/donkeywon/golib/runner"
 )
+
+var CreateReader = newBaseReader
+
+type ReaderWrapper interface {
+	Wrap(io.ReadCloser)
+}
 
 type ReaderType string
 
@@ -15,7 +24,6 @@ type Reader interface {
 	plugin.Plugin
 
 	Wrap(io.ReadCloser)
-	WithOptions(...Option)
 }
 
 type BaseReader struct {
@@ -23,27 +31,43 @@ type BaseReader struct {
 	io.ReadCloser
 
 	originReader io.ReadCloser
-	opt          *option
+
+	tees        []io.Writer
+	bufSize     int
+	queueSize   int
+	enableBuf   bool
+	enableAsync bool
 }
 
-func NewBaseReader(name string, opts ...Option) Reader {
-	r := &BaseReader{
+func newBaseReader(name string) Reader {
+	return &BaseReader{
 		Runner: runner.Create(name),
-		opt:    newOption(),
 	}
-	for _, opt := range opts {
-		opt(r.opt)
-	}
-	return r
 }
 
 func (b *BaseReader) Init() error {
-	if len(b.opt.tees) > 0 {
-		b.originReader = b.ReadCloser
-		b.ReadCloser = io.NopCloser(io.TeeReader(b.ReadCloser, io.MultiWriter(b.opt.tees...)))
+	b.originReader = b.ReadCloser
+	if len(b.tees) > 0 {
+		b.ReadCloser = io.NopCloser(io.TeeReader(b.ReadCloser, io.MultiWriter(b.tees...)))
+	}
+
+	if b.enableAsync {
+		b.ReadCloser = aio.NewAsyncReader(b.ReadCloser, aio.BufSize(b.bufSize), aio.QueueSize(b.queueSize))
+	} else if b.enableBuf {
+		b.ReadCloser = io.NopCloser(bufio.NewReaderSize(b.ReadCloser, b.bufSize))
 	}
 
 	return b.Runner.Init()
+}
+
+func (b *BaseReader) Close() error {
+	if b.originReader != nil && b.originReader != b.ReadCloser {
+		return errors.Join(b.ReadCloser.Close(), b.originReader.Close())
+	}
+	if b.ReadCloser != nil {
+		return b.ReadCloser.Close()
+	}
+	return nil
 }
 
 func (b *BaseReader) Wrap(r io.ReadCloser) {
@@ -56,10 +80,21 @@ func (b *BaseReader) Wrap(r io.ReadCloser) {
 	b.ReadCloser = r
 }
 
-func (b *BaseReader) WithOptions(opts ...Option) {
-	b.opt.with(opts...)
-}
-
 func (b *BaseReader) Type() any { panic("not implemented") }
 
 func (b *BaseReader) GetCfg() any { panic("not implemented") }
+
+func (b *BaseReader) Tee(w ...io.Writer) {
+	b.tees = append(b.tees, w...)
+}
+
+func (b *BaseReader) EnableBuf(bufSize int) {
+	b.enableBuf = true
+	b.bufSize = bufSize
+}
+
+func (b *BaseReader) EnableAsync(bufSize int, queueSize int) {
+	b.enableAsync = true
+	b.bufSize = bufSize
+	b.queueSize = queueSize
+}
