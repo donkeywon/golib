@@ -21,17 +21,37 @@ type WriterType string
 
 type Writer interface {
 	io.WriteCloser
+	io.ReaderFrom
 	runner.Runner
 	plugin.Plugin
 
 	Wrap(io.WriteCloser)
+	MultiWrite(...io.Writer)
+	EnableBuf(bufSize int)
+	EnableAsync(bufSize int, queueSize int, deadline time.Duration)
 }
 
 type nopWriteCloser struct {
 	io.Writer
 }
 
-func (nopWriteCloser) Close() error { return nil }
+type flusher interface {
+	Flush() error
+}
+
+type flusher2 interface {
+	Flush()
+}
+
+func (n nopWriteCloser) Close() error {
+	switch t := n.Writer.(type) {
+	case flusher:
+		return t.Flush()
+	case flusher2:
+		t.Flush()
+	}
+	return nil
+}
 
 type BaseWriter struct {
 	runner.Runner
@@ -73,6 +93,7 @@ func (b *BaseWriter) Init() error {
 }
 
 func (b *BaseWriter) Close() error {
+	defer b.Cancel()
 	if b.originWriter != nil && b.originWriter != b.WriteCloser {
 		return errors.Join(b.WriteCloser.Close(), b.originWriter.Close())
 	}
@@ -106,4 +127,12 @@ func (b *BaseWriter) EnableAsync(bufSize int, queueSize int, deadline time.Durat
 	b.bufSize = bufSize
 	b.queueSize = queueSize
 	b.deadline = deadline
+}
+
+func (b *BaseWriter) ReadFrom(r io.Reader) (int64, error) {
+	if rf, ok := b.WriteCloser.(io.ReaderFrom); ok {
+		return rf.ReadFrom(r)
+	}
+
+	return io.Copy(b.WriteCloser, r)
 }

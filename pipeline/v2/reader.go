@@ -10,6 +10,10 @@ import (
 	"github.com/donkeywon/golib/runner"
 )
 
+type canceler interface {
+	Cancel()
+}
+
 var CreateReader = newBaseReader
 
 type ReaderWrapper interface {
@@ -20,10 +24,14 @@ type ReaderType string
 
 type Reader interface {
 	io.ReadCloser
+	io.WriterTo
 	runner.Runner
 	plugin.Plugin
 
 	Wrap(io.ReadCloser)
+	Tee(w ...io.Writer)
+	EnableBuf(bufSize int)
+	EnableAsync(bufSize int, queueSize int)
 }
 
 type BaseReader struct {
@@ -61,6 +69,8 @@ func (b *BaseReader) Init() error {
 }
 
 func (b *BaseReader) Close() error {
+	defer b.Cancel()
+
 	if b.originReader != nil && b.originReader != b.ReadCloser {
 		return errors.Join(b.ReadCloser.Close(), b.originReader.Close())
 	}
@@ -97,4 +107,12 @@ func (b *BaseReader) EnableAsync(bufSize int, queueSize int) {
 	b.enableAsync = true
 	b.bufSize = bufSize
 	b.queueSize = queueSize
+}
+
+func (b *BaseReader) WriteTo(w io.Writer) (int64, error) {
+	if wt, ok := b.ReadCloser.(io.WriterTo); ok {
+		return wt.WriteTo(w)
+	}
+
+	return io.Copy(w, b.ReadCloser)
 }

@@ -9,17 +9,17 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
-const defaultTimeout = 30
+const defaultTimeout = time.Minute
 
-func NewClient(addr, user, pwd string, privateKey []byte, timeout int) (*ssh.Client, *ssh.Session, error) {
+func NewClient(addr, user, pwd string, privateKey []byte, timeout time.Duration) (*ssh.Client, *ssh.Session, error) {
 	cfg := &ssh.ClientConfig{
 		User:            user,
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
 	}
 
-	cfg.Timeout = time.Second * defaultTimeout
-	if timeout > 0 {
-		cfg.Timeout = time.Second * time.Duration(timeout)
+	cfg.Timeout = timeout
+	if timeout == 0 {
+		cfg.Timeout = defaultTimeout
 	}
 
 	if len(privateKey) > 0 {

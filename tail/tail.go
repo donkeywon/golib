@@ -28,12 +28,12 @@ type Reader struct {
 	once     sync.Once
 }
 
-func NewReader(filepath string, pos int64) (*Reader, error) {
+func NewReader(filepath string, offset int64) (*Reader, error) {
 	var err error
 
 	r := &Reader{
 		filepath: filepath,
-		offset:   pos,
+		offset:   offset,
 		closed:   make(chan struct{}),
 	}
 
