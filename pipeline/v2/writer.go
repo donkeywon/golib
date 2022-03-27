@@ -3,10 +3,10 @@ package v2
 import (
 	"bufio"
 	"errors"
+	"github.com/donkeywon/golib/plugin"
 	"io"
 
 	"github.com/donkeywon/golib/aio"
-	"github.com/donkeywon/golib/plugin"
 	"github.com/donkeywon/golib/runner"
 )
 
@@ -16,16 +16,14 @@ type WriterWrapper interface {
 	Wrap(io.WriteCloser)
 }
 
-type WriterType string
-
 type Writer interface {
 	io.WriteCloser
 	io.ReaderFrom
 	runner.Runner
-	plugin.Plugin
+	plugin.Plugin[Type]
+	optionApplier
 
 	Wrap(io.WriteCloser)
-	WithOptions(...Option)
 }
 
 type nopWriteCloser struct {
@@ -118,4 +116,8 @@ func (b *BaseWriter) WithOptions(options ...Option) {
 	for _, opt := range options {
 		opt(b.opt)
 	}
+}
+
+func (b *BaseWriter) Type() Type {
+	panic("not implemented")
 }

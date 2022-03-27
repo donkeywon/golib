@@ -140,7 +140,6 @@ type WriteHook func(n int, bs []byte, err error, cost int64, misc ...any) error
 type RW interface {
 	runner.Runner
 	io.ReadWriteCloser
-	plugin.Plugin
 
 	NestReader(io.ReadCloser)
 	NestWriter(io.WriteCloser)

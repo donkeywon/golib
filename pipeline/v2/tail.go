@@ -12,7 +12,7 @@ func init() {
 	plugin.RegWithCfg(ReaderTail, func() any { return NewTail() }, func() any { return NewTailCfg() })
 }
 
-const ReaderTail ReaderType = "tail"
+const ReaderTail Type = "tail"
 
 type TailCfg struct {
 	Path   string `json:"path" yaml:"path"`
@@ -52,10 +52,10 @@ func (t *Tail) Wrap(io.ReadCloser) {
 	panic(ErrInvalidWrap)
 }
 
-func (t *Tail) Type() any {
+func (t *Tail) Type() Type {
 	return ReaderTail
 }
 
-func (t *Tail) GetCfg() any {
+func (t *Tail) GetCfg() *TailCfg {
 	return t.TailCfg
 }

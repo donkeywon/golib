@@ -15,8 +15,8 @@ func init() {
 }
 
 const (
-	ReaderFile ReaderType = "file"
-	WriterFile WriterType = "file"
+	ReaderFile Type = "fileReader"
+	WriterFile Type = "fileWriter"
 )
 
 type FileCfg struct {
@@ -91,16 +91,16 @@ func (f *FileReader) Wrap(io.ReadCloser) {
 	panic(ErrInvalidWrap)
 }
 
-func (f *FileReader) Type() any {
+func (f *FileReader) Type() Type {
 	return ReaderFile
 }
 
-func (f *FileReader) GetCfg() any {
+func (f *FileReader) GetCfg() *FileCfg {
 	return f.f.FileCfg
 }
 
-func (f *FileReader) SetCfg(cfg any) {
-	f.f.FileCfg = cfg.(*FileCfg)
+func (f *FileReader) SetCfg(cfg *FileCfg) {
+	f.f.FileCfg = cfg
 }
 
 type FileWriter struct {
@@ -131,14 +131,14 @@ func (f *FileWriter) Wrap(io.WriteCloser) {
 	panic(ErrInvalidWrap)
 }
 
-func (f *FileWriter) Type() any {
+func (f *FileWriter) Type() Type {
 	return WriterFile
 }
 
-func (f *FileWriter) GetCfg() any {
+func (f *FileWriter) GetCfg() *FileCfg {
 	return f.f.FileCfg
 }
 
-func (f *FileWriter) SetCfg(cfg any) {
-	f.f.FileCfg = cfg.(*FileCfg)
+func (f *FileWriter) SetCfg(cfg *FileCfg) {
+	f.f.FileCfg = cfg
 }

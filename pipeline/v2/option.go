@@ -36,7 +36,7 @@ func EnableBuf(bufSize int) Option {
 	}
 }
 
-func EnableAsyncRead(bufSize int, queueSize int) Option {
+func EnableAsync(bufSize int, queueSize int) Option {
 	return func(o *option) {
 		o.enableAsync = true
 		o.bufSize = bufSize
@@ -44,7 +44,8 @@ func EnableAsyncRead(bufSize int, queueSize int) Option {
 	}
 }
 
-func EnableAsyncWrite(bufSize int, queueSize int, deadline time.Duration) Option {
+// EnableAsyncDeadline Only for Writer
+func EnableAsyncDeadline(bufSize int, queueSize int, deadline time.Duration) Option {
 	return func(o *option) {
 		o.enableAsync = true
 		o.bufSize = bufSize

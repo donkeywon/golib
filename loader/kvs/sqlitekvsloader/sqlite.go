@@ -334,14 +334,6 @@ func (s *SQLiteKVS) LoadAllAsString() (map[string]string, error) {
 	return result, err
 }
 
-func (s *SQLiteKVS) Type() any {
-	return TypeSQLite
-}
-
-func (s *SQLiteKVS) GetCfg() any {
-	return s.SQLiteKVSCfg
-}
-
 func (s *SQLiteKVS) prepareSQL(sql string) string {
 	return fmt.Sprintf(sql, s.Table)
 }

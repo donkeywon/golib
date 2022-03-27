@@ -28,14 +28,6 @@ func NewMapKVS() *MapKVS {
 	return &MapKVS{}
 }
 
-func (m *MapKVS) Type() any {
-	return TypeMap
-}
-
-func (m *MapKVS) GetCfg() any {
-	return m.MapKVSCfg
-}
-
 func (m *MapKVS) Store(k string, v any) {
 	m.m.Store(k, v)
 }

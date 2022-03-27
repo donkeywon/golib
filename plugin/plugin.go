@@ -16,17 +16,12 @@ type CfgCreator func() any
 
 type Type string
 
-type CfgSetter interface {
-	SetCfg(cfg any)
+type CfgSetter[CFG any] interface {
+	SetCfg(cfg CFG)
 }
 
-type CfgGetter interface {
-	GetCfg() any
-}
-
-type Plugin interface {
-	CfgGetter
-	Type() any
+type Plugin[T any] interface {
+	Type() T
 }
 
 var (
@@ -38,15 +33,15 @@ var (
 // type DaemonType string
 // const DaemonTypeHttpd DaemonType = "httpd"
 // Reg(DaemonTypeHttpd, func() any { return NewHttpd() }).
-func Reg(typ any, creator Creator) {
+func Reg[T any](typ T, creator Creator) {
 	_plugins[typ] = creator
 }
 
-func RegCfg(typ any, creator CfgCreator) {
+func RegCfg[T any](typ T, creator CfgCreator) {
 	_pluginCfgs[typ] = creator
 }
 
-func RegWithCfg(typ any, creator Creator, cfgCreator CfgCreator) {
+func RegWithCfg[T any](typ T, creator Creator, cfgCreator CfgCreator) {
 	Reg(typ, creator)
 	RegCfg(typ, cfgCreator)
 }
@@ -58,7 +53,7 @@ func RegWithCfg(typ any, creator Creator, cfgCreator CfgCreator) {
 // 1. plugin不存在，说明没有注册，大部分情况是没有调用RegisterPlugin
 // 2. cfg设置失败，说明plugin本身定义的有问题
 // 这两种情况下说明代码本身有问题，所以直接panic.
-func CreateWithCfg(typ any, cfg any) any {
+func CreateWithCfg[CFG any, T any](typ T, cfg CFG) any {
 	f, exists := _plugins[typ]
 	if !exists {
 		panic(fmt.Sprintf("plugin not exists: %+v", typ))
@@ -80,7 +75,7 @@ func CreateWithCfg(typ any, cfg any) any {
 	return p
 }
 
-func CreateCfg(typ any) any {
+func CreateCfg[T any](typ T) any {
 	f, exists := _pluginCfgs[typ]
 	if !exists {
 		return nil
@@ -98,12 +93,12 @@ func CreateCfg(typ any) any {
 	return cfg
 }
 
-func Create(typ any) any {
+func Create[T any](typ T) any {
 	return CreateWithCfg(typ, CreateCfg(typ))
 }
 
-func SetCfg(p any, cfg any) {
-	if sp, ok := p.(CfgSetter); ok {
+func SetCfg[T any](p any, cfg T) {
+	if sp, ok := p.(CfgSetter[T]); ok {
 		sp.SetCfg(cfg)
 		return
 	}

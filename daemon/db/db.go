@@ -80,11 +80,7 @@ func (d *db) Stop() error {
 	return nil
 }
 
-func (d *db) GetCfg() any {
-	return d.Cfg
-}
-
-func (d *db) Type() any {
+func (d *db) Type() boot.DaemonType {
 	return DaemonTypeDB
 }
 

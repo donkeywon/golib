@@ -12,7 +12,7 @@ func init() {
 	plugin.RegWithCfg(WorkerCopy, func() any { return NewCopy() }, func() any { return NewCopyCfg() })
 }
 
-const WorkerCopy WorkerType = "copy"
+const WorkerCopy Type = "copy"
 
 type CopyCfg struct {
 	BufSize int `json:"bufSize" yaml:"bufSize"`
@@ -64,10 +64,10 @@ func (c *Copy) Stop() error {
 	return c.Reader().Close()
 }
 
-func (c *Copy) Type() any {
+func (c *Copy) Type() Type {
 	return WorkerCopy
 }
 
-func (c *Copy) GetCfg() any {
+func (c *Copy) GetCfg() *CopyCfg {
 	return c.CopyCfg
 }

@@ -73,7 +73,6 @@ type Result struct {
 
 type Task struct {
 	runner.Runner
-	plugin.Plugin
 	*Cfg
 
 	stepDoneHooks      []StepHook

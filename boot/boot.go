@@ -30,7 +30,7 @@ type DaemonType string
 
 type Daemon interface {
 	runner.Runner
-	plugin.Plugin
+	plugin.Plugin[DaemonType]
 }
 
 var (

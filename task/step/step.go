@@ -55,7 +55,7 @@ func (s *Cfg) customUnmarshal(data []byte, unmarshaler func([]byte, any) error) 
 
 type Step interface {
 	runner.Runner
-	plugin.Plugin
+	plugin.Plugin[Type]
 }
 
 type baseStep struct {
@@ -72,10 +72,6 @@ func (b *baseStep) Store(k string, v any) {
 	b.Runner.StoreAsString(k, v)
 }
 
-func (b *baseStep) Type() any {
+func (b *baseStep) Type() Type {
 	panic("method Step.Kind not implemented")
-}
-
-func (b *baseStep) GetCfg() any {
-	panic("method Step.GetCfg not implemented")
 }

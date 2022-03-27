@@ -18,7 +18,7 @@ func init() {
 	plugin.RegWithCfg(WorkerSSH, func() any { return NewSSH() }, func() any { return NewSSHCfg() })
 }
 
-const WorkerSSH WorkerType = "ssh"
+const WorkerSSH Type = "ssh"
 
 type SSHCfg struct {
 	Addr       string `json:"addr"       yaml:"addr" validate:"required"`
