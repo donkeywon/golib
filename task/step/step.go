@@ -73,7 +73,7 @@ func (b *baseStep) Store(k string, v any) {
 }
 
 func (b *baseStep) Type() any {
-	panic("method Step.Type not implemented")
+	panic("method Step.Kind not implemented")
 }
 
 func (b *baseStep) GetCfg() any {

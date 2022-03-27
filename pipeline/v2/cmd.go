@@ -6,10 +6,15 @@ import (
 
 	"github.com/donkeywon/golib/consts"
 	"github.com/donkeywon/golib/errs"
+	"github.com/donkeywon/golib/plugin"
 	"github.com/donkeywon/golib/util/cmd"
 )
 
-const TypeCmd WorkerType = "cmd"
+func init() {
+	plugin.RegWithCfg(WorkerCmd, func() any { return NewCmd() }, func() any { return &cmd.Cfg{} })
+}
+
+const WorkerCmd WorkerType = "cmd"
 
 type Cmd struct {
 	Worker
@@ -20,7 +25,7 @@ type Cmd struct {
 
 func NewCmd() *Cmd {
 	return &Cmd{
-		Worker: CreateWorker(string(TypeCmd)),
+		Worker: CreateWorker(string(WorkerCmd)),
 		Cfg:    &cmd.Cfg{},
 	}
 }
@@ -79,7 +84,7 @@ func (c *Cmd) Stop() error {
 }
 
 func (c *Cmd) Type() any {
-	return TypeCmd
+	return WorkerCmd
 }
 
 func (c *Cmd) GetCfg() any {

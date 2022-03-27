@@ -4,14 +4,20 @@ import (
 	"errors"
 	"io"
 
+	"github.com/donkeywon/golib/plugin"
 	"github.com/klauspost/compress/s2"
 	"github.com/klauspost/compress/zstd"
 	"github.com/klauspost/pgzip"
 )
 
+func init() {
+	plugin.RegWithCfg(ReaderCompress, func() any { return NewCompressReader() }, func() any { return NewCompressCfg() })
+	plugin.RegWithCfg(WriterCompress, func() any { return NewCompressWriter() }, func() any { return NewCompressCfg() })
+}
+
 const (
-	TypeCompressReader ReaderType = "compress"
-	TypeCompressWriter WriterType = "compress"
+	ReaderCompress ReaderType = "compress"
+	WriterCompress WriterType = "compress"
 
 	CompressTypeNop    CompressType = "nop"
 	CompressTypeGzip   CompressType = "gzip"
@@ -47,7 +53,7 @@ type CompressReader struct {
 
 func NewCompressReader() *CompressReader {
 	return &CompressReader{
-		Reader:      CreateReader(string(TypeCompressReader)),
+		Reader:      CreateReader(string(ReaderCompress)),
 		CompressCfg: NewCompressCfg(),
 	}
 }
@@ -86,7 +92,7 @@ func (c *CompressReader) Close() error {
 }
 
 func (c *CompressReader) Type() any {
-	return TypeCompressReader
+	return ReaderCompress
 }
 
 func (c *CompressReader) GetCfg() any {
@@ -102,7 +108,7 @@ type CompressWriter struct {
 
 func NewCompressWriter() *CompressWriter {
 	return &CompressWriter{
-		Writer:      CreateWriter(string(TypeCompressWriter)),
+		Writer:      CreateWriter(string(WriterCompress)),
 		CompressCfg: NewCompressCfg(),
 	}
 }
@@ -140,7 +146,7 @@ func (c *CompressWriter) Close() error {
 }
 
 func (c *CompressWriter) Type() any {
-	return TypeCompressWriter
+	return WriterCompress
 }
 
 func (c *CompressWriter) GetCfg() any {

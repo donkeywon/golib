@@ -6,11 +6,17 @@ import (
 	"strconv"
 
 	"github.com/donkeywon/golib/errs"
+	"github.com/donkeywon/golib/plugin"
 )
 
+func init() {
+	plugin.RegWithCfg(ReaderFile, func() any { return NewFileReader() }, func() any { return NewFileCfg() })
+	plugin.RegWithCfg(WriterFile, func() any { return NewFileWriter() }, func() any { return NewFileCfg() })
+}
+
 const (
-	TypeFileReader ReaderType = "file"
-	TypeFileWriter WriterType = "file"
+	ReaderFile ReaderType = "file"
+	WriterFile WriterType = "file"
 )
 
 type FileCfg struct {
@@ -65,7 +71,7 @@ type FileReader struct {
 
 func NewFileReader() *FileReader {
 	return &FileReader{
-		Reader: CreateReader(string(TypeFileReader)),
+		Reader: CreateReader(string(ReaderFile)),
 		f:      newFile(os.O_RDONLY),
 	}
 }
@@ -86,7 +92,7 @@ func (f *FileReader) Wrap(io.ReadCloser) {
 }
 
 func (f *FileReader) Type() any {
-	return TypeFileReader
+	return ReaderFile
 }
 
 func (f *FileReader) GetCfg() any {
@@ -105,7 +111,7 @@ type FileWriter struct {
 
 func NewFileWriter() *FileWriter {
 	return &FileWriter{
-		Writer: CreateWriter(string(TypeFileWriter)),
+		Writer: CreateWriter(string(WriterFile)),
 		f:      newFile(os.O_WRONLY | os.O_CREATE),
 	}
 }
@@ -126,7 +132,7 @@ func (f *FileWriter) Wrap(io.WriteCloser) {
 }
 
 func (f *FileWriter) Type() any {
-	return TypeFileWriter
+	return WriterFile
 }
 
 func (f *FileWriter) GetCfg() any {

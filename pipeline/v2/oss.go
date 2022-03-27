@@ -5,11 +5,17 @@ import (
 	"io"
 
 	"github.com/donkeywon/golib/oss"
+	"github.com/donkeywon/golib/plugin"
 )
 
+func init() {
+	plugin.RegWithCfg(ReaderOSS, func() any { return NewOSSReader() }, func() any { return NewOSSCfg() })
+	plugin.RegWithCfg(WriterOSS, func() any { return NewOSSWriter() }, func() any { return NewOSSCfg() })
+}
+
 const (
-	TypeOSSReader ReaderType = "oss"
-	TypeOSSWriter WriterType = "oss"
+	ReaderOSS ReaderType = "oss"
+	WriterOSS WriterType = "oss"
 )
 
 type OSSCfg struct {
@@ -30,7 +36,7 @@ type OSSReader struct {
 
 func NewOSSReader() *OSSReader {
 	return &OSSReader{
-		Reader: CreateReader(string(TypeOSSReader)),
+		Reader: CreateReader(string(ReaderOSS)),
 		OSSCfg: NewOSSCfg(),
 	}
 }
@@ -45,7 +51,7 @@ func (o *OSSReader) Wrap(io.ReadCloser) {
 }
 
 func (o *OSSReader) Type() any {
-	return TypeOSSReader
+	return ReaderOSS
 }
 
 func (o *OSSReader) GetCfg() any {
@@ -59,7 +65,7 @@ type OSSWriter struct {
 
 func NewOSSWriter() *OSSWriter {
 	return &OSSWriter{
-		Writer: CreateWriter(string(TypeOSSWriter)),
+		Writer: CreateWriter(string(WriterOSS)),
 		OSSCfg: NewOSSCfg(),
 	}
 }
@@ -78,7 +84,7 @@ func (o *OSSWriter) Wrap(io.WriteCloser) {
 }
 
 func (o *OSSWriter) Type() any {
-	return TypeOSSWriter
+	return WriterOSS
 }
 
 func (o *OSSWriter) GetCfg() any {

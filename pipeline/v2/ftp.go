@@ -3,11 +3,17 @@ package v2
 import (
 	"github.com/donkeywon/golib/errs"
 	"github.com/donkeywon/golib/ftp"
+	"github.com/donkeywon/golib/plugin"
 )
 
+func init() {
+	plugin.RegWithCfg(ReaderFtp, func() any { return NewFtpReader() }, func() any { return NewFtpCfg() })
+	plugin.RegWithCfg(WriterFtp, func() any { return NewFtpWriter() }, func() any { return NewFtpCfg() })
+}
+
 const (
-	TypeFtpReader ReaderType = "ftp"
-	TypeFtpWriter ReaderType = "ftp"
+	ReaderFtp ReaderType = "ftp"
+	WriterFtp ReaderType = "ftp"
 )
 
 type FtpCfg struct {
@@ -26,6 +32,13 @@ type FtpReader struct {
 	*FtpCfg
 }
 
+func NewFtpReader() *FtpReader {
+	return &FtpReader{
+		Reader: CreateReader(string(ReaderFtp)),
+		FtpCfg: NewFtpCfg(),
+	}
+}
+
 func (f *FtpReader) Init() error {
 	r, err := createFtpReader(f.FtpCfg)
 	if err != nil {
@@ -37,7 +50,7 @@ func (f *FtpReader) Init() error {
 }
 
 func (f *FtpReader) Type() any {
-	return TypeFtpReader
+	return ReaderFtp
 }
 
 func (f *FtpReader) GetCfg() any {
@@ -47,6 +60,13 @@ func (f *FtpReader) GetCfg() any {
 type FtpWriter struct {
 	Writer
 	*FtpCfg
+}
+
+func NewFtpWriter() *FtpWriter {
+	return &FtpWriter{
+		Writer: CreateWriter(string(WriterFtp)),
+		FtpCfg: NewFtpCfg(),
+	}
 }
 
 func (f *FtpWriter) Init() error {
@@ -59,7 +79,7 @@ func (f *FtpWriter) Init() error {
 }
 
 func (f *FtpWriter) Type() any {
-	return TypeFtpWriter
+	return WriterFtp
 }
 
 func (f *FtpWriter) GetCfg() any {

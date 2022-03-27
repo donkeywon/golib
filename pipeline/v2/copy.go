@@ -4,10 +4,15 @@ import (
 	"io"
 
 	"github.com/donkeywon/golib/errs"
+	"github.com/donkeywon/golib/plugin"
 	"github.com/donkeywon/golib/util/bytespool"
 )
 
-const TypeCopy WorkerType = "copy"
+func init() {
+	plugin.RegWithCfg(WorkerCopy, func() any { return NewCopy() }, func() any { return NewCopyCfg() })
+}
+
+const WorkerCopy WorkerType = "copy"
 
 type CopyCfg struct {
 	BufSize int `json:"bufSize" yaml:"bufSize"`
@@ -24,7 +29,7 @@ type Copy struct {
 
 func NewCopy() *Copy {
 	return &Copy{
-		Worker:  CreateWorker(string(TypeCopy)),
+		Worker:  CreateWorker(string(WorkerCopy)),
 		CopyCfg: NewCopyCfg(),
 	}
 }
@@ -60,7 +65,7 @@ func (c *Copy) Stop() error {
 }
 
 func (c *Copy) Type() any {
-	return TypeCopy
+	return WorkerCopy
 }
 
 func (c *Copy) GetCfg() any {

@@ -22,6 +22,9 @@ type Worker interface {
 	WriteTo(...io.WriteCloser)
 	ReadFrom(...io.ReadCloser)
 
+	Writers() []io.WriteCloser
+	Readers() []io.ReadCloser
+
 	Reader() io.ReadCloser
 	Writer() io.WriteCloser
 }
@@ -59,7 +62,6 @@ func (b *BaseWorker) Init() error {
 			panic(ErrNotWrapper)
 		} else {
 			rr.Wrap(b.rs[i+1])
-			b.r = b.rs[i]
 		}
 	}
 	b.r = b.rs[0]
@@ -103,6 +105,14 @@ func (b *BaseWorker) WriteTo(w ...io.WriteCloser) {
 
 func (b *BaseWorker) ReadFrom(r ...io.ReadCloser) {
 	b.rs = append(b.rs, r...)
+}
+
+func (b *BaseWorker) Readers() []io.ReadCloser {
+	return b.rs
+}
+
+func (b *BaseWorker) Writers() []io.WriteCloser {
+	return b.ws
 }
 
 func (b *BaseWorker) Reader() io.ReadCloser {
