@@ -9,8 +9,8 @@ import (
 )
 
 func init() {
-	plugin.RegWithCfg(ReaderFtp, func() *Ftp { return NewFtp(ReaderFtp) }, NewFtpCfg)
-	plugin.RegWithCfg(WriterFtp, func() *Ftp { return NewFtp(WriterFtp) }, NewFtpCfg)
+	plugin.RegWithCfg(ReaderFtp, func() Common { return NewFtpReader() }, NewFtpCfg)
+	plugin.RegWithCfg(WriterFtp, func() Common { return NewFtpWriter() }, NewFtpCfg)
 }
 
 const (
@@ -29,66 +29,67 @@ func NewFtpCfg() *FtpCfg {
 	}
 }
 
-type Ftp struct {
-	Common
+type FtpReader struct {
 	Reader
+	*FtpCfg
+}
+
+func NewFtpReader() *FtpReader {
+	return &FtpReader{
+		Reader: CreateReader(string(ReaderFtp)),
+		FtpCfg: NewFtpCfg(),
+	}
+}
+
+func (f *FtpReader) Init() error {
+	r, err := createFtpReader(f.FtpCfg)
+	if err != nil {
+		return errs.Wrap(err, "create ftp reader failed")
+	}
+
+	f.Reader.WrapReader(r)
+	return f.Reader.Init()
+}
+
+func (f *FtpReader) Type() Type {
+	return ReaderFtp
+}
+
+func (f *FtpReader) SetCfg(c any) {
+	f.FtpCfg = c.(*FtpCfg)
+}
+
+type FtpWriter struct {
 	Writer
-
-	c   *FtpCfg
-	typ Type
+	*FtpCfg
 }
 
-func NewFtp(typ Type) *Ftp {
-	f := &Ftp{
-		typ: typ,
-		c:   NewFtpCfg(),
+func NewFtpWriter() *FtpWriter {
+	return &FtpWriter{
+		Writer: CreateWriter(string(WriterFtp)),
+		FtpCfg: NewFtpCfg(),
 	}
+}
 
-	if typ == ReaderFtp {
-		r := CreateReader(string(typ))
-		f.Common = r
-		f.Reader = r
-	} else {
-		w := CreateWriter(string(typ))
-		f.Common = w
-		f.Writer = w
+func (f *FtpWriter) Init() error {
+	w, err := createFtpWriter(f.FtpCfg)
+	if err != nil {
+		return errs.Wrap(err, "create ftp writer failed")
 	}
-
-	return f
+	f.Writer.WrapWriter(w)
+	return f.Writer.Init()
 }
 
-func (f *Ftp) Type() Type {
-	return f.typ
-}
-
-func (f *Ftp) Init() error {
-	if f.typ == ReaderFtp {
-		r, err := createFtpReader(f.c)
-		if err != nil {
-			return errs.Wrap(err, "create ftp reader failed")
-		}
-		f.Common.(Reader).WrapReader(r)
-	} else {
-		w, err := createFtpWriter(f.c)
-		if err != nil {
-			return errs.Wrap(err, "create ftp writer failed")
-		}
-		f.Common.(Writer).WrapWriter(w)
-	}
-
-	return f.Common.Init()
-}
-
-func (f *Ftp) WrapReader(io.ReadCloser) {
+func (f *FtpWriter) WrapWriter(io.WriteCloser) {
 	panic(ErrInvalidWrap)
 }
 
-func (f *Ftp) WrapWriter(io.WriteCloser) {
-	panic(ErrInvalidWrap)
+func (f *FtpWriter) Type() Type {
+	return WriterFtp
 }
 
-func (f *Ftp) SetCfg(cfg *FtpCfg) {
-	f.c = cfg
+func (f *FtpWriter) SetCfg(c any) {
+	f.FtpCfg = c.(*FtpCfg)
 }
 
 func createFtpReader(ftpCfg *FtpCfg) (*ftp.Reader, error) {

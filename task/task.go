@@ -14,7 +14,7 @@ import (
 )
 
 func init() {
-	plugin.RegWithCfg(PluginTypeTask, func() any { return New() }, func() any { return NewCfg() })
+	plugin.RegWithCfg(PluginTypeTask, New, NewCfg)
 }
 
 const PluginTypeTask plugin.Type = "task"
@@ -192,12 +192,8 @@ func (t *Task) Store(k string, v any) {
 	t.Runner.StoreAsString(k, v)
 }
 
-func (t *Task) Type() any {
+func (t *Task) Type() plugin.Type {
 	return PluginTypeTask
-}
-
-func (t *Task) GetCfg() any {
-	return t.Cfg
 }
 
 func (t *Task) createStep(idx int, stepCfg *step.Cfg, isDefer bool) step.Step {
@@ -210,11 +206,11 @@ func (t *Task) createStep(idx int, stepCfg *step.Cfg, isDefer bool) step.Step {
 		stepOrDefer = "step"
 	}
 
-	step := plugin.CreateWithCfg(stepCfg.Type, stepCfg.Cfg).(step.Step)
-	step.Inherit(t)
-	step.SetParent(t)
-	step.WithLoggerFields(stepOrDefer, idx, stepOrDefer+"_type", step.Type())
-	return step
+	s := plugin.CreateWithCfg[step.Type, step.Step](stepCfg.Type, stepCfg.Cfg)
+	s.Inherit(t)
+	s.SetParent(t)
+	s.WithLoggerFields(stepOrDefer, idx, stepOrDefer+"_type", s.Type())
+	return s
 }
 
 func (t *Task) recoverStepPanic() {

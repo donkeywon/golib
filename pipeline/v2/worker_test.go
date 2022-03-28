@@ -17,7 +17,7 @@ func TestCopy(t *testing.T) {
 	tests.Init(f)
 
 	o := NewOSSWriter()
-	o.OSSCfg = &OSSCfg{
+	o.SetCfg(&OSSCfg{
 		Cfg: &oss.Cfg{
 			URL:     "",
 			Ak:      "",
@@ -25,16 +25,16 @@ func TestCopy(t *testing.T) {
 			Timeout: 10,
 			Region:  "",
 		},
-	}
+	})
 	o.WithOptions(EnableBuf(8 * 1024 * 1024))
 	tests.Init(o)
 
 	compress := NewCompressWriter()
-	compress.CompressCfg = &CompressCfg{
+	compress.SetCfg(&CompressCfg{
 		Type:        CompressTypeZstd,
 		Level:       CompressLevelFast,
 		Concurrency: 2,
-	}
+	})
 	tests.Init(compress)
 
 	c := NewCopy()

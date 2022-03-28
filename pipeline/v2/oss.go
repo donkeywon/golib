@@ -9,8 +9,8 @@ import (
 )
 
 func init() {
-	plugin.RegWithCfg(ReaderOSS, func() *OSS { return NewOSS(ReaderOSS) }, NewOSSCfg)
-	plugin.RegWithCfg(WriterOSS, func() *OSS { return NewOSS(WriterOSS) }, NewOSSCfg)
+	plugin.RegWithCfg(ReaderOSS, func() Common { return NewOSSReader() }, NewOSSCfg)
+	plugin.RegWithCfg(WriterOSS, func() Common { return NewOSSWriter() }, NewOSSCfg)
 }
 
 const (
@@ -29,62 +29,66 @@ func NewOSSCfg() *OSSCfg {
 	}
 }
 
-type OSS struct {
-	Common
+type OSSReader struct {
 	Reader
+	*OSSCfg
+}
+
+func NewOSSReader() *OSSReader {
+	return &OSSReader{
+		Reader: CreateReader(string(ReaderOSS)),
+		OSSCfg: NewOSSCfg(),
+	}
+}
+
+func (o *OSSReader) Init() error {
+	o.Reader.WrapReader(createOSSReader(o.Ctx(), o.OSSCfg))
+	return o.Reader.Init()
+}
+
+func (o *OSSReader) Wrap(io.ReadCloser) {
+	panic(ErrInvalidWrap)
+}
+
+func (o *OSSReader) Type() Type {
+	return ReaderOSS
+}
+
+func (o *OSSReader) SetCfg(c any) {
+	o.OSSCfg = c.(*OSSCfg)
+}
+
+type OSSWriter struct {
 	Writer
-
-	typ Type
-	c   *OSSCfg
+	*OSSCfg
 }
 
-func NewOSS(typ Type) *OSS {
-	o := &OSS{
-		typ: typ,
-		c:   NewOSSCfg(),
+func NewOSSWriter() *OSSWriter {
+	return &OSSWriter{
+		Writer: CreateWriter(string(WriterOSS)),
+		OSSCfg: NewOSSCfg(),
 	}
+}
 
-	if o.typ == ReaderOSS {
-		r := CreateReader(string(typ))
-		o.Common = r
-		o.Reader = r
+func (o *OSSWriter) Init() error {
+	if o.OSSCfg.Append {
+		o.Writer.WrapWriter(createOSSAppendWriter(o.Ctx(), o.OSSCfg))
 	} else {
-		w := CreateWriter(string(typ))
-		o.Common = w
-		o.Writer = w
+		o.Writer.WrapWriter(createOSSMultipartWriter(o.Ctx(), o.OSSCfg))
 	}
-
-	return o
+	return o.Writer.Init()
 }
 
-func (o *OSS) Init() error {
-	if o.typ == ReaderOSS {
-		o.Common.(Reader).WrapReader(createOSSReader(o.Ctx(), o.c))
-	} else {
-		if o.c.Append {
-			o.Common.(Writer).WrapWriter(createOSSAppendWriter(o.Ctx(), o.c))
-		} else {
-			o.Common.(Writer).WrapWriter(createOSSMultipartWriter(o.Ctx(), o.c))
-		}
-	}
-
-	return o.Common.Init()
-}
-
-func (o *OSS) WrapReader(io.ReadCloser) {
+func (o *OSSWriter) Wrap(io.WriteCloser) {
 	panic(ErrInvalidWrap)
 }
 
-func (o *OSS) WrapWriter(io.WriteCloser) {
-	panic(ErrInvalidWrap)
+func (o *OSSWriter) Type() Type {
+	return WriterOSS
 }
 
-func (o *OSS) Type() Type {
-	return o.typ
-}
-
-func (o *OSS) SetCfg(cfg *OSSCfg) {
-	o.c = cfg
+func (o *OSSWriter) SetCfg(c any) {
+	o.OSSCfg = c.(*OSSCfg)
 }
 
 func createOSSReader(ctx context.Context, cfg *OSSCfg) *oss.Reader {

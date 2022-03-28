@@ -87,7 +87,7 @@ func (p *Pipeline) Init() error {
 		return errs.Wrap(err, "pipeline cfg validate failed")
 	}
 
-	for i := range p.ws {
+	for i := 0; i < len(p.ws)-1; i++ {
 		pr, pw := io.Pipe()
 		if len(p.ws[i].Writers()) > 0 {
 			if ww, ok := p.ws[i].LastWriter().(WriterWrapper); !ok {
@@ -165,12 +165,12 @@ func (p *Pipeline) Type() plugin.Type {
 	return PluginTypePipeline
 }
 
-func (p *Pipeline) SetCfg(cfg *Cfg) {
-	p.cfg = cfg
+func (p *Pipeline) SetCfg(cfg any) {
+	p.cfg = cfg.(*Cfg)
 
 	items := make([]any, 0, len(p.cfg.Items))
 	for _, itemCfg := range p.cfg.Items {
-		item := plugin.CreateWithCfg[Type, plugin.Plugin[Type]](itemCfg.Type, itemCfg.Cfg)
+		item := plugin.CreateWithCfg[Type, Common](itemCfg.Type, itemCfg.Cfg)
 		typ := typeof(item)
 		switch typ {
 		case 'r', 'w':
@@ -253,7 +253,7 @@ func groupItemsByWorker(items []any) [][]any {
 		}
 
 		groups = append(groups, itemGroup)
-		itemGroup = []any{}
+		itemGroup = make([]any, 1)
 		itemGroup[0] = items[i]
 	}
 	if len(itemGroup) > 0 {
@@ -275,19 +275,19 @@ func typeof(item any) byte {
 	}
 }
 
-func splitGroup(group []any) ([]CommonReader, Worker, []CommonWriter) {
+func splitGroup(group []any) ([]Reader, Worker, []Writer) {
 	var (
-		readers []CommonReader
+		readers []Reader
 		worker  Worker
-		writers []CommonWriter
+		writers []Writer
 	)
 
 	for _, item := range group {
 		switch typeof(item) {
 		case 'r':
-			readers = append(readers, item.(CommonReader))
+			readers = append(readers, item.(Reader))
 		case 'w':
-			writers = append(writers, item.(CommonWriter))
+			writers = append(writers, item.(Writer))
 		case 'W':
 			worker = item.(Worker)
 		}

@@ -79,14 +79,14 @@ func CreateWithCfg[T any, P Plugin[T], C any](typ T, cfg C) P {
 	return p
 }
 
-func CreateCfg[T any, C any](typ T) C {
-	var c C
+func CreateCfg[T any](typ T) any {
 	f, exists := _pluginCfgCreators[typ]
 	if !exists {
-		return c
+		return nil
 	}
 
-	return f.(CfgCreator[C])()
+	// TODO
+	return f.(CfgCreator)()
 }
 
 func Create[T any, P Plugin[T], C any](typ T) P {
@@ -94,5 +94,33 @@ func Create[T any, P Plugin[T], C any](typ T) P {
 }
 
 func SetCfg[C any](p any, cfg C) {
-	p.(CfgSetter[C]).SetCfg(cfg)
+	if sp, ok := p.(CfgSetter[C]); ok {
+		sp.SetCfg(cfg)
+		return
+	}
+
+	pValue := reflect.ValueOf(p)
+	if pValue.Kind() != reflect.Pointer {
+		panic(fmt.Sprintf("plugin(%+v) must be a pointer", pValue.Type()))
+	}
+
+	cfgType := reflect.TypeOf(cfg)
+	if cfgType.Kind() != reflect.Pointer {
+		panic(fmt.Sprintf("plugin(%s) cfg must be a pointer: %s", pValue.Type(), cfgType))
+	}
+
+	found := false
+	i := 0
+	for ; i < pValue.Elem().NumField(); i++ {
+		f := pValue.Elem().Field(i)
+		if f.CanSet() && f.Type() == cfgType {
+			found = true
+			break
+		}
+	}
+	if !found {
+		panic(fmt.Sprintf("plugin(%+v) must has a exported cfg field", pValue.Type()))
+	}
+
+	pValue.Elem().Field(i).Set(reflect.ValueOf(cfg))
 }

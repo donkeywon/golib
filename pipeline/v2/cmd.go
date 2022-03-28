@@ -11,7 +11,7 @@ import (
 )
 
 func init() {
-	plugin.RegWithCfg(WorkerCmd, NewCmd, cmd.NewCfg)
+	plugin.RegWithCfg(WorkerCmd, func() Common { return NewCmd() }, cmd.NewCfg)
 }
 
 const WorkerCmd Type = "cmd"
@@ -87,6 +87,6 @@ func (c *Cmd) Type() Type {
 	return WorkerCmd
 }
 
-func (c *Cmd) GetCfg() *cmd.Cfg {
-	return c.Cfg
+func (c *Cmd) SetCfg(cfg any) {
+	c.Cfg = cfg.(*cmd.Cfg)
 }
