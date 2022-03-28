@@ -11,8 +11,8 @@ import (
 )
 
 func init() {
-	plugin.RegWithCfg(ReaderCompress, NewCompressReader, NewCompressCfg)
-	plugin.RegWithCfg(WriterCompress, NewCompressWriter, NewCompressCfg)
+	plugin.RegWithCfg(ReaderCompress, func() *Compress { return NewCompress(ReaderCompress) }, NewCompressCfg)
+	plugin.RegWithCfg(WriterCompress, func() *Compress { return NewCompress(WriterCompress) }, NewCompressCfg)
 }
 
 const (
@@ -44,113 +44,101 @@ func NewCompressCfg() *CompressCfg {
 	return &CompressCfg{}
 }
 
-type CompressReader struct {
+type Compress struct {
+	Common
 	Reader
-	*CompressCfg
+	Writer
 
-	r io.ReadCloser
+	c   *CompressCfg
+	typ Type
+	r   io.ReadCloser
+	w   io.WriteCloser
 }
 
-func NewCompressReader() *CompressReader {
-	return &CompressReader{
-		Reader:      CreateReader(string(ReaderCompress)),
-		CompressCfg: NewCompressCfg(),
+func NewCompress(typ Type) *Compress {
+	c := &Compress{
+		c:   NewCompressCfg(),
+		typ: typ,
 	}
+
+	if c.typ == ReaderCompress {
+		r := CreateReader(string(typ))
+		c.Common = r
+		c.Reader = r
+	} else {
+		w := CreateWriter(string(typ))
+		c.Common = w
+		c.Writer = w
+	}
+
+	return c
 }
 
-func (c *CompressReader) Init() error {
-	c.WithLoggerFields("type", c.CompressCfg.Type)
-	return c.Reader.Init()
+func (c *Compress) Init() error {
+	c.WithLoggerFields("type", c.c.Type)
+	return c.Common.Init()
 }
 
-func (c *CompressReader) Wrap(r io.ReadCloser) {
+func (c *Compress) Type() Type {
+	return c.typ
+}
+
+func (c *Compress) SetCfg(cfg *CompressCfg) {
+	c.c = cfg
+}
+
+func (c *Compress) WrapReader(r io.ReadCloser) {
 	var compressReader io.ReadCloser
-	switch c.CompressCfg.Type {
+	switch c.c.Type {
 	case CompressTypeGzip:
-		compressReader = NewGzipReader(r, c.CompressCfg)
+		compressReader = NewGzipReader(r, c.c)
 	case CompressTypeSnappy:
-		compressReader = NewSnappyReader(r, c.CompressCfg)
+		compressReader = NewSnappyReader(r, c.c)
 	case CompressTypeZstd:
-		compressReader = NewZstdReader(r, c.CompressCfg)
+		compressReader = NewZstdReader(r, c.c)
 	default:
 	}
 
 	if compressReader == nil {
-		c.Reader.Wrap(r)
+		c.Common.(Reader).WrapReader(r)
 	} else {
-		c.Reader.Wrap(compressReader)
+		c.Common.(Reader).WrapReader(compressReader)
 		c.r = r
 	}
 }
 
-func (c *CompressReader) Close() error {
-	if c.r != nil {
-		return errors.Join(c.Reader.Close(), c.r.Close())
-	}
-
-	return c.Reader.Close()
-}
-
-func (c *CompressReader) Type() Type {
-	return ReaderCompress
-}
-
-func (c *CompressReader) GetCfg() *CompressCfg {
-	return c.CompressCfg
-}
-
-type CompressWriter struct {
-	Writer
-	*CompressCfg
-
-	w io.WriteCloser
-}
-
-func NewCompressWriter() *CompressWriter {
-	return &CompressWriter{
-		Writer:      CreateWriter(string(WriterCompress)),
-		CompressCfg: NewCompressCfg(),
-	}
-}
-
-func (c *CompressWriter) Init() error {
-	c.WithLoggerFields("type", c.CompressCfg.Type)
-	return c.Writer.Init()
-}
-
-func (c *CompressWriter) Wrap(w io.WriteCloser) {
+func (c *Compress) WrapWriter(w io.WriteCloser) {
 	var compressWriter io.WriteCloser
-	switch c.CompressCfg.Type {
+	switch c.c.Type {
 	case CompressTypeGzip:
-		compressWriter = NewGzipWritter(w, c.CompressCfg)
+		compressWriter = NewGzipWritter(w, c.c)
 	case CompressTypeSnappy:
-		compressWriter = NewSnappyWriter(w, c.CompressCfg)
+		compressWriter = NewSnappyWriter(w, c.c)
 	case CompressTypeZstd:
-		compressWriter = NewZstdWriter(w, c.CompressCfg)
+		compressWriter = NewZstdWriter(w, c.c)
 	default:
 	}
 
 	if compressWriter == nil {
-		c.Writer.Wrap(w)
+		c.Common.(Writer).WrapWriter(w)
 	} else {
-		c.Writer.Wrap(compressWriter)
+		c.Common.(Writer).WrapWriter(compressWriter)
 		c.w = w
 	}
 }
 
-func (c *CompressWriter) Close() error {
-	if c.w != nil {
-		return errors.Join(c.Writer.Close(), c.w.Close())
+func (c *Compress) Close() error {
+	if c.typ == ReaderCompress {
+		if c.r != nil {
+			return errors.Join(c.Common.Close(), c.r.Close())
+		}
+		return c.Common.Close()
+	} else {
+		if c.w != nil {
+			return errors.Join(c.Common.Close(), c.w.Close())
+		}
+		return c.Common.Close()
 	}
-	return c.Writer.Close()
-}
-
-func (c *CompressWriter) Type() Type {
-	return WriterCompress
-}
-
-func (c *CompressWriter) GetCfg() any {
-	return c.CompressCfg
 }
 
 func NewZstdWriter(w io.WriteCloser, cfg *CompressCfg) io.WriteCloser {

@@ -10,8 +10,8 @@ import (
 )
 
 func init() {
-	plugin.RegWithCfg(ReaderFile, NewFileReader, NewFileCfg)
-	plugin.RegWithCfg(WriterFile, NewFileWriter, NewFileCfg)
+	plugin.RegWithCfg(ReaderFile, func() *File { return NewFile(ReaderFile, os.O_RDONLY) }, NewFileCfg)
+	plugin.RegWithCfg(WriterFile, func() *File { return NewFile(WriterFile, os.O_CREATE|os.O_WRONLY) }, NewFileCfg)
 }
 
 const (
@@ -29,116 +29,75 @@ func NewFileCfg() *FileCfg {
 }
 
 type File struct {
-	*os.File
-	*FileCfg
+	Common
+	Reader
+	Writer
 
+	c          *FileCfg
+	f          *os.File
+	typ        Type
 	parsedPerm int64
 	flag       int
 }
 
-func newFile(flag int) *File {
-	return &File{
-		FileCfg: NewFileCfg(),
-		flag:    flag,
+func NewFile(typ Type, flag int) *File {
+	f := &File{
+		c:    NewFileCfg(),
+		flag: flag,
+		typ:  typ,
 	}
+
+	if typ == ReaderFile {
+		r := CreateReader(string(typ))
+		f.Common = r
+		f.Reader = r
+	} else {
+		w := CreateWriter(string(typ))
+		f.Common = w
+		f.Writer = w
+	}
+
+	return f
 }
 
-func (f *File) init() error {
+func (f *File) Init() error {
 	var err error
 
-	if f.Perm == 0 {
-		f.Perm = 644
+	if f.c.Perm == 0 {
+		f.c.Perm = 644
 	}
 
-	f.parsedPerm, err = strconv.ParseInt(strconv.Itoa(int(f.Perm)), 8, 32)
+	f.parsedPerm, err = strconv.ParseInt(strconv.Itoa(int(f.c.Perm)), 8, 32)
 	if err != nil {
-		return errs.Wrapf(err, "invalid file perm: %d", f.Perm)
+		return errs.Wrapf(err, "invalid file perm: %d", f.c.Perm)
 	}
 
-	f.File, err = os.OpenFile(f.Path, f.flag, os.FileMode(f.Perm))
+	f.f, err = os.OpenFile(f.c.Path, f.flag, os.FileMode(f.c.Perm))
 	if err != nil {
-		return errs.Wrapf(err, "failed to open file: %s", f.Path)
+		return errs.Wrapf(err, "failed to open file: %s", f.c.Path)
 	}
 
-	return nil
-}
-
-type FileReader struct {
-	Reader
-
-	f *File
-}
-
-func NewFileReader() *FileReader {
-	return &FileReader{
-		Reader: CreateReader(string(ReaderFile)),
-		f:      newFile(os.O_RDONLY),
-	}
-}
-
-func (f *FileReader) Init() error {
-	err := f.f.init()
-	if err != nil {
-		return err
+	if f.typ == ReaderFile {
+		f.Common.(Reader).WrapReader(f.f)
+	} else {
+		f.Common.(Writer).WrapWriter(f.f)
 	}
 
-	f.Reader.Wrap(f.f)
-
-	return f.Reader.Init()
+	return f.Common.Init()
 }
 
-func (f *FileReader) Wrap(io.ReadCloser) {
+func (f *File) Type() Type {
+	return f.typ
+}
+
+func (f *File) WrapReader(io.ReadCloser) {
 	panic(ErrInvalidWrap)
 }
 
-func (f *FileReader) Type() Type {
-	return ReaderFile
-}
-
-func (f *FileReader) GetCfg() *FileCfg {
-	return f.f.FileCfg
-}
-
-func (f *FileReader) SetCfg(cfg *FileCfg) {
-	f.f.FileCfg = cfg
-}
-
-type FileWriter struct {
-	Writer
-
-	f *File
-}
-
-func NewFileWriter() *FileWriter {
-	return &FileWriter{
-		Writer: CreateWriter(string(WriterFile)),
-		f:      newFile(os.O_WRONLY | os.O_CREATE),
-	}
-}
-
-func (f *FileWriter) Init() error {
-	err := f.f.init()
-	if err != nil {
-		return err
-	}
-
-	f.Writer.Wrap(f.f)
-
-	return f.Writer.Init()
-}
-
-func (f *FileWriter) Wrap(io.WriteCloser) {
+func (f *File) WrapWriter(io.WriteCloser) {
 	panic(ErrInvalidWrap)
 }
 
-func (f *FileWriter) Type() Type {
-	return WriterFile
-}
-
-func (f *FileWriter) GetCfg() *FileCfg {
-	return f.f.FileCfg
-}
-
-func (f *FileWriter) SetCfg(cfg *FileCfg) {
-	f.f.FileCfg = cfg
+func (f *File) SetCfg(c *FileCfg) {
+	f.c = c
 }

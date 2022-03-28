@@ -3,7 +3,6 @@ package v2
 import (
 	"bufio"
 	"errors"
-	"github.com/donkeywon/golib/plugin"
 	"io"
 
 	"github.com/donkeywon/golib/aio"
@@ -25,13 +24,10 @@ type ReaderWrapper interface {
 }
 
 type Reader interface {
-	io.ReadCloser
+	io.Reader
 	io.WriterTo
-	runner.Runner
-	plugin.Plugin[Type]
-	optionApplier
 
-	Wrap(io.ReadCloser)
+	WrapReader(io.ReadCloser)
 }
 
 type BaseReader struct {
@@ -43,7 +39,7 @@ type BaseReader struct {
 	opt *option
 }
 
-func newBaseReader(name string) Reader {
+func newBaseReader(name string) CommonReader {
 	return &BaseReader{
 		Runner: runner.Create(name),
 		opt:    newOption(),
@@ -77,7 +73,7 @@ func (b *BaseReader) Close() error {
 	return nil
 }
 
-func (b *BaseReader) Wrap(r io.ReadCloser) {
+func (b *BaseReader) WrapReader(r io.ReadCloser) {
 	if r == nil {
 		panic(ErrWrapNil)
 	}

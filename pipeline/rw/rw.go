@@ -73,7 +73,7 @@ func (c *Cfg) customUnmarshal(data []byte, unmarshaler func([]byte, any) error) 
 	c.Type = Type(typ.Str)
 
 	cv := cfgWithoutType{}
-	cv.Cfg = plugin.CreateCfg(c.Type)
+	cv.Cfg = plugin.CreateCfg[Type, any](c.Type)
 	if cv.Cfg == nil {
 		return errs.Errorf("created rw cfg is nil: %s", c.Type)
 	}

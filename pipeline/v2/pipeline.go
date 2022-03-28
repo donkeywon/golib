@@ -2,6 +2,7 @@ package v2
 
 import (
 	"errors"
+	"io"
 	"reflect"
 	"sync"
 	"time"
@@ -13,7 +14,7 @@ import (
 )
 
 func init() {
-	plugin.RegWithCfg(PluginTypePipeline, NewPipeline, NewCfg)
+	plugin.RegWithCfg(PluginTypePipeline, New, NewCfg)
 }
 
 const PluginTypePipeline plugin.Type = "pipeline"
@@ -58,12 +59,13 @@ func NewCfg() *Cfg {
 	return &Cfg{}
 }
 
-func (c *Cfg) Add(t Type, cfg any, opt *ItemOption) {
+func (c *Cfg) Add(t Type, cfg any, opt *ItemOption) *Cfg {
 	c.Items = append(c.Items, &ItemCfg{
 		Cfg:    cfg,
 		Option: opt,
 		Type:   t,
 	})
+	return c
 }
 
 type Pipeline struct {
@@ -73,7 +75,7 @@ type Pipeline struct {
 	ws  []Worker
 }
 
-func NewPipeline() *Pipeline {
+func New() *Pipeline {
 	return &Pipeline{
 		Runner: runner.Create(string(PluginTypePipeline)),
 	}
@@ -83,6 +85,29 @@ func (p *Pipeline) Init() error {
 	err := v.Struct(p.cfg)
 	if err != nil {
 		return errs.Wrap(err, "pipeline cfg validate failed")
+	}
+
+	for i := range p.ws {
+		pr, pw := io.Pipe()
+		if len(p.ws[i].Writers()) > 0 {
+			if ww, ok := p.ws[i].LastWriter().(WriterWrapper); !ok {
+				return errs.Errorf("worker(%d) %s last writer %s is not WriterWrapper", i, p.ws[i].Type(), reflect.TypeOf(p.ws[i].LastWriter()).String())
+			} else {
+				ww.Wrap(pw)
+			}
+		} else {
+			p.ws[i].WriteTo(pw)
+		}
+
+		if len(p.ws[i+1].Readers()) > 0 {
+			if rr, ok := p.ws[i+1].LastReader().(ReaderWrapper); !ok {
+				return errs.Errorf("worker(%d) %s last reader %s is not ReaderWrapper", i, p.ws[i+1].Type(), reflect.TypeOf(p.ws[i+1].LastReader()).String())
+			} else {
+				rr.Wrap(pr)
+			}
+		} else {
+			p.ws[i+1].ReadFrom(pr)
+		}
 	}
 
 	for i, w := range p.ws {
@@ -145,7 +170,7 @@ func (p *Pipeline) SetCfg(cfg *Cfg) {
 
 	items := make([]any, 0, len(p.cfg.Items))
 	for _, itemCfg := range p.cfg.Items {
-		item := plugin.CreateWithCfg[Type, plugin.Plugin[Type], any](itemCfg.Type, itemCfg.Cfg)
+		item := plugin.CreateWithCfg[Type, plugin.Plugin[Type]](itemCfg.Type, itemCfg.Cfg)
 		typ := typeof(item)
 		switch typ {
 		case 'r', 'w':
@@ -250,19 +275,19 @@ func typeof(item any) byte {
 	}
 }
 
-func splitGroup(group []any) ([]Reader, Worker, []Writer) {
+func splitGroup(group []any) ([]CommonReader, Worker, []CommonWriter) {
 	var (
-		readers []Reader
+		readers []CommonReader
 		worker  Worker
-		writers []Writer
+		writers []CommonWriter
 	)
 
 	for _, item := range group {
 		switch typeof(item) {
 		case 'r':
-			readers = append(readers, item.(Reader))
+			readers = append(readers, item.(CommonReader))
 		case 'w':
-			writers = append(writers, item.(Writer))
+			writers = append(writers, item.(CommonWriter))
 		case 'W':
 			worker = item.(Worker)
 		}

@@ -1,14 +1,16 @@
 package v2
 
 import (
+	"io"
+
 	"github.com/donkeywon/golib/errs"
 	"github.com/donkeywon/golib/ftp"
 	"github.com/donkeywon/golib/plugin"
 )
 
 func init() {
-	plugin.RegWithCfg(ReaderFtp, NewFtpReader, NewFtpCfg)
-	plugin.RegWithCfg(WriterFtp, NewFtpWriter, NewFtpCfg)
+	plugin.RegWithCfg(ReaderFtp, func() *Ftp { return NewFtp(ReaderFtp) }, NewFtpCfg)
+	plugin.RegWithCfg(WriterFtp, func() *Ftp { return NewFtp(WriterFtp) }, NewFtpCfg)
 }
 
 const (
@@ -27,63 +29,66 @@ func NewFtpCfg() *FtpCfg {
 	}
 }
 
-type FtpReader struct {
+type Ftp struct {
+	Common
 	Reader
-	*FtpCfg
-}
-
-func NewFtpReader() *FtpReader {
-	return &FtpReader{
-		Reader: CreateReader(string(ReaderFtp)),
-		FtpCfg: NewFtpCfg(),
-	}
-}
-
-func (f *FtpReader) Init() error {
-	r, err := createFtpReader(f.FtpCfg)
-	if err != nil {
-		return errs.Wrap(err, "create ftp reader failed")
-	}
-
-	f.Wrap(r)
-	return f.Reader.Init()
-}
-
-func (f *FtpReader) Type() Type {
-	return ReaderFtp
-}
-
-func (f *FtpReader) GetCfg() *FtpCfg {
-	return f.FtpCfg
-}
-
-type FtpWriter struct {
 	Writer
-	*FtpCfg
+
+	c   *FtpCfg
+	typ Type
 }
 
-func NewFtpWriter() *FtpWriter {
-	return &FtpWriter{
-		Writer: CreateWriter(string(WriterFtp)),
-		FtpCfg: NewFtpCfg(),
+func NewFtp(typ Type) *Ftp {
+	f := &Ftp{
+		typ: typ,
+		c:   NewFtpCfg(),
 	}
-}
 
-func (f *FtpWriter) Init() error {
-	w, err := createFtpWriter(f.FtpCfg)
-	if err != nil {
-		return errs.Wrap(err, "create ftp writer failed")
+	if typ == ReaderFtp {
+		r := CreateReader(string(typ))
+		f.Common = r
+		f.Reader = r
+	} else {
+		w := CreateWriter(string(typ))
+		f.Common = w
+		f.Writer = w
 	}
-	f.Wrap(w)
-	return f.Writer.Init()
+
+	return f
 }
 
-func (f *FtpWriter) Type() Type {
-	return WriterFtp
+func (f *Ftp) Type() Type {
+	return f.typ
 }
 
-func (f *FtpWriter) GetCfg() *FtpCfg {
-	return f.FtpCfg
+func (f *Ftp) Init() error {
+	if f.typ == ReaderFtp {
+		r, err := createFtpReader(f.c)
+		if err != nil {
+			return errs.Wrap(err, "create ftp reader failed")
+		}
+		f.Common.(Reader).WrapReader(r)
+	} else {
+		w, err := createFtpWriter(f.c)
+		if err != nil {
+			return errs.Wrap(err, "create ftp writer failed")
+		}
+		f.Common.(Writer).WrapWriter(w)
+	}
+
+	return f.Common.Init()
+}
+
+func (f *Ftp) WrapReader(io.ReadCloser) {
+	panic(ErrInvalidWrap)
+}
+
+func (f *Ftp) WrapWriter(io.WriteCloser) {
+	panic(ErrInvalidWrap)
+}
+
+func (f *Ftp) SetCfg(cfg *FtpCfg) {
+	f.c = cfg
 }
 
 func createFtpReader(ftpCfg *FtpCfg) (*ftp.Reader, error) {

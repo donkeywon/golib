@@ -6,22 +6,21 @@ import (
 	"reflect"
 
 	"github.com/donkeywon/golib/errs"
-	"github.com/donkeywon/golib/plugin"
 	"github.com/donkeywon/golib/runner"
 )
 
 var CreateWorker = newBaseWorker
 
 type Worker interface {
-	runner.Runner
-	plugin.Plugin[Type]
-	io.Closer
+	Common
 
 	WriteTo(...io.WriteCloser)
 	ReadFrom(...io.ReadCloser)
 
 	Writers() []io.WriteCloser
 	Readers() []io.ReadCloser
+	LastWriter() io.WriteCloser
+	LastReader() io.ReadCloser
 
 	Reader() io.ReadCloser
 	Writer() io.WriteCloser
@@ -121,6 +120,20 @@ func (b *BaseWorker) Writer() io.WriteCloser {
 	return b.w
 }
 
+func (b *BaseWorker) LastWriter() io.WriteCloser {
+	if len(b.ws) > 0 {
+		return b.ws[len(b.ws)-1]
+	}
+	return nil
+}
+
+func (b *BaseWorker) LastReader() io.ReadCloser {
+	if len(b.rs) > 0 {
+		return b.rs[len(b.rs)-1]
+	}
+	return nil
+}
+
 func (b *BaseWorker) Close() error {
 	defer b.Cancel()
 	defer func() {
@@ -140,4 +153,8 @@ func (b *BaseWorker) Close() error {
 		b.AppendError(errs.Wrap(err, "close failed"))
 	}
 	return nil
+}
+
+func (b *BaseWorker) WithOptions(...Option) {
+
 }
