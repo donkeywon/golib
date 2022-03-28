@@ -10,13 +10,13 @@ import (
 )
 
 func init() {
-	plugin.RegWithCfg(ReaderFile, func() any { return NewFileReader() }, func() any { return NewFileCfg() })
-	plugin.RegWithCfg(WriterFile, func() any { return NewFileWriter() }, func() any { return NewFileCfg() })
+	plugin.RegWithCfg(ReaderFile, NewFileReader, NewFileCfg)
+	plugin.RegWithCfg(WriterFile, NewFileWriter, NewFileCfg)
 }
 
 const (
-	ReaderFile Type = "fileReader"
-	WriterFile Type = "fileWriter"
+	ReaderFile Type = "rfile"
+	WriterFile Type = "wfile"
 )
 
 type FileCfg struct {

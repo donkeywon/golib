@@ -7,13 +7,13 @@ import (
 )
 
 func init() {
-	plugin.RegWithCfg(ReaderFtp, func() any { return NewFtpReader() }, func() any { return NewFtpCfg() })
-	plugin.RegWithCfg(WriterFtp, func() any { return NewFtpWriter() }, func() any { return NewFtpCfg() })
+	plugin.RegWithCfg(ReaderFtp, NewFtpReader, NewFtpCfg)
+	plugin.RegWithCfg(WriterFtp, NewFtpWriter, NewFtpCfg)
 }
 
 const (
-	ReaderFtp Type = "ftpReader"
-	WriterFtp Type = "ftpWriter"
+	ReaderFtp Type = "rftp"
+	WriterFtp Type = "wftp"
 )
 
 type FtpCfg struct {

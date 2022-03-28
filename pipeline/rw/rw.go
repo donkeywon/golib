@@ -104,7 +104,7 @@ type Type string
 type Role string
 
 func CreateRW(rwCfg *Cfg) RW {
-	rw := plugin.CreateWithCfg(rwCfg.Type, rwCfg.Cfg).(RW)
+	rw := plugin.CreateWithCfg[Type, RW, any](rwCfg.Type, rwCfg.Cfg)
 	if rwCfg.ExtraCfg == nil {
 		rwCfg.ExtraCfg = &ExtraCfg{}
 	}
@@ -140,6 +140,7 @@ type WriteHook func(n int, bs []byte, err error, cost int64, misc ...any) error
 type RW interface {
 	runner.Runner
 	io.ReadWriteCloser
+	plugin.Plugin[Type]
 
 	NestReader(io.ReadCloser)
 	NestWriter(io.WriteCloser)
@@ -308,7 +309,7 @@ func (b *baseRW) Stop() error {
 	return b.Runner.Stop()
 }
 
-func (b *baseRW) Type() any {
+func (b *baseRW) Type() Type {
 	panic("method RW.Kind not implemented")
 }
 
@@ -1037,7 +1038,7 @@ func ApplyCommonCfgToRW(rw RW, cfg *ExtraCfg) {
 		rw.EnableCalcHash(cfg.HashAlgo)
 	}
 	if cfg.EnableRateLimit {
-		rw.EnableRateLimit(plugin.CreateWithCfg(cfg.RateLimiterCfg.Type, cfg.RateLimiterCfg.Cfg).(ratelimit.RxTxRateLimiter))
+		rw.EnableRateLimit(plugin.CreateWithCfg[ratelimit.RateLimiterType, ratelimit.RxTxRateLimiter, any](cfg.RateLimiterCfg.Type, cfg.RateLimiterCfg.Cfg))
 	}
 	if cfg.Checksum != "" {
 		rw.EnableChecksum(cfg.Checksum, cfg.HashAlgo)

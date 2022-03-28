@@ -11,13 +11,13 @@ import (
 )
 
 func init() {
-	plugin.RegWithCfg(ReaderCompress, func() any { return NewCompressReader() }, func() any { return NewCompressCfg() })
-	plugin.RegWithCfg(WriterCompress, func() any { return NewCompressWriter() }, func() any { return NewCompressCfg() })
+	plugin.RegWithCfg(ReaderCompress, NewCompressReader, NewCompressCfg)
+	plugin.RegWithCfg(WriterCompress, NewCompressWriter, NewCompressCfg)
 }
 
 const (
-	ReaderCompress Type = "compressReader"
-	WriterCompress Type = "compressWriter"
+	ReaderCompress Type = "rcompress"
+	WriterCompress Type = "wcompress"
 
 	CompressTypeNop    CompressType = "nop"
 	CompressTypeGzip   CompressType = "gzip"
@@ -145,7 +145,7 @@ func (c *CompressWriter) Close() error {
 	return c.Writer.Close()
 }
 
-func (c *CompressWriter) Type() any {
+func (c *CompressWriter) Type() Type {
 	return WriterCompress
 }
 

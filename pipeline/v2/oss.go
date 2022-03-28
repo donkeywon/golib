@@ -9,13 +9,13 @@ import (
 )
 
 func init() {
-	plugin.RegWithCfg(ReaderOSS, func() any { return NewOSSReader() }, func() any { return NewOSSCfg() })
-	plugin.RegWithCfg(WriterOSS, func() any { return NewOSSWriter() }, func() any { return NewOSSCfg() })
+	plugin.RegWithCfg(ReaderOSS, NewOSSReader, NewOSSCfg)
+	plugin.RegWithCfg(WriterOSS, NewOSSWriter, NewOSSCfg)
 }
 
 const (
-	ReaderOSS Type = "ossReader"
-	WriterOSS Type = "ossWriter"
+	ReaderOSS Type = "ross"
+	WriterOSS Type = "woss"
 )
 
 type OSSCfg struct {

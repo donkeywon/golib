@@ -10,15 +10,22 @@ import (
 	"github.com/donkeywon/golib/util/bufferpool"
 	"github.com/donkeywon/golib/util/proc"
 )
- 
+
 type Cfg struct {
-	Command    []string          `json:"command"    validate:"required" yaml:"command"`
 	Env        map[string]string `json:"env"        yaml:"env"`
 	RunAsUser  string            `json:"runAsUser"  yaml:"runAsUser"`
 	WorkingDir string            `json:"workingDir" yaml:"workingDir"`
+	Command    []string          `json:"command"    validate:"required" yaml:"command"`
+}
+
+func NewCfg() *Cfg {
+	return &Cfg{}
 }
 
 type Result struct {
+	err           error
+	stdoutBuf     *bufferpool.Buffer
+	stderrBuf     *bufferpool.Buffer
 	Stdout        []string `json:"stdout"`
 	Stderr        []string `json:"stderr"`
 	ExitCode      int      `json:"exitCode"`
@@ -26,10 +33,6 @@ type Result struct {
 	StartTimeNano int64    `json:"startTimeNano"`
 	StopTimeNano  int64    `json:"stopTimeNano"`
 	Signaled      bool     `json:"signaled"`
-
-	stdoutBuf *bufferpool.Buffer
-	stderrBuf *bufferpool.Buffer
-	err       error
 }
 
 func Run(command ...string) (*Result, error) {

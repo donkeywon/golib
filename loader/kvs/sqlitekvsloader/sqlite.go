@@ -18,7 +18,7 @@ func init() {
 }
 
 func Load() {
-	plugin.RegWithCfg(TypeSQLite, func() any { return NewSQLiteKVS() }, func() any { return NewSQLiteKVSCfg() })
+	plugin.RegWithCfg(TypeSQLite, func() kvs.KVS { return NewSQLiteKVS() }, func() *SQLiteKVSCfg { return NewSQLiteKVSCfg() })
 }
 
 const (
@@ -85,6 +85,10 @@ type SQLiteKVS struct {
 
 func NewSQLiteKVS() *SQLiteKVS {
 	return &SQLiteKVS{}
+}
+
+func (s *SQLiteKVS) Type() kvs.Type {
+	return TypeSQLite
 }
 
 func (s *SQLiteKVS) Open() error {

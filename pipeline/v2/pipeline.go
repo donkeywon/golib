@@ -1,7 +1,9 @@
 package v2
 
 import (
+	"errors"
 	"reflect"
+	"sync"
 	"time"
 
 	"github.com/donkeywon/golib/errs"
@@ -9,6 +11,10 @@ import (
 	"github.com/donkeywon/golib/runner"
 	"github.com/donkeywon/golib/util/v"
 )
+
+func init() {
+	plugin.RegWithCfg(PluginTypePipeline, NewPipeline, NewCfg)
+}
 
 const PluginTypePipeline plugin.Type = "pipeline"
 
@@ -48,6 +54,10 @@ type Cfg struct {
 	Items []*ItemCfg `json:"items" yaml:"items"`
 }
 
+func NewCfg() *Cfg {
+	return &Cfg{}
+}
+
 func (c *Cfg) Add(t Type, cfg any, opt *ItemOption) {
 	c.Items = append(c.Items, &ItemCfg{
 		Cfg:    cfg,
@@ -72,21 +82,21 @@ func NewPipeline() *Pipeline {
 func (p *Pipeline) Init() error {
 	err := v.Struct(p.cfg)
 	if err != nil {
-		return errs.Wrap(err, "validate failed")
+		return errs.Wrap(err, "pipeline cfg validate failed")
 	}
 
 	for i, w := range p.ws {
+		w.Inherit(p)
 		err = runner.Init(w)
 		if err != nil {
-			return errs.Wrapf(err, "init worker(%d) %s failed", i, w.Name())
+			return errs.Wrapf(err, "init worker(%d) %s failed", i, w.Type())
 		}
 	}
 
-	// TODO
-	return nil
+	return p.Runner.Init()
 }
 
-// AddWorker for no cfg scene
+// AddWorker for no cfg scene.
 func (p *Pipeline) AddWorker(w Worker) {
 	p.ws = append(p.ws, w)
 }
@@ -96,12 +106,33 @@ func (p *Pipeline) Workers() []Worker {
 }
 
 func (p *Pipeline) Start() error {
-	// TODO
-	return p.Runner.Start()
+	var (
+		err   error
+		errMu sync.Mutex
+	)
+
+	wg := &sync.WaitGroup{}
+	wg.Add(len(p.ws))
+	for _, w := range p.ws {
+		go func(w Worker) {
+			defer wg.Done()
+			runner.Start(w)
+			e := w.Err()
+			if e != nil {
+				errMu.Lock()
+				err = errors.Join(err, e)
+				errMu.Unlock()
+			}
+		}(w)
+	}
+
+	wg.Wait()
+
+	return err
 }
 
 func (p *Pipeline) Stop() error {
-	// TODO
+	runner.Stop(p.ws[0])
 	return nil
 }
 
@@ -114,7 +145,7 @@ func (p *Pipeline) SetCfg(cfg *Cfg) {
 
 	items := make([]any, 0, len(p.cfg.Items))
 	for _, itemCfg := range p.cfg.Items {
-		item := plugin.CreateWithCfg(itemCfg.Type, itemCfg.Cfg)
+		item := plugin.CreateWithCfg[Type, plugin.Plugin[Type], any](itemCfg.Type, itemCfg.Cfg)
 		typ := typeof(item)
 		switch typ {
 		case 'r', 'w':
