@@ -18,7 +18,7 @@ func init() {
 }
 
 func Load() {
-	plugin.RegWithCfg(TypeSQLite, NewSQLiteKVS, NewSQLiteKVSCfg)
+	plugin.RegWithCfg(TypeSQLite, NewSQLiteKVS, func() any { return NewSQLiteKVSCfg() })
 }
 
 const (

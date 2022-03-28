@@ -42,16 +42,11 @@ func Reg[T any, P Plugin[T]](typ T, creator Creator[T, P]) {
 	_pluginCreators[typ] = creator
 }
 
-func RegCfg[T any, C any](typ T, creator CfgCreator[C]) {
-	var c C
-	rt := reflect.TypeOf(c)
-	if rt != nil && rt.Kind() != reflect.Ptr {
-		panic(fmt.Sprintf("plugin cfg %s is not interface or ptr", rt.String()))
-	}
+func RegCfg[T any](typ T, creator CfgCreator[any]) {
 	_pluginCfgCreators[typ] = creator
 }
 
-func RegWithCfg[T any, C any, P Plugin[T]](typ T, creator Creator[T, P], cfgCreator CfgCreator[C]) {
+func RegWithCfg[T any, P Plugin[T]](typ T, creator Creator[T, P], cfgCreator CfgCreator[any]) {
 	Reg(typ, creator)
 	RegCfg(typ, cfgCreator)
 }
@@ -63,7 +58,7 @@ func RegWithCfg[T any, C any, P Plugin[T]](typ T, creator Creator[T, P], cfgCrea
 // 1. plugin不存在，说明没有注册，大部分情况是没有调用RegisterPlugin
 // 2. cfg设置失败，说明plugin本身定义的有问题
 // 这两种情况下说明代码本身有问题，所以直接panic.
-func CreateWithCfg[T any, P Plugin[T], C any](typ T, cfg C) P {
+func CreateWithCfg[T any, P Plugin[T]](typ T, cfg any) P {
 	f, exists := _pluginCreators[typ]
 	if !exists {
 		panic(fmt.Sprintf("plugin not exists: %+v", typ))
@@ -85,12 +80,11 @@ func CreateCfg[T any](typ T) any {
 		return nil
 	}
 
-	// TODO
-	return f.(CfgCreator)()
+	return f.(CfgCreator[any])()
 }
 
 func Create[T any, P Plugin[T], C any](typ T) P {
-	return CreateWithCfg[T, P, C](typ, CreateCfg[T, C](typ))
+	return CreateWithCfg[T, P](typ, CreateCfg(typ))
 }
 
 func SetCfg[C any](p any, cfg C) {
