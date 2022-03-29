@@ -3,10 +3,11 @@ package pipeline
 import (
 	"errors"
 	"io"
+	"reflect"
 	"sync"
+	"time"
 
 	"github.com/donkeywon/golib/errs"
-	"github.com/donkeywon/golib/pipeline/rw"
 	"github.com/donkeywon/golib/plugin"
 	"github.com/donkeywon/golib/runner"
 	"github.com/donkeywon/golib/util/v"
@@ -16,90 +17,117 @@ func init() {
 	plugin.RegWithCfg(PluginTypePipeline, New, func() any { return NewCfg() })
 }
 
-const PluginTypePipeline plugin.Type = "ppl"
+const PluginTypePipeline plugin.Type = "pipeline"
+
+type Type string
+
+type ItemCfg struct {
+	Cfg    any         `json:"cfg"    yaml:"cfg" validate:"required"`
+	Option *ItemOption `json:"option" yaml:"option"`
+	Type   Type        `json:"type"   yaml:"type" validate:"required"`
+}
+
+type ItemOption struct {
+	BufSize     int  `json:"bufSize" yaml:"bufSize"`
+	QueueSize   int  `json:"queueSize" yaml:"queueSize"`
+	Deadline    int  `json:"deadline" yaml:"deadline"`
+	EnableBuf   bool `json:"enableBuf" yaml:"enableBuf"`
+	EnableAsync bool `json:"enableAsync" yaml:"enableAsync"`
+}
+
+func (ito *ItemOption) ToOptions() []Option {
+	opts := make([]Option, 0, 2)
+	if ito.EnableBuf {
+		opts = append(opts, EnableBuf(ito.BufSize))
+	}
+	if ito.EnableAsync {
+		if ito.Deadline > 0 {
+			opts = append(opts, EnableAsyncDeadline(ito.BufSize, ito.QueueSize, time.Second*time.Duration(ito.Deadline)))
+		} else {
+			opts = append(opts, EnableAsync(ito.BufSize, ito.QueueSize))
+		}
+	}
+
+	return opts
+}
 
 type Cfg struct {
-	RWs []*rw.Cfg `json:"rws" validate:"required" yaml:"rws"`
+	Items []*ItemCfg `json:"items" yaml:"items"`
 }
 
 func NewCfg() *Cfg {
 	return &Cfg{}
 }
 
-func (c *Cfg) Add(role rw.Role, typ rw.Type, cfg any, extraCfg *rw.ExtraCfg) *Cfg {
-	c.RWs = append(c.RWs, &rw.Cfg{
-		Type:     typ,
-		Cfg:      cfg,
-		ExtraCfg: extraCfg,
-		Role:     role,
+func (c *Cfg) Add(t Type, cfg any, opt *ItemOption) *Cfg {
+	c.Items = append(c.Items, &ItemCfg{
+		Cfg:    cfg,
+		Option: opt,
+		Type:   t,
 	})
 	return c
 }
 
-func (c *Cfg) AddCfg(cfg *rw.Cfg) *Cfg {
-	c.RWs = append(c.RWs, cfg)
-	return c
-}
-
-type Result struct {
-	Cfg     *Cfg             `json:"cfg"     yaml:"cfg"`
-	Data    map[string]any   `json:"data"    yaml:"data"`
-	RWsData []map[string]any `json:"rwsData" yaml:"rwsData"`
-}
-
 type Pipeline struct {
 	runner.Runner
-	*Cfg
 
-	rwGroups []*RWGroup
+	cfg *Cfg
+	ws  []Worker
 }
 
 func New() *Pipeline {
 	return &Pipeline{
 		Runner: runner.Create(string(PluginTypePipeline)),
-		Cfg:    NewCfg(),
 	}
 }
 
 func (p *Pipeline) Init() error {
-	err := v.Struct(p.Cfg)
+	err := v.Struct(p.cfg)
 	if err != nil {
-		return errs.Wrap(err, "validate failed")
+		return errs.Wrap(err, "pipeline cfg validate failed")
 	}
 
-	rwCfgGroups := groupRWCfgByStarter(p.Cfg.RWs)
-	for _, rwGroup := range rwCfgGroups {
-		if !hasStarter(rwGroup) {
-			return errs.New("invalid pipeline cfg order")
-		}
-	}
-
-	p.rwGroups = createRWGroups(rwCfgGroups)
-
-	for i, rwGroup := range p.rwGroups {
-		rwGroup.Inherit(p)
-		err = runner.Init(rwGroup)
-		if err != nil {
-			return errs.Wrapf(err, "init rw group fail: %d", i)
-		}
-	}
-
-	for i := 0; i < len(p.rwGroups)-1; i++ {
+	for i := 0; i < len(p.ws)-1; i++ {
 		pr, pw := io.Pipe()
-		if len(p.rwGroups[i].Writers()) > 0 {
-			p.rwGroups[i].LastWriter().NestWriter(pw)
+		if len(p.ws[i].Writers()) > 0 {
+			if ww, ok := p.ws[i].LastWriter().(WriterWrapper); !ok {
+				return errs.Errorf("worker(%d) %s last writer %s is not WriterWrapper", i, p.ws[i].Type(), reflect.TypeOf(p.ws[i].LastWriter()).String())
+			} else {
+				ww.Wrap(pw)
+			}
 		} else {
-			p.rwGroups[i].Starter().NestWriter(pw)
+			p.ws[i].WriteTo(pw)
 		}
 
-		if len(p.rwGroups[i+1].Readers()) > 0 {
-			p.rwGroups[i+1].FirstReader().NestReader(pr)
+		if len(p.ws[i+1].Readers()) > 0 {
+			if rr, ok := p.ws[i+1].LastReader().(ReaderWrapper); !ok {
+				return errs.Errorf("worker(%d) %s last reader %s is not ReaderWrapper", i, p.ws[i+1].Type(), reflect.TypeOf(p.ws[i+1].LastReader()).String())
+			} else {
+				rr.Wrap(pr)
+			}
 		} else {
-			p.rwGroups[i+1].Starter().NestReader(pr)
+			p.ws[i+1].ReadFrom(pr)
+		}
+	}
+
+	for i, w := range p.ws {
+		w.Inherit(p)
+		err = runner.Init(w)
+		if err != nil {
+			return errs.Wrapf(err, "init worker(%d) %s failed", i, w.Type())
 		}
 	}
 
 	return p.Runner.Init()
+}
+
+// AddWorker for no cfg scene.
+func (p *Pipeline) AddWorker(w Worker) {
+	p.ws = append(p.ws, w)
+}
+
+func (p *Pipeline) Workers() []Worker {
+	return p.ws
 }
 
 func (p *Pipeline) Start() error {
@@ -109,18 +137,18 @@ func (p *Pipeline) Start() error {
 	)
 
 	wg := &sync.WaitGroup{}
-	wg.Add(len(p.rwGroups))
-	for _, rwGroup := range p.rwGroups {
-		go func(rwGroup *RWGroup) {
+	wg.Add(len(p.ws))
+	for _, w := range p.ws {
+		go func(w Worker) {
 			defer wg.Done()
-			runner.Start(rwGroup)
-			re := rwGroup.Err()
-			errMu.Lock()
-			if re != nil {
-				err = errors.Join(err, re)
+			runner.Start(w)
+			e := w.Err()
+			if e != nil {
+				errMu.Lock()
+				err = errors.Join(err, e)
+				errMu.Unlock()
 			}
-			errMu.Unlock()
-		}(rwGroup)
+		}(w)
 	}
 
 	wg.Wait()
@@ -129,7 +157,7 @@ func (p *Pipeline) Start() error {
 }
 
 func (p *Pipeline) Stop() error {
-	runner.Stop(p.rwGroups[0])
+	runner.Stop(p.ws[0])
 	return nil
 }
 
@@ -137,117 +165,140 @@ func (p *Pipeline) Type() plugin.Type {
 	return PluginTypePipeline
 }
 
-func (p *Pipeline) RWGroups() []*RWGroup {
-	return p.rwGroups
+func (p *Pipeline) SetCfg(cfg any) {
+	p.cfg = cfg.(*Cfg)
+
+	items := make([]any, 0, len(p.cfg.Items))
+	for _, itemCfg := range p.cfg.Items {
+		item := plugin.CreateWithCfg[Type, Common](itemCfg.Type, itemCfg.Cfg)
+		typ := typeof(item)
+		switch typ {
+		case 'r', 'w':
+			if itemCfg.Option != nil {
+				item.(optionApplier).WithOptions(itemCfg.Option.ToOptions()...)
+			}
+		}
+
+		items = append(items, item)
+	}
+
+	groups := groupItemsByWorker(items)
+	for _, group := range groups {
+		if !hasWorker(group) {
+			panic("invalid pipeline items order")
+		}
+	}
+
+	p.ws = combineReaderAndWriterToWorker(groups)
 }
 
-func (p *Pipeline) Result() *Result {
-	r := &Result{
-		Cfg: p.Cfg,
+func combineReaderAndWriterToWorker(groups [][]any) []Worker {
+	workers := make([]Worker, 0, len(groups))
+	for _, group := range groups {
+		readers, worker, writers := splitGroup(group)
+		if len(readers) > 0 {
+			for i := len(readers) - 1; i >= 0; i-- {
+				worker.ReadFrom(readers[i])
+			}
+		}
+		if len(writers) > 0 {
+			for i := range writers {
+				worker.WriteTo(writers[i])
+			}
+		}
+		workers = append(workers, worker)
 	}
-	r.Data = p.LoadAll()
 
-	var data map[string]any
-	for _, rwg := range p.rwGroups {
-		for _, rw := range rwg.Readers() {
-			data = rw.LoadAll()
-			r.RWsData = append(r.RWsData, data)
-		}
-		data = rwg.Starter().LoadAll()
-		r.RWsData = append(r.RWsData, data)
-		for _, rw := range rwg.Writers() {
-			data = rw.LoadAll()
-			r.RWsData = append(r.RWsData, data)
-		}
-	}
-	return r
+	return workers
 }
 
-func createRWGroups(rwCfgGroups [][]*rw.Cfg) []*RWGroup {
-	var rwGroups []*RWGroup
-	for _, rwCfgGroup := range rwCfgGroups {
-		rwGroupCfg := NewRWGroupCfg()
-		readers, starter, writers := splitRWCfgGroup(rwCfgGroup)
-		for _, reader := range readers {
-			rwGroupCfg.FromReader(reader.Type, reader.Cfg, reader.ExtraCfg)
-		}
-		rwGroupCfg.SetStarter(starter.Type, starter.Cfg, starter.ExtraCfg)
-		for _, writer := range writers {
-			rwGroupCfg.ToWriter(writer.Type, writer.Cfg, writer.ExtraCfg)
-		}
+func groupItemsByWorker(items []any) [][]any {
+	// W worker
+	// w writer
+	// r reader
 
-		rwGroup := NewRWGroup()
-		rwGroup.RWGroupCfg = rwGroupCfg
-		rwGroups = append(rwGroups, rwGroup)
-	}
-	return rwGroups
-}
-
-func groupRWCfgByStarter(rws []*rw.Cfg) [][]*rw.Cfg {
 	// RW between starter must like
-	// Srrr...rrrS
-	// Swww...wwwS
-	// Srrr...wwwS
-	// Swww...rrrS
+	// Wrrr...rrrW
+	// Wwww...wwwW
+	// Wrrr...wwwW
+	// Wwww...rrrW
 
-	// RR append
-	// RS append
-	// RW new group
-	// SS new group
-	// SR new group
-	// SW append
-	// WW append
-	// WR new group
-	// WS new group
-	var rwGroups [][]*rw.Cfg
-	var group []*rw.Cfg
-	for i := range rws {
-		if i == 0 {
-			group = append(group, rws[i])
-			continue
-		}
-		curRole := rws[i].Role
-		previousRole := rws[i-1].Role
-		if previousRole == rw.RoleReader && curRole == rw.RoleReader ||
-			previousRole == rw.RoleReader && curRole == rw.RoleStarter ||
-			previousRole == rw.RoleStarter && curRole == rw.RoleWriter ||
-			previousRole == rw.RoleWriter && curRole == rw.RoleWriter {
-			group = append(group, rws[i])
-			continue
-		}
+	// rr append
+	// rW append
+	// rw new group
+	// WW new group
+	// Wr new group
+	// Ww append
+	// ww append
+	// wr new group
+	// wW new group
 
-		rwGroups = append(rwGroups, group)
-		group = make([]*rw.Cfg, 1)
-		group[0] = rws[i]
-	}
-	if len(group) != 0 {
-		rwGroups = append(rwGroups, group)
-	}
-	return rwGroups
-}
-
-func splitRWCfgGroup(rwCfgGroup []*rw.Cfg) ([]*rw.Cfg, *rw.Cfg, []*rw.Cfg) {
 	var (
-		readers []*rw.Cfg
-		starter *rw.Cfg
-		writers []*rw.Cfg
+		groups    [][]any
+		itemGroup []any
 	)
-	for _, rwCfg := range rwCfgGroup {
-		switch rwCfg.Role {
-		case rw.RoleReader:
-			readers = append(readers, rwCfg)
-		case rw.RoleStarter:
-			starter = rwCfg
-		case rw.RoleWriter:
-			writers = append(writers, rwCfg)
+	for i := range items {
+		if i == 0 {
+			itemGroup = append(itemGroup, items[i])
+			continue
 		}
+		cur := typeof(items[i])
+		previous := typeof(items[i-1])
+		if previous == 'r' && cur == 'r' ||
+			previous == 'r' && cur == 'W' ||
+			previous == 'W' && cur == 'w' ||
+			previous == 'w' && cur == 'w' {
+			itemGroup = append(itemGroup, items[i])
+			continue
+		}
+
+		groups = append(groups, itemGroup)
+		itemGroup = make([]any, 1)
+		itemGroup[0] = items[i]
 	}
-	return readers, starter, writers
+	if len(itemGroup) > 0 {
+		groups = append(groups, itemGroup)
+	}
+	return groups
 }
 
-func hasStarter(rws []*rw.Cfg) bool {
-	for _, _rw := range rws {
-		if _rw.Role == rw.RoleStarter {
+func typeof(item any) byte {
+	switch item.(type) {
+	case Reader:
+		return 'r'
+	case Writer:
+		return 'w'
+	case Worker:
+		return 'W'
+	default:
+		panic("invalid pipeline item type: " + reflect.TypeOf(item).String())
+	}
+}
+
+func splitGroup(group []any) ([]Reader, Worker, []Writer) {
+	var (
+		readers []Reader
+		worker  Worker
+		writers []Writer
+	)
+
+	for _, item := range group {
+		switch typeof(item) {
+		case 'r':
+			readers = append(readers, item.(Reader))
+		case 'w':
+			writers = append(writers, item.(Writer))
+		case 'W':
+			worker = item.(Worker)
+		}
+	}
+
+	return readers, worker, writers
+}
+
+func hasWorker(group []any) bool {
+	for _, item := range group {
+		if typeof(item) == 'W' {
 			return true
 		}
 	}

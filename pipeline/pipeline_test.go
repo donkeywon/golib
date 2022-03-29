@@ -1,156 +1,58 @@
 package pipeline
 
 import (
-	"fmt"
 	"testing"
-	"time"
 
-	"github.com/donkeywon/golib/pipeline/rw"
+	"github.com/donkeywon/golib/log"
+	"github.com/donkeywon/golib/oss"
 	"github.com/donkeywon/golib/runner"
-	"github.com/donkeywon/golib/util/jsons"
+	"github.com/donkeywon/golib/util/cmd"
 	"github.com/donkeywon/golib/util/tests"
 	"github.com/stretchr/testify/require"
 )
 
-func TestGroupByStarter(t *testing.T) {
-	rws := []*rw.Cfg{}
-	g := groupRWCfgByStarter(rws)
-	require.Empty(t, g)
-
-	rws = []*rw.Cfg{
-		{Role: rw.RoleReader},
-	}
-	g = groupRWCfgByStarter(rws)
-	require.Len(t, g, 1)
-	require.Len(t, g[0], 1)
-
-	rws = []*rw.Cfg{
-		{Role: rw.RoleReader},
-		{Role: rw.RoleStarter},
-		{Role: rw.RoleWriter},
-	}
-	g = groupRWCfgByStarter(rws)
-	require.Len(t, g, 1)
-	require.Len(t, g[0], 3)
-
-	rws = []*rw.Cfg{
-		{Role: rw.RoleReader},
-		{Role: rw.RoleReader},
-	}
-	g = groupRWCfgByStarter(rws)
-	require.Len(t, g, 1)
-	require.Len(t, g[0], 2)
-
-	rws = []*rw.Cfg{
-		{Role: rw.RoleReader},
-		{Role: rw.RoleReader},
-		{Role: rw.RoleStarter},
-		{Role: rw.RoleStarter},
-		{Role: rw.RoleWriter},
-		{Role: rw.RoleWriter},
-		{Role: rw.RoleStarter},
-	}
-	g = groupRWCfgByStarter(rws)
-	require.Len(t, g, 3)
-	require.Len(t, g[0], 3)
-	require.Len(t, g[1], 3)
-	require.Len(t, g[2], 1)
+type logWriter struct {
+	log.Logger
 }
 
-func TestMultiGroupPipeline(t *testing.T) {
-	cfg := NewCfg().
-		//Add(RoleReader, TypeFile, &FileCfg{Path: "/root/test.file"}, nil).
-		//Add(RoleWriter, TypeCompress, &CompressCfg{Type: CompressTypeZstd, Level: CompressLevelBetter, Concurrency: 1}, nil).
-		//Add(rw.RoleStarter, rw.TypeCmd, &cmd.Cfg{Command: []string{"zstd"}}, nil).
-		Add(rw.RoleStarter, rw.TypeCopy, &rw.CopyCfg{}, nil).
-		Add(rw.RoleWriter, rw.TypeFile, &rw.FileCfg{Path: "/dev/null"}, nil)
-
-	p := New()
-	p.Cfg = cfg
-	tests.Init(p)
-	err := runner.Init(p)
-	require.NoError(t, err)
-
-	//p.rwGroups[0].LastWriter().HookWrite(func(n int, bs []byte, err error, cost int64, misc ...any) error {
-	//	time.Sleep(time.Second)
-	//	return nil
-	//})
-	//
-	go func() {
-		time.Sleep(time.Second * 1)
-		runner.Stop(p)
-	}()
-
-	runner.Start(p)
-	require.NoError(t, p.Err())
+func (l logWriter) Write(p []byte) (int, error) {
+	l.Logger.Info("write", "len", len(p))
+	return len(p), nil
 }
 
-func TestCompress(t *testing.T) {
-	cfg := NewCfg().
-		Add(rw.RoleReader, rw.TypeFile, &rw.FileCfg{Path: "test.file.zst"}, nil).
-		Add(rw.RoleReader, rw.TypeCompress, &rw.CompressCfg{Type: rw.CompressTypeZstd}, nil).
-		Add(rw.RoleStarter, rw.TypeCopy, &rw.CopyCfg{BufSize: 32 * 1024}, nil).
-		Add(rw.RoleWriter, rw.TypeFile, &rw.FileCfg{Path: "test.file"}, nil)
+func TestPipelineWithCfg(t *testing.T) {
+	c := NewCfg()
+	c.
+		Add(ReaderFile, &FileCfg{
+			Path: "/tmp/test.file",
+			Perm: 644,
+		}, nil).
+		Add(WorkerCopy, &CopyCfg{}, nil).
+		Add(WorkerCmd, &cmd.Cfg{Command: []string{"zstd"}}, nil).
+		Add(WriterOSS, &OSSCfg{
+			Cfg: &oss.Cfg{
+				URL:     "",
+				Ak:      "",
+				Sk:      "",
+				Timeout: 10,
+				Region:  "",
+			},
+			Append: false,
+		}, nil)
 
-	p := New()
-	p.Cfg = cfg
-	tests.Init(p)
-	err := runner.Init(p)
-	require.NoError(t, err)
+	ppl := New()
+	ppl.SetCfg(c)
+	tests.Init(ppl)
 
-	runner.Start(p)
-	require.NoError(t, p.Err())
-
-	fmt.Println(p.RWGroups()[0].Readers()[1].Type())
-}
-
-func TestUnmarshal(t *testing.T) {
-	str := `{
-  "rws": [
-    {
-      "type": "file",
-      "cfg": {
-        "path": "/root/test",
-        "perm": 755
-      },
-      "role": "reader",
-      "extraCfg": {
-        "rateLimiterCfg": {
-          "type": "host",
-          "cfg": {
-            "nic": "eth0",
-            "monitorInterval": 10
-          }
-        }
-      }
-    },
-    {
-      "type": "copy",
-      "cfg": {
-        "bufSize": 1024
-      },
-      "role": "starter"
-    },
-    {
-      "type": "compress",
-      "cfg": {
-        "type": "zstd",
-        "level": "fast",
-        "concurrency": 1
-      }
-    },
-    {
-      "type": "cmd",
-      "cfg": {
-        "command": ["bash", "-c", "test"],
-        "runAsUser": "abc"
-      }
-    }
-  ]
-}
-`
-
-	cfg := NewCfg()
-	err := jsons.Unmarshal([]byte(str), cfg)
-	require.NoError(t, err)
+	ppl.Workers()[1].Writers()[0].(Writer).WithOptions(EnableBuf(8*1024*1024), MultiWrite(logWriter{ppl}))
+	// go func() {
+	// 	time.Sleep(time.Millisecond * 500)
+	// 	runner.Stop(ppl)
+	// }()
+	require.NoError(t, runner.Init(ppl))
+	runner.Start(ppl)
+	if ppl.Err() != nil {
+		ppl.Error("failed", ppl.Err())
+	}
+	require.NoError(t, ppl.Err())
 }
