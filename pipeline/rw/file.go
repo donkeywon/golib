@@ -9,7 +9,7 @@ import (
 )
 
 func init() {
-	plugin.RegWithCfg(TypeFile, func() any { return NewFile() }, func() any { return NewFileCfg() })
+	plugin.RegWithCfg(TypeFile, func() RW { return NewFile() }, func() any { return NewFileCfg() })
 }
 
 const TypeFile Type = "file"
@@ -67,10 +67,6 @@ func (f *File) Init() error {
 	return f.RW.Init()
 }
 
-func (f *File) Type() any {
+func (f *File) Type() Type {
 	return TypeFile
-}
-
-func (f *File) GetCfg() any {
-	return f.FileCfg
 }

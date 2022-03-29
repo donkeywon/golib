@@ -109,11 +109,7 @@ func (t *tickStep) Start() error {
 	return nil
 }
 
-func (t *tickStep) GetCfg() any {
-	return t.Cfg
-}
-
-func (t *tickStep) Type() any {
+func (t *tickStep) Type() step.Type {
 	return stepTypeTick
 }
 

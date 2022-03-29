@@ -8,7 +8,7 @@ import (
 )
 
 func init() {
-	plugin.RegWithCfg(TypeNull, func() any { return NewNull() }, func() any { return NewNullCfg() })
+	plugin.RegWithCfg(TypeNull, func() RW { return NewNull() }, func() any { return NewNullCfg() })
 }
 
 type null struct{}
@@ -61,10 +61,6 @@ func (f *Null) Init() error {
 	return f.RW.Init()
 }
 
-func (f *Null) Type() any {
+func (f *Null) Type() Type {
 	return TypeFile
-}
-
-func (f *Null) GetCfg() any {
-	return f.NullCfg
 }

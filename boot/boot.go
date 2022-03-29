@@ -329,7 +329,7 @@ func durationUnmarshaler(d *time.Duration, b []byte) error {
 func buildCfgMap() map[string]any {
 	cfgMap := make(map[string]any)
 	for _, daemonType := range _daemons {
-		cfg := plugin.CreateCfg[DaemonType, any](daemonType)
+		cfg := plugin.CreateCfg(daemonType)
 		cfgMap[string(daemonType)] = cfg
 	}
 	for name, cfg := range _cfgMap {

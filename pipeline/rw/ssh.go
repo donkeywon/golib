@@ -15,7 +15,7 @@ import (
 )
 
 func init() {
-	plugin.RegWithCfg(TypeSSH, func() any { return NewSSH() }, func() any { return NewSSHCfg() })
+	plugin.RegWithCfg(TypeSSH, func() RW { return NewSSH() }, func() any { return NewSSHCfg() })
 }
 
 const (
@@ -106,12 +106,8 @@ func (s *SSH) Stop() error {
 	return errs.Wrap(err, "ssh signal kill failed")
 }
 
-func (s *SSH) Type() any {
+func (s *SSH) Type() Type {
 	return TypeSSH
-}
-
-func (s *SSH) GetCfg() any {
-	return s.SSHCfg
 }
 
 func sshReadCmd(path string) string {

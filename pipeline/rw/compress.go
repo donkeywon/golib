@@ -12,7 +12,7 @@ import (
 )
 
 func init() {
-	plugin.RegWithCfg(TypeCompress, func() any { return NewCompress() }, func() any { return NewCompressCfg() })
+	plugin.RegWithCfg(TypeCompress, func() RW { return NewCompress() }, func() any { return NewCompressCfg() })
 }
 
 const (
@@ -111,12 +111,8 @@ func (c *Compress) NestWriter(w io.WriteCloser) {
 	c.RW.NestWriter(c.compressWriter)
 }
 
-func (c *Compress) Type() any {
+func (c *Compress) Type() Type {
 	return TypeCompress
-}
-
-func (c *Compress) GetCfg() any {
-	return c.CompressCfg
 }
 
 func NewZstdWriter(w io.WriteCloser, cfg *CompressCfg) io.WriteCloser {

@@ -7,7 +7,7 @@ import (
 )
 
 func init() {
-	plugin.RegWithCfg(TypeFtp, func() any { return NewFtp() }, func() any { return NewFtpCfg() })
+	plugin.RegWithCfg(TypeFtp, func() RW { return NewFtp() }, func() any { return NewFtpCfg() })
 }
 
 const (
@@ -66,12 +66,8 @@ func (f *Ftp) Init() error {
 	return f.RW.Init()
 }
 
-func (f *Ftp) Type() any {
+func (f *Ftp) Type() Type {
 	return TypeFtp
-}
-
-func (f *Ftp) GetCfg() any {
-	return f.FtpCfg
 }
 
 func createFtpCfg(ftpCfg *FtpCfg) *ftp.Cfg {

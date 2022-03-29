@@ -11,7 +11,7 @@ import (
 const defaultBufSize = 32 * 1024
 
 func init() {
-	plugin.RegWithCfg(TypeCopy, func() any { return NewCopy() }, func() any { return NewCopyCfg() })
+	plugin.RegWithCfg(TypeCopy, func() RW { return NewCopy() }, func() any { return NewCopyCfg() })
 }
 
 const TypeCopy Type = "copy"
@@ -68,10 +68,6 @@ func (cp *Copy) Stop() error {
 	return cp.RW.Stop()
 }
 
-func (cp *Copy) Type() any {
+func (cp *Copy) Type() Type {
 	return TypeCopy
-}
-
-func (cp *Copy) GetCfg() any {
-	return cp.CopyCfg
 }
