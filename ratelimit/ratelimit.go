@@ -9,33 +9,33 @@ import (
 	"github.com/tidwall/gjson"
 )
 
-type RateLimiterType string
+type Type string
 
 type RxTxRateLimiter interface {
 	runner.Runner
-	plugin.Plugin[RateLimiterType]
+	plugin.Plugin[Type]
 	RxWaitN(n int, timeout int) error
 	TxWaitN(n int, timeout int) error
 }
 
-type RateLimiterCfg struct {
-	Type RateLimiterType `json:"type" yaml:"type"`
-	Cfg  any             `json:"cfg"  yaml:"cfg"`
+type Cfg struct {
+	Type Type `json:"type" yaml:"type"`
+	Cfg  any  `json:"cfg"  yaml:"cfg"`
 }
 
 type rateLimiterCfgOnlyCfg struct {
 	Cfg any `json:"cfg" yaml:"cfg"`
 }
 
-func (c *RateLimiterCfg) UnmarshalJSON(data []byte) error {
+func (c *Cfg) UnmarshalJSON(data []byte) error {
 	return c.customUnmarshal(data, jsons.Unmarshal)
 }
 
-func (c *RateLimiterCfg) UnmarshalYAML(data []byte) error {
+func (c *Cfg) UnmarshalYAML(data []byte) error {
 	return c.customUnmarshal(data, yamls.Unmarshal)
 }
 
-func (c *RateLimiterCfg) customUnmarshal(data []byte, unmarshaler func([]byte, any) error) error {
+func (c *Cfg) customUnmarshal(data []byte, unmarshaler func([]byte, any) error) error {
 	typ := gjson.GetBytes(data, "type")
 	if !typ.Exists() {
 		return errs.Errorf("ratelimiter type is not present")
@@ -43,7 +43,7 @@ func (c *RateLimiterCfg) customUnmarshal(data []byte, unmarshaler func([]byte, a
 	if typ.Type != gjson.String {
 		return errs.Errorf("invalid ratelimiter type")
 	}
-	c.Type = RateLimiterType(typ.Str)
+	c.Type = Type(typ.Str)
 
 	cv := rateLimiterCfgOnlyCfg{}
 	cv.Cfg = plugin.CreateCfg(c.Type)

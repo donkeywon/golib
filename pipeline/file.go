@@ -32,6 +32,7 @@ type File struct {
 	*os.File
 	*FileCfg
 
+	fi         os.FileInfo
 	parsedPerm int64
 	flag       int
 }
@@ -60,7 +61,16 @@ func (f *File) init() error {
 		return errs.Wrapf(err, "failed to open file: %s", f.Path)
 	}
 
+	f.fi, err = f.File.Stat()
+	if err != nil {
+		return errs.Wrapf(err, "stat file failed: %s", f.Path)
+	}
+
 	return nil
+}
+
+func (f *File) Size() int64 {
+	return f.fi.Size()
 }
 
 type FileReader struct {
@@ -97,6 +107,10 @@ func (f *FileReader) Type() Type {
 
 func (f *FileReader) SetCfg(cfg any) {
 	f.f.FileCfg = cfg.(*FileCfg)
+}
+
+func (f *FileReader) Size() int64 {
+	return f.f.Size()
 }
 
 type FileWriter struct {

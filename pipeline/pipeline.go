@@ -1,7 +1,12 @@
 package pipeline
 
 import (
+	"crypto/md5"
+	"crypto/sha1"
+	"crypto/sha256"
 	"errors"
+	"hash"
+	"hash/crc32"
 	"io"
 	"reflect"
 	"sync"
@@ -9,8 +14,10 @@ import (
 
 	"github.com/donkeywon/golib/errs"
 	"github.com/donkeywon/golib/plugin"
+	"github.com/donkeywon/golib/ratelimit"
 	"github.com/donkeywon/golib/runner"
 	"github.com/donkeywon/golib/util/v"
+	"github.com/zeebo/xxh3"
 )
 
 func init() {
@@ -28,11 +35,15 @@ type ItemCfg struct {
 }
 
 type ItemOption struct {
-	BufSize     int  `json:"bufSize" yaml:"bufSize"`
-	QueueSize   int  `json:"queueSize" yaml:"queueSize"`
-	Deadline    int  `json:"deadline" yaml:"deadline"`
-	EnableBuf   bool `json:"enableBuf" yaml:"enableBuf"`
-	EnableAsync bool `json:"enableAsync" yaml:"enableAsync"`
+	BufSize             int            `json:"bufSize" yaml:"bufSize"`
+	QueueSize           int            `json:"queueSize" yaml:"queueSize"`
+	Deadline            int            `json:"deadline" yaml:"deadline"`
+	EnableBuf           bool           `json:"enableBuf" yaml:"enableBuf"`
+	EnableAsync         bool           `json:"enableAsync" yaml:"enableAsync"`
+	ProgressLogInterval int            `json:"progressLogInterval" yaml:"progressLogInterval"`
+	Hash                string         `json:"hash" yaml:"hash"`
+	Checksum            string         `json:"checksum" yaml:"checksum"`
+	RateLimitCfg        *ratelimit.Cfg `json:"rateLimitCfg" yaml:"rateLimitCfg"`
 }
 
 func (ito *ItemOption) ToOptions() []Option {
@@ -47,8 +58,39 @@ func (ito *ItemOption) ToOptions() []Option {
 			opts = append(opts, EnableAsync(ito.BufSize, ito.QueueSize))
 		}
 	}
+	if ito.ProgressLogInterval > 0 {
+		opts = append(opts, ProgressLog(time.Second*time.Duration(ito.ProgressLogInterval)))
+	}
+	if len(ito.Hash) > 0 && len(ito.Checksum) > 0 {
+		opts = append(opts, Checksum(ito.Checksum, initHash(ito.Hash)))
+	}
+	if len(ito.Hash) > 0 {
+		opts = append(opts, Hash(initHash(ito.Hash)))
+	}
+	if ito.RateLimitCfg != nil && ito.RateLimitCfg.Cfg != nil {
+		opts = append(opts, RateLimit(ito.RateLimitCfg))
+	}
 
 	return opts
+}
+
+func initHash(algo string) hash.Hash {
+	var h hash.Hash
+	switch algo {
+	case "sha1":
+		h = sha1.New()
+	case "md5":
+		h = md5.New()
+	case "sha256":
+		h = sha256.New()
+	case "crc32":
+		h = crc32.New(crc32.IEEETable)
+	case "xxh3":
+		h = xxh3.New()
+	default:
+		h = xxh3.New()
+	}
+	return h
 }
 
 type Cfg struct {
@@ -111,6 +153,17 @@ func (p *Pipeline) Init() error {
 	}
 
 	for i, w := range p.ws {
+		for _, writer := range w.Writers() {
+			if common, ok := writer.(Common); ok {
+				common.WithOptions(setToTeesAndMultiWriters(common))
+			}
+		}
+		for _, reader := range w.Readers() {
+			if common, ok := reader.(Common); ok {
+				common.WithOptions(setToTeesAndMultiWriters(common))
+			}
+		}
+
 		w.Inherit(p)
 		err = runner.Init(w)
 		if err != nil {
@@ -175,7 +228,7 @@ func (p *Pipeline) SetCfg(cfg any) {
 		switch typ {
 		case 'r', 'w':
 			if itemCfg.Option != nil {
-				item.(optionApplier).WithOptions(itemCfg.Option.ToOptions()...)
+				item.WithOptions(itemCfg.Option.ToOptions()...)
 			}
 		}
 

@@ -11,10 +11,10 @@ import (
 )
 
 func init() {
-	plugin.RegWithCfg(RateLimiterTypeFixed, NewFixedRateLimiter, func() any { return NewFixedRateLimiterCfg() })
+	plugin.RegWithCfg(TypeFixed, func() RxTxRateLimiter { return NewFixedRateLimiter() }, func() any { return NewFixedRateLimiterCfg() })
 }
 
-const RateLimiterTypeFixed RateLimiterType = "fixed"
+const TypeFixed Type = "fixed"
 
 type FixedRateLimiterCfg struct {
 	N int
@@ -69,6 +69,6 @@ func (frl *FixedRateLimiter) TxWaitN(n int, timeout int) error {
 	return frl.waitN(n, timeout, frl.txRl)
 }
 
-func (frl *FixedRateLimiter) Type() RateLimiterType {
-	return RateLimiterTypeFixed
+func (frl *FixedRateLimiter) Type() Type {
+	return TypeFixed
 }

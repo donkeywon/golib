@@ -83,10 +83,10 @@ func (b *BaseWriter) Init() error {
 func (b *BaseWriter) Close() error {
 	defer b.Cancel()
 	if b.originWriter != nil && b.originWriter != b.WriteCloser {
-		return errors.Join(b.WriteCloser.Close(), b.originWriter.Close())
+		return errors.Join(b.WriteCloser.Close(), b.originWriter.Close(), b.opt.onclose())
 	}
 	if b.WriteCloser != nil {
-		return b.WriteCloser.Close()
+		return errors.Join(b.WriteCloser.Close(), b.opt.onclose())
 	}
 	return nil
 }

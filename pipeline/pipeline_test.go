@@ -3,8 +3,8 @@ package pipeline
 import (
 	"testing"
 
-	"github.com/donkeywon/golib/log"
 	"github.com/donkeywon/golib/oss"
+	"github.com/donkeywon/golib/ratelimit"
 	"github.com/donkeywon/golib/runner"
 	"github.com/donkeywon/golib/util/cmd"
 	"github.com/donkeywon/golib/util/tests"
@@ -12,12 +12,16 @@ import (
 )
 
 type logWriter struct {
-	log.Logger
+	Common
 }
 
-func (l logWriter) Write(p []byte) (int, error) {
-	l.Logger.Info("write", "len", len(p))
+func (l *logWriter) Write(p []byte) (int, error) {
+	l.Info("write", "len", len(p))
 	return len(p), nil
+}
+
+func (l *logWriter) Set(c Common) {
+	l.Common = c
 }
 
 func TestPipelineWithCfg(t *testing.T) {
@@ -26,7 +30,9 @@ func TestPipelineWithCfg(t *testing.T) {
 		Add(ReaderFile, &FileCfg{
 			Path: "/tmp/test.file",
 			Perm: 644,
-		}, nil).
+		}, &ItemOption{
+			ProgressLogInterval: 1,
+		}).
 		Add(WorkerCopy, &CopyCfg{}, nil).
 		Add(WorkerCmd, &cmd.Cfg{Command: []string{"zstd"}}, nil).
 		Add(WriterOSS, &OSSCfg{
@@ -38,13 +44,20 @@ func TestPipelineWithCfg(t *testing.T) {
 				Region:  "",
 			},
 			Append: false,
-		}, nil)
+		}, &ItemOption{
+			EnableBuf: true,
+			BufSize:   5 * 1024 * 1024,
+			RateLimitCfg: &ratelimit.Cfg{
+				Type: ratelimit.TypeSleep,
+				Cfg:  &ratelimit.SleepRateLimiterCfg{Millisecond: 100},
+			},
+		})
 
 	ppl := New()
 	ppl.SetCfg(c)
 	tests.Init(ppl)
 
-	ppl.Workers()[1].Writers()[0].(Writer).WithOptions(EnableBuf(8*1024*1024), MultiWrite(logWriter{ppl}))
+	ppl.Workers()[1].Writers()[0].(Writer).WithOptions(MultiWrite(&logWriter{}))
 	// go func() {
 	// 	time.Sleep(time.Millisecond * 500)
 	// 	runner.Stop(ppl)
