@@ -21,7 +21,7 @@ const PluginTypePipeline plugin.Type = "ppl"
 type Type string
 
 type Cfg struct {
-	Workers []*WorkerCfg `json:"items" yaml:"items"`
+	Workers []*WorkerCfg `json:"workers" yaml:"workers"`
 }
 
 func (c *Cfg) build() []Worker {

@@ -22,7 +22,7 @@ type Name string
 var D Svcd = &svcd{
 	Runner:      runner.Create("svc"),
 	svcCreators: make([]svcCreatorWithFQN, 0, 64),
-	svcMap:      make(map[string]any),
+	svcMap:      make(map[string]Svc),
 	svcCfgMap:   make(map[string]any),
 }
 
@@ -43,7 +43,7 @@ type svcd struct {
 	*Cfg
 
 	svcCreators []svcCreatorWithFQN
-	svcMap      map[string]any
+	svcMap      map[string]Svc
 	svcCfgMap   map[string]any
 }
 
@@ -70,7 +70,6 @@ func (s *svcd) Init() error {
 
 		if cfg, hasCfg := s.svcCfgMap[fqn]; hasCfg {
 			s.Debug("apply cfg to svc", "fqn", fqn, "cfg", cfg)
-			// TODO generic
 			if cs, ok := ins.(plugin.CfgSetter[any]); ok {
 				cs.SetCfg(cfg)
 			} else {

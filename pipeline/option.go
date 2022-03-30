@@ -22,7 +22,7 @@ type ReaderWrapFunc func(io.Reader) io.Reader
 
 type WriterWrapFunc func(io.Writer) io.Writer
 
-type itemSetter interface {
+type setter interface {
 	Set(Common)
 }
 
@@ -377,12 +377,12 @@ func RateLimit(cfg *ratelimit.Cfg) Option {
 func setToTeesAndMultiWriters(c Common) Option {
 	return optionFunc(func(o *option) {
 		for _, w := range o.ws {
-			if setter, ok := w.(itemSetter); ok {
+			if setter, ok := w.(setter); ok {
 				setter.Set(c)
 			}
 		}
 		for _, w := range o.tees {
-			if setter, ok := w.(itemSetter); ok {
+			if setter, ok := w.(setter); ok {
 				setter.Set(c)
 			}
 		}

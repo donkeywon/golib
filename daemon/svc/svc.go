@@ -4,7 +4,7 @@ import (
 	"github.com/donkeywon/golib/log"
 )
 
-type Creator func() any
+type Creator func() Svc
 type CfgCreator func() any
 
 type Svc interface {

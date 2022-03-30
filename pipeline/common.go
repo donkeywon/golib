@@ -33,7 +33,6 @@ type CommonOption struct {
 	BufSize             int            `json:"bufSize" yaml:"bufSize"`
 	QueueSize           int            `json:"queueSize" yaml:"queueSize"`
 	Deadline            int            `json:"deadline" yaml:"deadline"`
-	EnableBuf           bool           `json:"enableBuf" yaml:"enableBuf"`
 	EnableAsync         bool           `json:"enableAsync" yaml:"enableAsync"`
 	ProgressLogInterval int            `json:"progressLogInterval" yaml:"progressLogInterval"`
 	Hash                string         `json:"hash" yaml:"hash"`
@@ -43,19 +42,19 @@ type CommonOption struct {
 
 func (ito *CommonOption) toOptions(write bool) []Option {
 	opts := make([]Option, 0, 2)
-	if ito.EnableBuf && ito.BufSize > 0 {
-		if write {
-			opts = append(opts, EnableBufWrite(ito.BufSize))
-		} else {
-			opts = append(opts, EnableBufRead(ito.BufSize))
-		}
-	}
-
 	if ito.EnableAsync && ito.BufSize > 0 {
 		if write {
 			opts = append(opts, EnableAsyncWrite(ito.BufSize, ito.QueueSize, time.Second*time.Duration(ito.Deadline)))
 		} else {
 			opts = append(opts, EnableAsyncRead(ito.BufSize, ito.QueueSize))
+		}
+	}
+
+	if ito.BufSize > 0 {
+		if write {
+			opts = append(opts, EnableBufWrite(ito.BufSize))
+		} else {
+			opts = append(opts, EnableBufRead(ito.BufSize))
 		}
 	}
 

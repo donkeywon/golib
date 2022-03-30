@@ -28,7 +28,6 @@ func TestPipelineWithCfg(t *testing.T) {
 	c := NewCfg().
 		Add(&WorkerCfg{
 			Type: WorkerCopy,
-			Cfg:  &CopyCfg{},
 			Readers: []*ReaderCfg{
 				{
 					CommonCfg: CommonCfg{
@@ -73,8 +72,7 @@ func TestPipelineWithCfg(t *testing.T) {
 						},
 					},
 					CommonOption: CommonOption{
-						EnableBuf: true,
-						BufSize:   5 * 1024 * 1024,
+						BufSize: 5 * 1024 * 1024,
 						RateLimitCfg: &ratelimit.Cfg{
 							Type: ratelimit.TypeSleep,
 							Cfg:  &ratelimit.SleepRateLimiterCfg{Millisecond: 100},
