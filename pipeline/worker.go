@@ -6,10 +6,31 @@ import (
 	"reflect"
 
 	"github.com/donkeywon/golib/errs"
+	"github.com/donkeywon/golib/plugin"
 	"github.com/donkeywon/golib/runner"
 )
 
 var CreateWorker = newBaseWorker
+
+type WorkerCfg struct {
+	Type    Type         `json:"type" yaml:"type"`
+	Cfg     any          `json:"cfg" yaml:"cfg"`
+	Readers []*ReaderCfg `json:"readers" yaml:"readers"`
+	Writers []*WriterCfg `json:"writers" yaml:"writers"`
+}
+
+func (wc *WorkerCfg) build() Worker {
+	worker := plugin.CreateWithCfg[Type, Worker](wc.Type, wc.Cfg)
+
+	for _, readerCfg := range wc.Readers {
+		worker.ReadFrom(readerCfg.build())
+	}
+	for _, writerCfg := range wc.Writers {
+		worker.WriteTo(writerCfg.build())
+	}
+
+	return worker
+}
 
 type Worker interface {
 	Common
@@ -48,7 +69,7 @@ func (b *BaseWorker) Init() error {
 			b.Error("writer is not WriterWrapper", nil, "writer", reflect.TypeOf(b.ws[i]))
 			panic(ErrNotWrapper)
 		} else {
-			ww.Wrap(b.ws[i+1])
+			ww.WrapWriter(b.ws[i+1])
 		}
 	}
 	b.w = b.ws[0]
@@ -58,7 +79,7 @@ func (b *BaseWorker) Init() error {
 			b.Error("reader is not ReaderWrapper", nil, "reader", reflect.TypeOf(b.rs[i]))
 			panic(ErrNotWrapper)
 		} else {
-			rr.Wrap(b.rs[i+1])
+			rr.WrapReader(b.rs[i+1])
 		}
 	}
 	b.r = b.rs[0]

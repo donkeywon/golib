@@ -25,31 +25,62 @@ func (l *logWriter) Set(c Common) {
 }
 
 func TestPipelineWithCfg(t *testing.T) {
-	c := NewCfg()
-	c.
-		Add(ReaderFile, &FileCfg{
-			Path: "/tmp/test.file",
-			Perm: 644,
-		}, &ItemOption{
-			ProgressLogInterval: 1,
-		}).
-		Add(WorkerCopy, &CopyCfg{}, nil).
-		Add(WorkerCmd, &cmd.Cfg{Command: []string{"zstd"}}, nil).
-		Add(WriterOSS, &OSSCfg{
-			Cfg: &oss.Cfg{
-				URL:     "",
-				Ak:      "",
-				Sk:      "",
-				Timeout: 10,
-				Region:  "",
+	c := NewCfg().
+		Add(&WorkerCfg{
+			Type: WorkerCopy,
+			Cfg:  &CopyCfg{},
+			Readers: []*ReaderCfg{
+				{
+					CommonCfg: CommonCfg{
+						Type: ReaderFile,
+						Cfg: &FileCfg{
+							Path: "/tmp/test.file",
+							Perm: 644,
+						},
+					},
+					CommonOption: CommonOption{
+						ProgressLogInterval: 1,
+					},
+				},
 			},
-			Append: false,
-		}, &ItemOption{
-			EnableBuf: true,
-			BufSize:   5 * 1024 * 1024,
-			RateLimitCfg: &ratelimit.Cfg{
-				Type: ratelimit.TypeSleep,
-				Cfg:  &ratelimit.SleepRateLimiterCfg{Millisecond: 100},
+		}).
+		Add(&WorkerCfg{
+			Type: WorkerCmd,
+			Cfg:  &cmd.Cfg{Command: []string{"zstd"}},
+			Writers: []*WriterCfg{
+				{
+					CommonCfg: CommonCfg{
+						Type: WriterCompress,
+						Cfg: &CompressCfg{
+							Type:        CompressTypeZstd,
+							Level:       CompressLevelFast,
+							Concurrency: 4,
+						},
+					},
+				},
+				{
+					CommonCfg: CommonCfg{
+						Type: WriterOSS,
+						Cfg: &OSSCfg{
+							Cfg: &oss.Cfg{
+								URL:     "",
+								Ak:      "",
+								Sk:      "",
+								Timeout: 10,
+								Region:  "",
+							},
+							Append: false,
+						},
+					},
+					CommonOption: CommonOption{
+						EnableBuf: true,
+						BufSize:   5 * 1024 * 1024,
+						RateLimitCfg: &ratelimit.Cfg{
+							Type: ratelimit.TypeSleep,
+							Cfg:  &ratelimit.SleepRateLimiterCfg{Millisecond: 100},
+						},
+					},
+				},
 			},
 		})
 
@@ -57,7 +88,7 @@ func TestPipelineWithCfg(t *testing.T) {
 	ppl.SetCfg(c)
 	tests.Init(ppl)
 
-	ppl.Workers()[1].Writers()[0].(Writer).WithOptions(MultiWrite(&logWriter{}))
+	// ppl.Workers()[1].Writers()[0].(Writer).WithOptions(MultiWrite(&logWriter{}))
 	// go func() {
 	// 	time.Sleep(time.Millisecond * 500)
 	// 	runner.Stop(ppl)

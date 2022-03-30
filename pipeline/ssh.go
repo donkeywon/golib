@@ -15,7 +15,7 @@ import (
 )
 
 func init() {
-	plugin.RegWithCfg(WorkerSSH, func() Common { return NewSSH() }, func() any { return NewSSHCfg() })
+	plugin.RegWithCfg(WorkerSSH, func() Worker { return NewSSH() }, func() any { return NewSSHCfg() })
 }
 
 const WorkerSSH Type = "ssh"
