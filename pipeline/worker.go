@@ -44,7 +44,7 @@ func newBaseWorker(name string) Worker {
 
 func (b *BaseWorker) Init() error {
 	for i := len(b.ws) - 2; i >= 0; i-- {
-		if ww, ok := b.ws[i].(WriterWrapper); !ok {
+		if ww, ok := b.ws[i].(writerWrapper); !ok {
 			b.Error("writer is not WriterWrapper", nil, "writer", reflect.TypeOf(b.ws[i]))
 			panic(ErrNotWrapper)
 		} else {
@@ -54,7 +54,7 @@ func (b *BaseWorker) Init() error {
 	b.w = b.ws[0]
 
 	for i := len(b.rs) - 2; i >= 0; i-- {
-		if rr, ok := b.rs[i].(ReaderWrapper); !ok {
+		if rr, ok := b.rs[i].(readerWrapper); !ok {
 			b.Error("reader is not ReaderWrapper", nil, "reader", reflect.TypeOf(b.rs[i]))
 			panic(ErrNotWrapper)
 		} else {

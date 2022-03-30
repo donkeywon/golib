@@ -1,6 +1,7 @@
 package pipeline
 
 import (
+	"bufio"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -8,6 +9,7 @@ import (
 	"io"
 	"time"
 
+	"github.com/donkeywon/golib/aio"
 	"github.com/donkeywon/golib/consts"
 	"github.com/donkeywon/golib/errs"
 	"github.com/donkeywon/golib/plugin"
@@ -15,6 +17,10 @@ import (
 	"github.com/donkeywon/golib/runner"
 	"github.com/zeebo/xxh3"
 )
+
+type ReaderWrapFunc func(io.Reader) io.Reader
+
+type WriterWrapFunc func(io.Writer) io.Writer
 
 type itemSetter interface {
 	Set(Common)
@@ -39,16 +45,11 @@ func (mo multiOption) apply(opt *option) {
 }
 
 type option struct {
-	enableBuf bool
-	bufSize   int
-
-	enableAsync bool
-	queueSize   int
-	deadline    time.Duration
-
-	tees []io.Writer
-	ws   []io.Writer
-	cs   []io.Closer
+	tees            []io.Writer
+	ws              []io.Writer
+	cs              []closeFunc
+	readerWrapFuncs []ReaderWrapFunc
+	writerWrapFuncs []WriterWrapFunc
 }
 
 func newOption() *option {
@@ -62,9 +63,13 @@ func (o *option) with(opts ...Option) {
 }
 
 func (o *option) onclose() error {
+	return doAllClose(o.cs)
+}
+
+func doAllClose(closes []closeFunc) error {
 	var err []error
-	for _, c := range o.cs {
-		func(c io.Closer) {
+	for _, c := range closes {
+		func(c func() error) {
 			defer func() {
 				p := recover()
 				if p != nil {
@@ -72,38 +77,55 @@ func (o *option) onclose() error {
 				}
 			}()
 
-			e := c.Close()
+			e := c()
 			if e != nil {
 				err = append(err, errs.Wrap(e, "err on close"))
 			}
 		}(c)
 	}
+	if len(err) == 0 {
+		return nil
+	}
+	if len(err) == 1 {
+		return err[0]
+	}
 
 	return errors.Join(err...)
 }
 
-func EnableBuf(bufSize int) Option {
-	return optionFunc(func(o *option) {
-		o.enableBuf = true
-		o.bufSize = bufSize
+func EnableBufRead(bufSize int) Option {
+	return WrapReader(func(r io.Reader) io.Reader {
+		return bufio.NewReaderSize(r, bufSize)
 	})
 }
 
-func EnableAsync(bufSize int, queueSize int) Option {
-	return optionFunc(func(o *option) {
-		o.enableAsync = true
-		o.bufSize = bufSize
-		o.queueSize = queueSize
+func EnableBufWrite(bufSize int) Option {
+	return WrapWriter(func(w io.Writer) io.Writer {
+		return bufio.NewWriterSize(w, bufSize)
 	})
 }
 
-// EnableAsyncDeadline Only for Writer
-func EnableAsyncDeadline(bufSize int, queueSize int, deadline time.Duration) Option {
+func EnableAsyncRead(bufSize int, queueSize int) Option {
+	return WrapReader(func(r io.Reader) io.Reader {
+		return aio.NewAsyncReader(r, aio.BufSize(bufSize), aio.QueueSize(queueSize))
+	})
+}
+
+func EnableAsyncWrite(bufSize int, queueSize int, deadline time.Duration) Option {
+	return WrapWriter(func(w io.Writer) io.Writer {
+		return aio.NewAsyncWriter(w, aio.BufSize(bufSize), aio.QueueSize(queueSize), aio.Deadline(deadline))
+	})
+}
+
+func WrapReader(f ReaderWrapFunc) Option {
 	return optionFunc(func(o *option) {
-		o.enableAsync = true
-		o.bufSize = bufSize
-		o.queueSize = queueSize
-		o.deadline = deadline
+		o.readerWrapFuncs = append(o.readerWrapFuncs, f)
+	})
+}
+
+func WrapWriter(f WriterWrapFunc) Option {
+	return optionFunc(func(o *option) {
+		o.writerWrapFuncs = append(o.writerWrapFuncs, f)
 	})
 }
 
@@ -121,7 +143,7 @@ func MultiWrite(w ...io.Writer) Option {
 	})
 }
 
-func OnClose(c ...io.Closer) Option {
+func OnClose(c ...closeFunc) Option {
 	return optionFunc(func(o *option) {
 		o.cs = append(o.cs, c...)
 	})
@@ -185,12 +207,12 @@ func (h *hasher) Close() error {
 
 func Hash(h hash.Hash) Option {
 	hs := &hasher{h: h}
-	return multiOption{MultiWrite(hs), OnClose(hs)}
+	return multiOption{MultiWrite(hs), OnClose(hs.Close)}
 }
 
 func Checksum(checksum string, h hash.Hash) Option {
 	hs := &hasher{h: h, checksum: checksum}
-	return multiOption{MultiWrite(hs), OnClose(hs)}
+	return multiOption{MultiWrite(hs), OnClose(hs.Close)}
 }
 
 type progressLogger struct {
@@ -290,7 +312,7 @@ func (p *progressLogger) Set(c Common) {
 
 func ProgressLog(interval time.Duration) Option {
 	p := newProgressLogger(interval)
-	return multiOption{Tee(p), OnClose(p)}
+	return multiOption{Tee(p), OnClose(p.Close)}
 }
 
 type rateLimit struct {
@@ -361,11 +383,6 @@ func setToTeesAndMultiWriters(c Common) Option {
 		}
 		for _, w := range o.tees {
 			if setter, ok := w.(itemSetter); ok {
-				setter.Set(c)
-			}
-		}
-		for _, closer := range o.cs {
-			if setter, ok := closer.(itemSetter); ok {
 				setter.Set(c)
 			}
 		}
