@@ -325,6 +325,7 @@ func (br *baseRunner) SetCtx(ctx context.Context) {
 func (br *baseRunner) Cancel() {
 	br.cancelOnce.Do(func() {
 		if br.cancel != nil {
+			br.Debug("cancel")
 			br.cancel()
 		}
 	})

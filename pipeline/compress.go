@@ -1,7 +1,6 @@
 package pipeline
 
 import (
-	"errors"
 	"io"
 
 	"github.com/donkeywon/golib/plugin"
@@ -47,8 +46,6 @@ func NewCompressCfg() *CompressCfg {
 type CompressReader struct {
 	Reader
 	*CompressCfg
-
-	r io.Reader
 }
 
 func NewCompressReader() *CompressReader {
@@ -79,18 +76,7 @@ func (c *CompressReader) WrapReader(r io.Reader) {
 		c.Reader.WrapReader(r)
 	} else {
 		c.Reader.WrapReader(compressReader)
-		c.r = r
 	}
-}
-
-func (c *CompressReader) Close() error {
-	if c.r != nil {
-		if rc, ok := c.r.(io.Closer); ok {
-			return errors.Join(c.Reader.Close(), rc.Close())
-		}
-	}
-
-	return c.Reader.Close()
 }
 
 func (c *CompressReader) Type() Type {
@@ -104,8 +90,6 @@ func (c *CompressReader) SetCfg(cfg any) {
 type CompressWriter struct {
 	Writer
 	*CompressCfg
-
-	w io.Writer
 }
 
 func NewCompressWriter() *CompressWriter {
@@ -136,17 +120,7 @@ func (c *CompressWriter) WrapWriter(w io.Writer) {
 		c.Writer.WrapWriter(w)
 	} else {
 		c.Writer.WrapWriter(compressWriter)
-		c.w = w
 	}
-}
-
-func (c *CompressWriter) Close() error {
-	if c.w != nil {
-		if wc, ok := c.w.(io.Closer); ok {
-			return errors.Join(c.Writer.Close(), wc.Close())
-		}
-	}
-	return c.Writer.Close()
 }
 
 func (c *CompressWriter) Type() Type {

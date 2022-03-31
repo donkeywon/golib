@@ -78,13 +78,17 @@ func (b *BaseReader) Init() error {
 }
 
 func (b *BaseReader) appendCloses(r io.Reader) {
-	if c, ok := r.(io.Closer); ok {
+	switch c := r.(type) {
+	case Reader:
+		// do not close wrapped pipeline.Reader, wrapped pipeline.Reader will close by caller like Worker
+	case io.Closer:
 		b.closes = append(b.closes, c.Close)
 	}
 }
 
 func (b *BaseReader) Close() error {
 	defer b.Cancel()
+	b.Debug("close")
 	return errors.Join(doAllClose(b.closes), b.opt.onclose())
 }
 

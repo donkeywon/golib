@@ -13,11 +13,14 @@ import (
 
 type logWriter struct {
 	Common
+	total int64
 }
 
 func (l *logWriter) Write(p []byte) (int, error) {
-	l.Info("write", "len", len(p))
-	return len(p), nil
+	n := len(p)
+	l.total += int64(n)
+	l.Info("write", "len", n, "total", l.total)
+	return n, nil
 }
 
 func (l *logWriter) Set(c Common) {
@@ -45,7 +48,7 @@ func TestPipelineWithCfg(t *testing.T) {
 		}).
 		Add(&WorkerCfg{
 			Type: WorkerCmd,
-			Cfg:  &cmd.Cfg{Command: []string{"zstd"}},
+			Cfg:  &cmd.Cfg{Command: []string{"cat"}},
 			Writers: []*WriterCfg{
 				{
 					CommonCfg: CommonCfg{
@@ -84,9 +87,9 @@ func TestPipelineWithCfg(t *testing.T) {
 
 	ppl := New()
 	ppl.SetCfg(c)
-	tests.Init(ppl)
+	tests.DebugInit(ppl)
 
-	// ppl.Workers()[1].Writers()[0].(Writer).WithOptions(MultiWrite(&logWriter{}))
+	//ppl.Workers()[1].Writers()[0].(Writer).WithOptions(MultiWrite(&logWriter{}))
 	// go func() {
 	// 	time.Sleep(time.Millisecond * 500)
 	// 	runner.Stop(ppl)

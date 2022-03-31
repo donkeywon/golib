@@ -60,9 +60,8 @@ func (c *Copy) Start() error {
 func (c *Copy) Stop() error {
 	if rc, ok := c.Reader().(canceler); ok {
 		rc.Cancel()
-		return nil
 	}
-	return c.Reader().Close()
+	return nil
 }
 
 func (c *Copy) Type() Type {
