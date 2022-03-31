@@ -50,6 +50,15 @@ func (c *Copy) Start() error {
 	defer buf.Free()
 
 	_, err := io.CopyBuffer(c.Writer(), c.Reader(), buf.B())
+	select {
+	case <-c.Stopping():
+		// stop before copy done
+		if err != nil {
+			c.Warn("copy stopped manually before done", "err", err)
+			err = nil
+		}
+	default:
+	}
 	if err != nil {
 		return errs.Wrap(err, "copy failed")
 	}
@@ -58,7 +67,10 @@ func (c *Copy) Start() error {
 }
 
 func (c *Copy) Stop() error {
-	if rc, ok := c.Reader().(canceler); ok {
+	switch rc := c.Reader().(type) {
+	case io.Closer:
+		return rc.Close()
+	case canceler:
 		rc.Cancel()
 	}
 	return nil
