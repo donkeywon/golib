@@ -9,6 +9,8 @@ import (
 	"github.com/donkeywon/golib/errs"
 	"github.com/donkeywon/golib/plugin"
 	"github.com/donkeywon/golib/runner"
+	"github.com/donkeywon/golib/util/jsons"
+	"github.com/donkeywon/golib/util/yamls"
 )
 
 var CreateWorker = newBaseWorker
@@ -20,10 +22,41 @@ type WorkerResult struct {
 }
 
 type WorkerCfg struct {
-	Type    Type         `json:"type" yaml:"type"`
-	Cfg     any          `json:"cfg" yaml:"cfg"`
+	CommonCfgWithOption
 	Readers []*ReaderCfg `json:"readers" yaml:"readers"`
 	Writers []*WriterCfg `json:"writers" yaml:"writers"`
+}
+
+type workerCfgWithoutCommonCfg struct {
+	Readers []*ReaderCfg `json:"readers" yaml:"readers"`
+	Writers []*WriterCfg `json:"writers" yaml:"writers"`
+}
+
+func (wc *WorkerCfg) UnmarshalJSON(data []byte) error {
+	err := wc.CommonCfgWithOption.UnmarshalJSON(data)
+	if err != nil {
+		return err
+	}
+	return wc.customUnmarshal(data, jsons.Unmarshal)
+}
+
+func (wc *WorkerCfg) UnmarshalYAML(data []byte) error {
+	err := wc.CommonCfgWithOption.UnmarshalYAML(data)
+	if err != nil {
+		return err
+	}
+	return wc.customUnmarshal(data, yamls.Unmarshal)
+}
+
+func (wc *WorkerCfg) customUnmarshal(data []byte, unmarshal func([]byte, any) error) error {
+	wcc := workerCfgWithoutCommonCfg{}
+	err := jsons.Unmarshal(data, &wcc)
+	if err != nil {
+		return err
+	}
+	wc.Readers = wcc.Readers
+	wc.Writers = wcc.Writers
+	return nil
 }
 
 func (wc *WorkerCfg) build() Worker {

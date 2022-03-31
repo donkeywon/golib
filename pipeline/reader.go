@@ -32,8 +32,7 @@ type Reader interface {
 }
 
 type ReaderCfg struct {
-	CommonCfg
-	CommonOption
+	CommonCfgWithOption
 }
 
 func (rc *ReaderCfg) build() Reader {

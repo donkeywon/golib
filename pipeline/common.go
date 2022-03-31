@@ -9,9 +9,13 @@ import (
 	"io"
 	"time"
 
+	"github.com/donkeywon/golib/errs"
 	"github.com/donkeywon/golib/plugin"
 	"github.com/donkeywon/golib/ratelimit"
 	"github.com/donkeywon/golib/runner"
+	"github.com/donkeywon/golib/util/jsons"
+	"github.com/donkeywon/golib/util/yamls"
+	"github.com/tidwall/gjson"
 	"github.com/zeebo/xxh3"
 )
 
@@ -27,6 +31,41 @@ type Common interface {
 type CommonCfg struct {
 	Type Type `json:"type" yaml:"type"`
 	Cfg  any  `json:"cfg" yaml:"cfg"`
+}
+
+type commonCfgWithoutType struct {
+	Cfg any `json:"cfg" yaml:"cfg"`
+}
+
+func (c *CommonCfg) UnmarshalJSON(data []byte) error {
+	return c.customUnmarshal(data, jsons.Unmarshal)
+}
+
+func (c *CommonCfg) UnmarshalYAML(data []byte) error {
+	return c.customUnmarshal(data, yamls.Unmarshal)
+}
+
+func (c *CommonCfg) customUnmarshal(data []byte, unmarshaler func([]byte, any) error) error {
+	typ := gjson.GetBytes(data, "type")
+	if !typ.Exists() {
+		return errs.Errorf("type is not present")
+	}
+	if typ.Type != gjson.String {
+		return errs.Errorf("invalid type")
+	}
+	c.Type = Type(typ.Str)
+
+	cv := commonCfgWithoutType{}
+	cv.Cfg = plugin.CreateCfg(c.Type)
+	if cv.Cfg == nil {
+		return errs.Errorf("created cfg is nil: %s", c.Type)
+	}
+	err := unmarshaler(data, &cv)
+	if err != nil {
+		return err
+	}
+	c.Cfg = cv.Cfg
+	return nil
 }
 
 type CommonOption struct {
@@ -91,4 +130,35 @@ func initHash(algo string) hash.Hash {
 		h = xxh3.New()
 	}
 	return h
+}
+
+type CommonCfgWithOption struct {
+	CommonCfg
+	CommonOption
+}
+
+func (cc *CommonCfgWithOption) UnmarshalJSON(data []byte) error {
+	err := cc.CommonCfg.UnmarshalJSON(data)
+	if err != nil {
+		return err
+	}
+	return cc.customUnmarshal(data, jsons.Unmarshal)
+}
+
+func (cc *CommonCfgWithOption) UnmarshalYAML(data []byte) error {
+	err := cc.CommonCfg.UnmarshalJSON(data)
+	if err != nil {
+		return err
+	}
+	return cc.customUnmarshal(data, yamls.Unmarshal)
+}
+
+func (cc *CommonCfgWithOption) customUnmarshal(data []byte, unmarshaler func([]byte, any) error) error {
+	o := CommonOption{}
+	err := unmarshaler(data, &o)
+	if err != nil {
+		return err
+	}
+	cc.CommonOption = o
+	return nil
 }
