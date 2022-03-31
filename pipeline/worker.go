@@ -13,6 +13,12 @@ import (
 
 var CreateWorker = newBaseWorker
 
+type WorkerResult struct {
+	Data        map[string]any   `json:"data" yaml:"data"`
+	ReadersData []map[string]any `json:"readersData" yaml:"readersData"`
+	WritersData []map[string]any `json:"writersData" yaml:"writersData"`
+}
+
 type WorkerCfg struct {
 	Type    Type         `json:"type" yaml:"type"`
 	Cfg     any          `json:"cfg" yaml:"cfg"`
@@ -46,6 +52,8 @@ type Worker interface {
 
 	Reader() io.Reader
 	Writer() io.Writer
+
+	Result() *WorkerResult
 }
 
 type BaseWorker struct {
@@ -165,8 +173,26 @@ func (b *BaseWorker) Close() error {
 	return nil
 }
 
-func (b *BaseWorker) WithOptions(...Option) {
+func (b *BaseWorker) WithOptions(...Option) {}
 
+func (b *BaseWorker) Result() *WorkerResult {
+	d := &WorkerResult{
+		Data:        b.LoadAll(),
+		ReadersData: make([]map[string]any, len(b.rs)),
+		WritersData: make([]map[string]any, len(b.ws)),
+	}
+
+	for i, r := range b.rs {
+		if c, ok := r.(Common); ok {
+			d.ReadersData[i] = c.LoadAll()
+		}
+	}
+	for i, w := range b.ws {
+		if c, ok := w.(Common); ok {
+			d.WritersData[i] = c.LoadAll()
+		}
+	}
+	return d
 }
 
 func (b *BaseWorker) closeReaders() error {

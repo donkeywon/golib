@@ -1,10 +1,9 @@
 package pipeline
 
 import (
+	"io"
 	"testing"
 
-	"github.com/donkeywon/golib/oss"
-	"github.com/donkeywon/golib/ratelimit"
 	"github.com/donkeywon/golib/runner"
 	"github.com/donkeywon/golib/util/cmd"
 	"github.com/donkeywon/golib/util/tests"
@@ -42,6 +41,7 @@ func TestPipelineWithCfg(t *testing.T) {
 					},
 					CommonOption: CommonOption{
 						ProgressLogInterval: 1,
+						Hash:                "xxh3",
 					},
 				},
 			},
@@ -60,36 +60,37 @@ func TestPipelineWithCfg(t *testing.T) {
 						},
 					},
 				},
-				{
-					CommonCfg: CommonCfg{
-						Type: WriterOSS,
-						Cfg: &OSSCfg{
-							Cfg: &oss.Cfg{
-								URL:     "",
-								Ak:      "",
-								Sk:      "",
-								Timeout: 10,
-								Region:  "",
-							},
-							Append: false,
-						},
-					},
-					CommonOption: CommonOption{
-						BufSize: 5 * 1024 * 1024,
-						RateLimitCfg: &ratelimit.Cfg{
-							Type: ratelimit.TypeSleep,
-							Cfg:  &ratelimit.SleepRateLimiterCfg{Millisecond: 100},
-						},
-					},
-				},
+				//{
+				//	CommonCfg: CommonCfg{
+				//		Type: WriterOSS,
+				//		Cfg: &OSSCfg{
+				//			Cfg: &oss.Cfg{
+				//				URL:     "",
+				//				Ak:      "",
+				//				Sk:      "",
+				//				Timeout: 10,
+				//				Region:  "",
+				//			},
+				//			Append: false,
+				//		},
+				//	},
+				//	CommonOption: CommonOption{
+				//		BufSize: 5 * 1024 * 1024,
+				//		RateLimitCfg: &ratelimit.Cfg{
+				//			Type: ratelimit.TypeSleep,
+				//			Cfg:  &ratelimit.SleepRateLimiterCfg{Millisecond: 100},
+				//		},
+				//	},
+				//},
 			},
 		})
 
 	ppl := New()
 	ppl.SetCfg(c)
+	ppl.Workers()[1].Writers()[0].(Writer).WrapWriter(io.Discard)
+
 	tests.DebugInit(ppl)
 
-	//ppl.Workers()[1].Writers()[0].(Writer).WithOptions(MultiWrite(&logWriter{}))
 	// go func() {
 	// 	time.Sleep(time.Millisecond * 500)
 	// 	runner.Stop(ppl)
