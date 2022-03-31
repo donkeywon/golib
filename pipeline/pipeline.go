@@ -70,7 +70,7 @@ func (p *Pipeline) Init() error {
 		pr, pw := io.Pipe()
 		if len(p.ws[i].Writers()) > 0 {
 			if ww, ok := p.ws[i].LastWriter().(writerWrapper); !ok {
-				return errs.Errorf("worker(%d) %s last writer %s is not WriterWrapper", i, p.ws[i].Type(), reflect.TypeOf(p.ws[i].LastWriter()).String())
+				return errs.Errorf("worker(%d) %s last writer %s is not WriterWrapper", i, p.ws[i].Name(), reflect.TypeOf(p.ws[i].LastWriter()).String())
 			} else {
 				ww.WrapWriter(pw)
 			}
@@ -80,7 +80,7 @@ func (p *Pipeline) Init() error {
 
 		if len(p.ws[i+1].Readers()) > 0 {
 			if rr, ok := p.ws[i+1].LastReader().(readerWrapper); !ok {
-				return errs.Errorf("worker(%d) %s last reader %s is not ReaderWrapper", i, p.ws[i+1].Type(), reflect.TypeOf(p.ws[i+1].LastReader()).String())
+				return errs.Errorf("worker(%d) %s last reader %s is not ReaderWrapper", i, p.ws[i+1].Name(), reflect.TypeOf(p.ws[i+1].LastReader()).String())
 			} else {
 				rr.WrapReader(pr)
 			}
@@ -104,7 +104,7 @@ func (p *Pipeline) Init() error {
 		w.Inherit(p)
 		err = runner.Init(w)
 		if err != nil {
-			return errs.Wrapf(err, "init worker(%d) %s failed", i, w.Type())
+			return errs.Wrapf(err, "init worker(%d) %s failed", i, w.Name())
 		}
 	}
 
@@ -149,10 +149,6 @@ func (p *Pipeline) Start() error {
 func (p *Pipeline) Stop() error {
 	runner.Stop(p.ws[0])
 	return nil
-}
-
-func (p *Pipeline) Type() plugin.Type {
-	return PluginTypePipeline
 }
 
 func (p *Pipeline) SetCfg(cfg any) {

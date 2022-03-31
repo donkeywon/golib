@@ -87,10 +87,6 @@ func NewSQLiteKVS() *SQLiteKVS {
 	return &SQLiteKVS{}
 }
 
-func (s *SQLiteKVS) Type() kvs.Type {
-	return TypeSQLite
-}
-
 func (s *SQLiteKVS) Open() error {
 	var err error
 	s.pool, err = sqlitex.NewPool(s.Path, sqlitex.PoolOptions{PoolSize: s.PoolSize})

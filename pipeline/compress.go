@@ -79,10 +79,6 @@ func (c *CompressReader) WrapReader(r io.Reader) {
 	}
 }
 
-func (c *CompressReader) Type() Type {
-	return ReaderCompress
-}
-
 func (c *CompressReader) SetCfg(cfg any) {
 	c.CompressCfg = cfg.(*CompressCfg)
 }
@@ -121,10 +117,6 @@ func (c *CompressWriter) WrapWriter(w io.Writer) {
 	} else {
 		c.Writer.WrapWriter(compressWriter)
 	}
-}
-
-func (c *CompressWriter) Type() Type {
-	return WriterCompress
 }
 
 func (c *CompressWriter) SetCfg(cfg any) {

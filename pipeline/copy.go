@@ -76,10 +76,6 @@ func (c *Copy) Stop() error {
 	return nil
 }
 
-func (c *Copy) Type() Type {
-	return WorkerCopy
-}
-
 func (c *Copy) SetCfg(cfg any) {
 	c.c = cfg.(*CopyCfg)
 }

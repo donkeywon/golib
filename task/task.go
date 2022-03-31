@@ -110,14 +110,14 @@ func (t *Task) Init() error {
 	for i := t.Cfg.CurStepIdx; i < len(t.steps); i++ {
 		err = runner.Init(t.steps[i])
 		if err != nil {
-			return errs.Wrapf(err, "init step(%d) %s failed", i, t.steps[i].Type())
+			return errs.Wrapf(err, "init step(%d) %s failed", i, t.steps[i].Name())
 		}
 	}
 
 	for i := len(t.Cfg.DeferSteps) - 1 - t.Cfg.CurDeferStepIdx; i >= 0; i-- {
 		err = runner.Init(t.deferSteps[i])
 		if err != nil {
-			return errs.Wrapf(err, "init defer step(%d) %s failed", i, t.deferSteps[i].Type())
+			return errs.Wrapf(err, "init defer step(%d) %s failed", i, t.deferSteps[i].Name())
 		}
 	}
 
@@ -192,10 +192,6 @@ func (t *Task) Store(k string, v any) {
 	t.Runner.StoreAsString(k, v)
 }
 
-func (t *Task) Type() plugin.Type {
-	return PluginTypeTask
-}
-
 func (t *Task) createStep(idx int, stepCfg *step.Cfg, isDefer bool) step.Step {
 	var (
 		stepOrDefer string
@@ -209,14 +205,14 @@ func (t *Task) createStep(idx int, stepCfg *step.Cfg, isDefer bool) step.Step {
 	s := plugin.CreateWithCfg[step.Type, step.Step](stepCfg.Type, stepCfg.Cfg)
 	s.Inherit(t)
 	s.SetParent(t)
-	s.WithLoggerFields(stepOrDefer, idx, stepOrDefer+"_type", s.Type())
+	s.WithLoggerFields(stepOrDefer, idx, stepOrDefer+"_type", s.Name())
 	return s
 }
 
 func (t *Task) recoverStepPanic() {
 	err := recover()
 	if err != nil {
-		t.AppendError(errs.PanicToErrWithMsg(err, fmt.Sprintf("step(%d) %s panic", t.CurStepIdx, t.CurStep().Type())))
+		t.AppendError(errs.PanicToErrWithMsg(err, fmt.Sprintf("step(%d) %s panic", t.CurStepIdx, t.CurStep().Name())))
 	}
 }
 
@@ -248,7 +244,7 @@ func (t *Task) runSteps() {
 				defer func() {
 					err := recover()
 					if err != nil {
-						t.Error("hook step panic", errs.PanicToErr(err), "hook_idx", idx, "hook", reflects.GetFuncName(h), "step_idx", t.CurStepIdx, "step_type", step.Type())
+						t.Error("hook step panic", errs.PanicToErr(err), "hook_idx", idx, "hook", reflects.GetFuncName(h), "step_idx", t.CurStepIdx, "step_type", step.Name())
 					}
 				}()
 				h(t, t.CurStepIdx, step)
@@ -256,7 +252,7 @@ func (t *Task) runSteps() {
 		}
 		err := step.Err()
 		if err != nil {
-			t.AppendError(errs.Wrapf(err, "run step(%d) %s failed", t.CurStepIdx, step.Type()))
+			t.AppendError(errs.Wrapf(err, "run step(%d) %s failed", t.CurStepIdx, step.Name()))
 			return
 		}
 	}
@@ -275,7 +271,7 @@ func (t *Task) runDeferSteps() {
 			defer func() {
 				err := recover()
 				if err != nil {
-					t.AppendError(errs.PanicToErrWithMsg(err, fmt.Sprintf("defer step(%d) %s panic", t.CurDeferStepIdx, t.CurDeferStep().Type())))
+					t.AppendError(errs.PanicToErrWithMsg(err, fmt.Sprintf("defer step(%d) %s panic", t.CurDeferStepIdx, t.CurDeferStep().Name())))
 				}
 			}()
 
@@ -294,7 +290,7 @@ func (t *Task) runDeferSteps() {
 					defer func() {
 						err := recover()
 						if err != nil {
-							t.Error("hook defer step panic", errs.PanicToErr(err), "hook_idx", idx, "hook", reflects.GetFuncName(h), "step_idx", t.CurDeferStepIdx, "step_type", deferStep.Type())
+							t.Error("hook defer step panic", errs.PanicToErr(err), "hook_idx", idx, "hook", reflects.GetFuncName(h), "step_idx", t.CurDeferStepIdx, "step_type", deferStep.Name())
 						}
 					}()
 					h(t, t.CurDeferStepIdx, deferStep)
@@ -302,7 +298,7 @@ func (t *Task) runDeferSteps() {
 			}
 			err := deferStep.Err()
 			if err != nil {
-				t.AppendError(errs.Wrapf(err, "run defer(%d) step %s failed", t.CurDeferStepIdx, deferStep.Type()))
+				t.AppendError(errs.Wrapf(err, "run defer(%d) step %s failed", t.CurDeferStepIdx, deferStep.Name()))
 			}
 		}()
 	}

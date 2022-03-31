@@ -52,10 +52,6 @@ func (t *Tail) WrapReader(io.Reader) {
 	panic(ErrInvalidWrap)
 }
 
-func (t *Tail) Type() Type {
-	return ReaderTail
-}
-
 func (t *Tail) SetCfg(c any) {
 	t.c = c.(*TailCfg)
 }

@@ -32,7 +32,7 @@ var (
 )
 
 type DB interface {
-	runner.Runner
+	boot.Daemon
 	Get(string) *sql.DB
 }
 
@@ -78,10 +78,6 @@ func (d *db) Stop() error {
 		}
 	}
 	return nil
-}
-
-func (d *db) Type() boot.DaemonType {
-	return DaemonTypeDB
 }
 
 func (d *db) Describe(ch chan<- *prometheus.Desc) {

@@ -109,10 +109,6 @@ func (t *tickStep) Start() error {
 	return nil
 }
 
-func (t *tickStep) Type() step.Type {
-	return stepTypeTick
-}
-
 func createTaskCfg(id string, tick int) *task.Cfg {
 	return task.NewCfg().SetID(id).SetType("abc").Add(stepTypeTick, &tickStepCfg{
 		Count: tick,

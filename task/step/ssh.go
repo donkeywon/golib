@@ -103,7 +103,3 @@ func (s *SSHStep) Stop() error {
 	}
 	return nil
 }
-
-func (s *SSHStep) Type() Type {
-	return TypeSSH
-}

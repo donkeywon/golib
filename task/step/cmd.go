@@ -82,7 +82,3 @@ func (c *CmdStep) Start() error {
 func (c *CmdStep) Stop() error {
 	return cmd.MustStop(context.Background(), c.cmd)
 }
-
-func (c *CmdStep) Type() Type {
-	return TypeCmd
-}

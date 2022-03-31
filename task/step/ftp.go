@@ -98,7 +98,3 @@ func (f *FtpStep) Start() error {
 func (f *FtpStep) Stop() error {
 	return f.cli.Close()
 }
-
-func (f *FtpStep) Type() Type {
-	return TypeFtp
-}

@@ -58,10 +58,6 @@ func (p *PipelineStep) Stop() error {
 	return nil
 }
 
-func (p *PipelineStep) Type() Type {
-	return TypePipeline
-}
-
 func (p *PipelineStep) SetCfg(cfg any) {
 	p.p.SetCfg(cfg)
 }

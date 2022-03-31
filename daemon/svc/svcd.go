@@ -27,7 +27,7 @@ var D Svcd = &svcd{
 }
 
 type Svcd interface {
-	runner.Runner
+	boot.Daemon
 	Get(ns Namespace, m Module, n Name) Svc
 	Reg(ns Namespace, m Module, n Name, creator Creator)
 	RegWithCfg(ns Namespace, m Module, n Name, creator Creator, cfgCreator CfgCreator)
@@ -112,10 +112,6 @@ func (s *svcd) Get(ns Namespace, m Module, n Name) Svc {
 	}
 
 	return ins.(Svc)
-}
-
-func (s *svcd) Type() boot.DaemonType {
-	return DaemonTypeSvc
 }
 
 func buildFQN(ns Namespace, m Module, n Name) string {

@@ -68,7 +68,3 @@ func (frl *FixedRateLimiter) RxWaitN(n int, timeout int) error {
 func (frl *FixedRateLimiter) TxWaitN(n int, timeout int) error {
 	return frl.waitN(n, timeout, frl.txRl)
 }
-
-func (frl *FixedRateLimiter) Type() Type {
-	return TypeFixed
-}

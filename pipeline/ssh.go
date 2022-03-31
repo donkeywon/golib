@@ -100,10 +100,6 @@ func (s *SSH) Close() error {
 	return errors.Join(sshs.Close(s.sshCli, s.sshSess), s.Worker.Close())
 }
 
-func (s *SSH) Type() Type {
-	return WorkerSSH
-}
-
 func (s *SSH) SetCfg(c any) {
 	s.c = c.(*SSHCfg)
 }
