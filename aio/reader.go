@@ -127,6 +127,7 @@ func (ar *AsyncReader) prepareBuf() error {
 }
 
 func (ar *AsyncReader) asyncRead() {
+	// TODO use LimitedReader ?
 	for {
 		select {
 		case <-ar.closed:

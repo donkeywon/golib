@@ -9,6 +9,7 @@ type Cfg struct {
 	Region   string `json:"region"         yaml:"region"`
 	Offset   int64  `json:"offset"         yaml:"offset"`
 	PartSize int64  `json:"partSize"       yaml:"partSize"`
+	Parallel int    `json:"parallel"       yaml:"parallel"`
 }
 
 func (c *Cfg) setDefaults() {
@@ -20,5 +21,8 @@ func (c *Cfg) setDefaults() {
 	}
 	if c.PartSize <= 0 {
 		c.PartSize = 8 * 1024 * 1024
+	}
+	if c.Parallel <= 0 {
+		c.Parallel = 1
 	}
 }
