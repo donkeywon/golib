@@ -45,6 +45,10 @@ func Trace(ctx context.Context, timeout time.Duration, url string, opts ...Optio
 }
 
 func Do(ctx context.Context, timeout time.Duration, method string, url string, opts ...Option) (*http.Response, error) {
+	return DoWithClient(ctx, http.DefaultClient, timeout, method, url, opts...)
+}
+
+func DoWithClient(ctx context.Context, client *http.Client, timeout time.Duration, method string, url string, opts ...Option) (*http.Response, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -71,7 +75,7 @@ func Do(ctx context.Context, timeout time.Duration, method string, url string, o
 	}
 
 	var resp *http.Response
-	resp, err = http.DefaultClient.Do(r)
+	resp, err = client.Do(r)
 	if err != nil {
 		return resp, errs.Wrap(err, "do http request failed")
 	}

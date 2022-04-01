@@ -313,6 +313,7 @@ func (br *baseRunner) Stop() error {
 
 func (br *baseRunner) Inherit(r Runner) {
 	br.WithLoggerFrom(r)
+	br.SetCtx(r.Ctx())
 }
 
 func (br *baseRunner) SetCtx(ctx context.Context) {

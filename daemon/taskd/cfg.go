@@ -1,18 +1,29 @@
 package taskd
 
 const (
-	DefaultPoolSize  = 5
+	DefaultPool      = "default"
+	DefaultPoolSize  = 64
 	DefaultQueueSize = 1024
 )
 
+type PoolCfg struct {
+	Name      string `yaml:"name" validate:"required"`
+	Size      int    `yaml:"size" validate:"required"`
+	QueueSize int    `yaml:"queueSize" validate:"required"`
+}
+
 type Cfg struct {
-	PoolSize  int `env:"TASK_POOL_SIZE"  flag-long:"task-pool-size"  yaml:"poolSize"  flag-description:"max number of workers in task pool"`
-	QueueSize int `env:"TASK_QUEUE_SIZE" flag-long:"task-queue-size" yaml:"queueSize" flag-description:"max size of buffered task queue"`
+	Pools []*PoolCfg `yaml:"pools" env:"TASK_POOLS"`
 }
 
 func NewCfg() *Cfg {
 	return &Cfg{
-		PoolSize:  DefaultPoolSize,
-		QueueSize: DefaultQueueSize,
+		Pools: []*PoolCfg{
+			{
+				Name:      DefaultPool,
+				Size:      DefaultPoolSize,
+				QueueSize: DefaultQueueSize,
+			},
+		},
 	}
 }

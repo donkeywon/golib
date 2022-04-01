@@ -51,7 +51,8 @@ func (c *CmdStep) Init() error {
 func (c *CmdStep) Start() error {
 	var err error
 
-	result, err := cmd.RunCmd(c.Ctx(), c.cmd, c.Cfg)
+	result := cmd.RunCmd(c.Ctx(), c.cmd, c.Cfg)
+	err = result.Err()
 	c.Info("cmd exit", "result", result)
 
 	if result != nil {
@@ -66,7 +67,7 @@ func (c *CmdStep) Start() error {
 	if result != nil && result.Signaled {
 		select {
 		case <-c.Stopping():
-			c.Info("cmd exit signaled", "err", err)
+			c.Info("cmd exit signaled", "err", result.Err)
 			err = nil
 		default:
 		}
