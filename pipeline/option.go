@@ -371,7 +371,34 @@ func (rl *rateLimit) Set(c Common) {
 }
 
 func RateLimit(cfg *ratelimit.Cfg) Option {
-	return MultiWrite(newRateLimit(cfg))
+	rl := newRateLimit(cfg)
+	return multiOption{MultiWrite(rl), OnClose(rl.Close)}
+}
+
+type countWriter struct {
+	Common
+
+	c int64
+}
+
+func (w *countWriter) Write(p []byte) (n int, err error) {
+	w.c += int64(len(p))
+	return len(p), nil
+}
+
+func (w *countWriter) Close() error {
+	w.Common.Store(consts.FieldCount, w.c)
+	return nil
+}
+
+func CountRead() Option {
+	c := new(countWriter)
+	return multiOption{Tee(c), OnClose(c.Close)}
+}
+
+func CountWrite() Option {
+	c := new(countWriter)
+	return multiOption{MultiWrite(c), OnClose(c.Close)}
 }
 
 func setToTeesAndMultiWriters(c Common) Option {

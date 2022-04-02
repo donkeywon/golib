@@ -4,6 +4,8 @@ const (
 	FieldStartTimeNano = "startTimeNano"
 	FieldStopTimeNano  = "stopTimeNano"
 
+	FieldCount = "count"
+
 	FieldStartTimeSec = "startTimeSec"
 	FieldStopTimeSec  = "stopTimeSec"
 

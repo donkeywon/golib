@@ -59,6 +59,7 @@ func (p *PipelineStep) Stop() error {
 }
 
 func (p *PipelineStep) SetCfg(cfg any) {
+	p.Cfg = cfg.(*pipeline.Cfg)
 	p.p.SetCfg(cfg)
 }
 
