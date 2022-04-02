@@ -14,26 +14,29 @@ import (
 
 func TestMultiPartWriter(t *testing.T) {
 	c := testCfg()
+	c.Parallel = 4
 	w := NewMultiPartWriter(context.TODO(), c)
-	testWriter(t, w, c)
+	testWriter(t, w, c, 32*1024)
 }
 
 func TestAppendWriter(t *testing.T) {
 	c := testCfg()
 	w := NewAppendWriter(context.TODO(), c)
-	testWriter(t, w, c)
+	testWriter(t, w, c, 32*1024)
 }
 
 func TestMultiPartWriterWithoutReadFrom(t *testing.T) {
 	c := testCfg()
+	c.Parallel = 4
 	w := NewMultiPartWriter(context.TODO(), c)
-	testWriter(t, bufio.NewWriterSize(w, 1024*1024), c)
+	testWriter(t, bufio.NewWriterSize(&mpwWithoutReadFrom{MultiPartWriter: w}, 5*1024*1024), c, 32*1024)
+	require.NoError(t, w.Close())
 }
 
 func TestAppendWriterWithoutReadFrom(t *testing.T) {
 	c := testCfg()
 	w := NewAppendWriter(context.TODO(), c)
-	testWriter(t, &apwWithoutReadFrom{AppendWriter: w}, c)
+	testWriter(t, &apwWithoutReadFrom{AppendWriter: w}, c, 32*1024)
 }
 
 func testCfg() *Cfg {
@@ -51,14 +54,15 @@ type flusher interface {
 	Flush() error
 }
 
-func testWriter(t *testing.T, w io.Writer, c *Cfg) {
+func testWriter(t *testing.T, w io.Writer, c *Cfg, bufSize int) {
 	err := oss.Delete(context.TODO(), time.Minute, c.URL, c.Ak, c.Sk, c.Region)
 	require.NoError(t, err)
 
 	f, _ := os.OpenFile("/tmp/test.file", os.O_CREATE|os.O_RDWR, 0644)
 	defer f.Close()
 
-	_, err = io.Copy(w, f)
+	buf := make([]byte, bufSize)
+	_, err = io.CopyBuffer(w, f, buf)
 	require.NoError(t, err)
 	if wf, ok := w.(flusher); ok {
 		require.NoError(t, wf.Flush())
