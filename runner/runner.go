@@ -30,6 +30,7 @@ type Runner interface {
 	initCtx()
 
 	Inherit(Runner)
+	Clone() Runner
 
 	Started() <-chan struct{}
 	Stopping() <-chan struct{}
@@ -309,6 +310,19 @@ func (br *baseRunner) Start() error {
 
 func (br *baseRunner) Stop() error {
 	return nil
+}
+
+func (br *baseRunner) Clone() Runner {
+	c := newBase(br.name).(*baseRunner)
+	c.parent = br.parent
+	for k, v := range br.LoadAll() {
+		c.Store(k, v)
+	}
+	for i := range br.children {
+		c.AppendRunner(br.children[i].Clone())
+	}
+
+	return c
 }
 
 func (br *baseRunner) Inherit(r Runner) {

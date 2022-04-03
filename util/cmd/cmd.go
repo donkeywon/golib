@@ -52,13 +52,17 @@ func RunCtx(ctx context.Context, command ...string) *Result {
 	return RunRaw(ctx, &Cfg{Command: command})
 }
 
-func RunRaw(ctx context.Context, cfg *Cfg, beforeRun ...func(cmd *exec.Cmd) error) *Result {
+func RunRaw(ctx context.Context, cfg *Cfg, beforeStart ...func(cmd *exec.Cmd)) *Result {
 	cmd := exec.CommandContext(ctx, cfg.Command[0], cfg.Command[1:]...)
-	return RunCmd(ctx, cmd, cfg, beforeRun...)
+	return RunCmd(ctx, cmd, cfg, beforeStart...)
 }
 
-func RunCmd(ctx context.Context, cmd *exec.Cmd, cfg *Cfg, beforeRun ...func(cmd *exec.Cmd) error) *Result {
-	r := Start(cmd, append(beforeRunFromCfg(cfg), beforeRun...)...)
+func RunCmd(ctx context.Context, cmd *exec.Cmd, cfg *Cfg, beforeStart ...func(cmd *exec.Cmd)) *Result {
+	cfgBeforeStart, err := beforeStartFromCfg(cfg)
+	if err != nil {
+		return &Result{err: err}
+	}
+	r := Start(cmd, append(cfgBeforeStart, beforeStart...)...)
 	Wait(ctx, cmd, r)
 	<-r.Done()
 	return r
@@ -67,17 +71,13 @@ func RunCmd(ctx context.Context, cmd *exec.Cmd, cfg *Cfg, beforeRun ...func(cmd 
 // Start start a command
 // you can get pid from Result.Pid, 0 means start fail.
 // Must call Wait after Start whether cmd fail or not.
-func Start(cmd *exec.Cmd, beforeRun ...func(cmd *exec.Cmd) error) *Result {
+func Start(cmd *exec.Cmd, beforeRun ...func(cmd *exec.Cmd)) *Result {
 	r := &Result{
 		done: make(chan struct{}),
 	}
 	if len(beforeRun) > 0 {
 		for _, f := range beforeRun {
-			err := f(cmd)
-			if err != nil {
-				r.err = err
-				return r
-			}
+			f(cmd)
 		}
 	}
 

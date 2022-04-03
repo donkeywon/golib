@@ -12,41 +12,39 @@ import (
 	"github.com/donkeywon/golib/util/paths"
 )
 
-func beforeRunFromCfg(cfg *Cfg) []func(cmd *exec.Cmd) error {
+func beforeStartFromCfg(cfg *Cfg) ([]func(cmd *exec.Cmd), error) {
 	if cfg == nil {
-		return nil
+		return nil, nil
 	}
-	var beforeRun []func(cmd *exec.Cmd) error
+	var beforeRun []func(cmd *exec.Cmd)
 	if len(cfg.Env) > 0 {
-		beforeRun = append(beforeRun, func(cmd *exec.Cmd) error {
+		beforeRun = append(beforeRun, func(cmd *exec.Cmd) {
 			for k, v := range cfg.Env {
 				cmd.Env = append(cmd.Env, k+"="+v)
 			}
-			return nil
 		})
 	}
 	if cfg.WorkingDir != "" {
-		beforeRun = append(beforeRun, func(cmd *exec.Cmd) error {
-			if !paths.DirExist(cfg.WorkingDir) {
-				return errs.Errorf("working dir not exists: %s", cfg.WorkingDir)
-			}
+		if !paths.DirExist(cfg.WorkingDir) {
+			return nil, errs.Errorf("working dir not exists: %s", cfg.WorkingDir)
+		}
+		beforeRun = append(beforeRun, func(cmd *exec.Cmd) {
 			cmd.Dir = cfg.WorkingDir
-			return nil
 		})
 	}
 	if cfg.RunAsUser != "" {
-		beforeRun = append(beforeRun, func(cmd *exec.Cmd) error {
-			u, er := user.Lookup(cfg.RunAsUser)
-			if er != nil {
-				return errs.Wrapf(er, "system user not found: %s", cfg.RunAsUser)
-			}
+		u, er := user.Lookup(cfg.RunAsUser)
+		if er != nil {
+			return nil, errs.Wrapf(er, "system user not found: %s", cfg.RunAsUser)
+		}
+
+		beforeRun = append(beforeRun, func(cmd *exec.Cmd) {
 			uid, _ := strconv.Atoi(u.Uid)
 			gid, _ := strconv.Atoi(u.Gid)
 
 			cmd.SysProcAttr = &syscall.SysProcAttr{}
 			cmd.SysProcAttr.Credential = &syscall.Credential{Uid: uint32(uid), Gid: uint32(gid)}
-			return nil
 		})
 	}
-	return beforeRun
+	return beforeRun, nil
 }

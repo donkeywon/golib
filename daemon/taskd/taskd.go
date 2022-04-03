@@ -5,7 +5,7 @@ import (
 	"errors"
 	"sync"
 
-	"github.com/alitto/pond"
+	"github.com/alitto/pond/v2"
 	"github.com/donkeywon/golib/boot"
 	"github.com/donkeywon/golib/errs"
 	"github.com/donkeywon/golib/plugin"
@@ -32,7 +32,6 @@ type Taskd interface {
 	boot.Daemon
 	SubmitTask(taskCfg *task.Cfg) (*task.Task, error)
 	SubmitTaskAndWait(context.Context, *task.Cfg) (*task.Task, error)
-	TrySubmitTask(taskCfg *task.Cfg) (*task.Task, bool, error)
 	StopTask(taskID string) error
 	PauseTask(taskID string) error
 	ResumeTask(taskID string) (*task.Task, error)
@@ -57,9 +56,10 @@ type Taskd interface {
 
 type taskd struct {
 	runner.Runner
-	*Cfg
 
-	pools map[string]*pond.WorkerPool
+	cfg *Cfg
+
+	pools map[string]pond.Pool
 
 	mu               sync.Mutex
 	taskIDMap        map[string]struct{}   // task id map include waiting, except pausing
@@ -83,16 +83,16 @@ func New() Taskd {
 		taskIDMap:        make(map[string]struct{}),
 		taskIDRunningMap: make(map[string]struct{}),
 		taskPausingMap:   make(map[string]*task.Task),
-		pools:            make(map[string]*pond.WorkerPool),
+		pools:            make(map[string]pond.Pool),
 	}
 }
 
 func (td *taskd) Init() error {
-	if len(td.Pools) == 0 {
+	if len(td.cfg.Pools) == 0 {
 		return errs.New("no pools")
 	}
-	for _, poolCfg := range td.Pools {
-		td.pools[poolCfg.Name] = pond.New(poolCfg.Size, poolCfg.QueueSize)
+	for _, poolCfg := range td.cfg.Pools {
+		td.pools[poolCfg.Name] = pond.NewPool(poolCfg.Size, pond.WithQueueSize(poolCfg.QueueSize))
 	}
 	return td.Runner.Init()
 }
@@ -112,23 +112,24 @@ func (td *taskd) Stop() error {
 	return nil
 }
 
-func (td *taskd) getPool(taskCfg *task.Cfg) *pond.WorkerPool {
-	return td.pools[taskCfg.Pool]
+func (td *taskd) getPool(taskCfg *task.Cfg) pond.Pool {
+	p := td.pools[taskCfg.Pool]
+	if p == nil {
+		panic("task pool not exists: " + taskCfg.Pool)
+	}
+	return p
+}
+
+func (td *taskd) SetCfg(cfg any) {
+	td.cfg = cfg.(*Cfg)
 }
 
 func (td *taskd) SubmitTask(taskCfg *task.Cfg) (*task.Task, error) {
-	t, _, err := td.createInitSubmit(td.Ctx(), taskCfg, false, true, nil)
-	return t, err
+	return td.createInitSubmit(td.Ctx(), taskCfg, false)
 }
 
 func (td *taskd) SubmitTaskAndWait(ctx context.Context, taskCfg *task.Cfg) (*task.Task, error) {
-	t, _, err := td.createInitSubmit(ctx, taskCfg, true, true, nil)
-	return t, err
-}
-
-func (td *taskd) TrySubmitTask(taskCfg *task.Cfg) (*task.Task, bool, error) {
-	t, submitted, err := td.createInitSubmit(td.Ctx(), taskCfg, false, false, nil)
-	return t, submitted, err
+	return td.createInitSubmit(ctx, taskCfg, true)
 }
 
 func (td *taskd) StopTask(taskID string) error {
@@ -204,21 +205,19 @@ func (td *taskd) ResumeTask(taskID string) (*task.Task, error) {
 	}
 
 	td.Info("resuming task", "task_id", taskID)
-	newT, _, err := td.createInitSubmit(td.Ctx(), t.Cfg, false, true, []task.Hook{
-		func(newT *task.Task, err error, hed *task.HookExtraData) {
-			for i, newStep := range newT.Steps() {
-				data := t.Steps()[i].LoadAll()
-				for k, v := range data {
-					newStep.Store(k, v)
-				}
+	newT, err := td.createInitSubmit(td.Ctx(), t.Cfg, false, func(newT *task.Task, err error, hed *task.HookExtraData) {
+		for i, newStep := range newT.Steps() {
+			data := t.Steps()[i].LoadAll()
+			for k, v := range data {
+				newStep.Store(k, v)
 			}
-			for i, newStep := range newT.DeferSteps() {
-				data := t.DeferSteps()[i].LoadAll()
-				for k, v := range data {
-					newStep.Store(k, v)
-				}
+		}
+		for i, newStep := range newT.DeferSteps() {
+			data := t.DeferSteps()[i].LoadAll()
+			for k, v := range data {
+				newStep.Store(k, v)
 			}
-		},
+		}
 	})
 
 	if err != nil {
@@ -237,14 +236,14 @@ func (td *taskd) waitAllTaskDone() {
 	}
 }
 
-func (td *taskd) createInit(ctx context.Context, taskCfg *task.Cfg) (*task.Task, error) {
+func (td *taskd) createInit(ctx context.Context, taskCfg *task.Cfg, extra *task.HookExtraData) (*task.Task, error) {
 	err := v.Struct(taskCfg)
 	if err != nil {
 		return nil, errs.Wrap(err, "invalid task cfg")
 	}
 
 	t, err := td.createTask(taskCfg)
-	td.hookTask(t, err, td.createHooks, "create", nil)
+	td.hookTask(t, err, td.createHooks, "create", extra)
 	if err != nil {
 		td.Error("create task failed", err, "cfg", taskCfg)
 		return t, errs.Wrap(err, "create task failed")
@@ -254,7 +253,7 @@ func (td *taskd) createInit(ctx context.Context, taskCfg *task.Cfg) (*task.Task,
 	t.HookDeferStepDone(td.deferStepDoneHooks...)
 
 	err = td.initTask(ctx, t)
-	td.hookTask(t, err, td.initHooks, "init", nil)
+	td.hookTask(t, err, td.initHooks, "init", extra)
 	if err != nil {
 		td.Error("init task failed", err, "cfg", taskCfg)
 		return t, errs.Wrap(err, "init task failed")
@@ -263,16 +262,17 @@ func (td *taskd) createInit(ctx context.Context, taskCfg *task.Cfg) (*task.Task,
 	return t, nil
 }
 
-func (td *taskd) submit(t *task.Task, wait bool, must bool) bool {
-	td.Info("submitting task", "task_id", t.Cfg.ID, "wait", wait, "must", must)
+func (td *taskd) submit(t *task.Task, wait bool) {
+	td.Info("submitting task", "wait", wait, "task", t.Cfg)
+	extra := &task.HookExtraData{Wait: wait}
 
 	f := func() {
 		td.markTaskRunning(t.Cfg.ID)
-		td.hookTask(t, nil, td.startHooks, "start", nil)
+		td.hookTask(t, nil, td.startHooks, "start", extra)
 
 		td.Info("starting task", "task_id", t.Cfg.ID, "task_type", t.Cfg.Type)
 		runner.Start(t)
-		td.hookTask(t, nil, td.doneHooks, "done", nil)
+		td.hookTask(t, nil, td.doneHooks, "done", extra)
 		td.unmarkTaskAndTaskID(t.Cfg.ID)
 
 		err := t.Err()
@@ -283,63 +283,51 @@ func (td *taskd) submit(t *task.Task, wait bool, must bool) bool {
 		}
 	}
 
-	var submitted bool
 	td.markTask(t)
-	if !must {
-		submitted = td.getPool(t.Cfg).TrySubmit(f)
-		if !submitted {
-			td.Warn("try submit fail, full queue and no idle worker", "task_id", t.Cfg.ID)
-			td.unmarkTaskAndTaskID(t.Cfg.ID)
-		} else {
-			td.Info("task submitted", "task_id", t.Cfg.ID)
-		}
-	} else {
-		if wait {
-			td.Info("task submit and wait", "task_id", t.Cfg.ID)
-			td.getPool(t.Cfg).SubmitAndWait(f)
-			td.Info("task submit and wait done", "task_id", t.Cfg.ID)
-		} else {
-			td.getPool(t.Cfg).Submit(f)
-			td.Info("task submitted", "task_id", t.Cfg.ID)
-		}
-		submitted = true
-	}
-	td.hookTask(t, nil, td.submitHooks, "submit", &task.HookExtraData{Submitted: submitted, SubmitWait: wait})
 
-	return submitted
+	pt := td.getPool(t.Cfg).Submit(f)
+	td.Info("task submitted", "task_id", t.Cfg.ID)
+	if wait {
+		td.Info("wait task done", "task_id", t.Cfg.ID)
+		pt.Wait()
+	}
+
+	td.hookTask(t, nil, td.submitHooks, "submit", extra)
 }
 
-func (td *taskd) createInitSubmit(ctx context.Context, taskCfg *task.Cfg, wait bool, must bool, beforeSubmit []task.Hook) (*task.Task, bool, error) {
+func (td *taskd) createInitSubmit(ctx context.Context, taskCfg *task.Cfg, wait bool, beforeSubmit ...task.Hook) (*task.Task, error) {
 	select {
 	case <-td.Stopping():
-		return nil, false, ErrStopping
+		return nil, ErrStopping
 	default:
 	}
+
+	hookExtra := &task.HookExtraData{Wait: wait}
 
 	marked := td.markTaskID(taskCfg.ID)
 	if !marked {
 		td.Warn("task already exists", "id", taskCfg.ID)
-		return nil, false, ErrTaskAlreadyExists
+		return nil, ErrTaskAlreadyExists
 	}
 
-	t, err := td.createInit(ctx, taskCfg)
+	t, err := td.createInit(ctx, taskCfg, hookExtra)
 	if err != nil {
 		td.unmarkTaskID(taskCfg.ID)
-		return nil, false, errs.Wrap(err, "create init task failed")
+		return nil, errs.Wrap(err, "create init task failed")
 	}
 
 	select {
 	case <-td.Stopping():
-		return nil, false, ErrStopping
+		return nil, ErrStopping
 	default:
 	}
 
 	for _, h := range beforeSubmit {
-		h(t, nil, nil)
+		h(t, nil, hookExtra)
 	}
 
-	submitted := td.submit(t, wait, must)
-	return t, submitted, nil
+	td.submit(t, wait)
+	return t, nil
 }
 
 func (td *taskd) createTask(cfg *task.Cfg) (t *task.Task, err error) {

@@ -7,13 +7,13 @@ const (
 )
 
 type PoolCfg struct {
-	Name      string `yaml:"name" validate:"required"`
-	Size      int    `yaml:"size" validate:"required"`
-	QueueSize int    `yaml:"queueSize" validate:"required"`
+	Name      string `json:"name" yaml:"name" validate:"required"`
+	Size      int    `json:"size" yaml:"size" validate:"required"`
+	QueueSize int    `json:"queueSize" yaml:"queueSize" validate:"required"`
 }
 
 type Cfg struct {
-	Pools []*PoolCfg `yaml:"pools" env:"TASK_POOLS"`
+	Pools []*PoolCfg `json:"pools" yaml:"pools" env:"TASK_POOLS"`
 }
 
 func NewCfg() *Cfg {
