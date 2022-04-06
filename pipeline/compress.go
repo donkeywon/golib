@@ -220,18 +220,3 @@ func NewGzipReader(r io.Reader, cfg *CompressCfg) io.ReadCloser {
 	}
 	return gr
 }
-
-func FileExtFromCompressCfg(c *CompressCfg) string {
-	switch c.Type {
-	case CompressTypeNop:
-		return ""
-	case CompressTypeGzip:
-		return ".gz"
-	case CompressTypeSnappy:
-		return ".snappy"
-	case CompressTypeZstd:
-		return ".zst"
-	default:
-		return ""
-	}
-}

@@ -47,6 +47,22 @@ func (c *Cfg) Add(w *WorkerCfg) *Cfg {
 	return c
 }
 
+func (c *Cfg) AddWorker(typ Type, cfg any, opt CommonOption) *WorkerCfg {
+	workerCfg := &WorkerCfg{
+		CommonCfgWithOption: CommonCfgWithOption{
+			CommonCfg: CommonCfg{
+				Type: typ,
+				Cfg:  cfg,
+			},
+			CommonOption: opt,
+		},
+	}
+
+	c.Workers = append(c.Workers, workerCfg)
+
+	return workerCfg
+}
+
 type Pipeline struct {
 	runner.Runner
 

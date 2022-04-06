@@ -72,7 +72,7 @@ type CommonOption struct {
 	BufSize             int            `json:"bufSize" yaml:"bufSize"`
 	QueueSize           int            `json:"queueSize" yaml:"queueSize"`
 	Deadline            int            `json:"deadline" yaml:"deadline"`
-	EnableAsync         bool           `json:"enableAsync" yaml:"enableAsync"`
+	Async               bool           `json:"async" yaml:"async"`
 	ProgressLogInterval int            `json:"progressLogInterval" yaml:"progressLogInterval"`
 	Hash                string         `json:"hash" yaml:"hash"`
 	Checksum            string         `json:"checksum" yaml:"checksum"`
@@ -81,7 +81,7 @@ type CommonOption struct {
 
 func (ito *CommonOption) toOptions(write bool) []Option {
 	opts := make([]Option, 0, 2)
-	if ito.EnableAsync && ito.BufSize > 0 {
+	if ito.Async && ito.BufSize > 0 {
 		if write {
 			opts = append(opts, EnableAsyncWrite(ito.BufSize, ito.QueueSize, time.Second*time.Duration(ito.Deadline)))
 		} else {
