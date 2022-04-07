@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"os/exec"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -42,6 +43,42 @@ func (r *Result) Done() <-chan struct{} {
 
 func (r *Result) Err() error {
 	return r.err
+}
+
+func (r *Result) String() string {
+	buf := bufferpool.Get()
+	defer buf.Free()
+
+	buf.WriteString(`{"stdout":[`)
+	for i := range r.Stdout {
+		buf.WriteByte('"')
+		buf.WriteString(r.Stdout[i])
+		buf.WriteByte('"')
+		if i < len(r.Stdout)-1 {
+			buf.WriteByte(',')
+		}
+	}
+	buf.WriteString(`],"stderr":[`)
+	for i := range r.Stderr {
+		buf.WriteByte('"')
+		buf.WriteString(r.Stderr[i])
+		buf.WriteByte('"')
+		if i < len(r.Stderr)-1 {
+			buf.WriteByte(',')
+		}
+	}
+	buf.WriteString(`],"exitCode":`)
+	buf.WriteString(strconv.Itoa(r.ExitCode))
+	buf.WriteString(`,"pid":`)
+	buf.WriteString(strconv.Itoa(r.Pid))
+	buf.WriteString(`,"startTimeNano":`)
+	buf.WriteString(strconv.FormatInt(r.StartTimeNano, 10))
+	buf.WriteString(`,"stopTimeNano":`)
+	buf.WriteString(strconv.FormatInt(r.StopTimeNano, 10))
+	buf.WriteString(`,"signaled":`)
+	buf.WriteString(strconv.FormatBool(r.Signaled))
+	buf.WriteByte('}')
+	return buf.String()
 }
 
 func Run(command ...string) *Result {

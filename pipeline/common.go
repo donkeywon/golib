@@ -77,6 +77,7 @@ type CommonOption struct {
 	Hash                string         `json:"hash" yaml:"hash"`
 	Checksum            string         `json:"checksum" yaml:"checksum"`
 	RateLimitCfg        *ratelimit.Cfg `json:"rateLimitCfg" yaml:"rateLimitCfg"`
+	Count               bool           `json:"count" yaml:"count"`
 }
 
 func (ito *CommonOption) toOptions(write bool) []Option {
@@ -108,6 +109,13 @@ func (ito *CommonOption) toOptions(write bool) []Option {
 	}
 	if ito.RateLimitCfg != nil && ito.RateLimitCfg.Cfg != nil {
 		opts = append(opts, RateLimit(ito.RateLimitCfg))
+	}
+	if ito.Count {
+		if write {
+			opts = append(opts, CountWrite())
+		} else {
+			opts = append(opts, CountRead())
+		}
 	}
 
 	return opts
