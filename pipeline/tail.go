@@ -55,3 +55,7 @@ func (t *Tail) WrapReader(io.Reader) {
 func (t *Tail) SetCfg(c any) {
 	t.c = c.(*TailCfg)
 }
+
+func (t *Tail) Offset() int64 {
+	return t.t.Offset()
+}

@@ -127,7 +127,7 @@ func (t *Task) Start() error {
 	defer t.runDeferSteps()
 	defer t.recoverStepPanic()
 
-	t.Store(consts.FieldStartTimeNano, time.Now().Unix())
+	t.Store(consts.FieldStartTimeNano, time.Now().UnixNano())
 	t.runSteps()
 
 	return nil
@@ -212,7 +212,7 @@ func (t *Task) recoverStepPanic() {
 }
 
 func (t *Task) final() {
-	t.Store(consts.FieldStopTimeNano, time.Now().Unix())
+	t.Store(consts.FieldStopTimeNano, time.Now().UnixNano())
 }
 
 func (t *Task) runSteps() {
