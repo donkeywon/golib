@@ -9,17 +9,14 @@ import (
 )
 
 type AsyncReader struct {
-	r   io.Reader
-	opt *option
-
-	buf   *buffer.FixedBuffer
-	queue chan *buffer.FixedBuffer
-
+	r             io.Reader
+	err           error
+	opt           *option
+	buf           *buffer.FixedBuffer
+	queue         chan *buffer.FixedBuffer
+	closed        chan struct{}
 	asyncReadOnce sync.Once
 	closeOnce     sync.Once
-	closed        chan struct{}
-
-	err error
 }
 
 func NewAsyncReader(r io.Reader, opts ...Option) *AsyncReader {

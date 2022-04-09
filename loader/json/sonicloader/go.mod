@@ -12,8 +12,8 @@ require (
 	github.com/cloudwego/base64x v0.1.5 // indirect
 	github.com/klauspost/cpuid/v2 v2.2.10 // indirect
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
-	golang.org/x/arch v0.15.0 // indirect
-	golang.org/x/sys v0.31.0 // indirect
+	golang.org/x/arch v0.16.0 // indirect
+	golang.org/x/sys v0.32.0 // indirect
 )
 
 replace github.com/donkeywon/golib => ../../../

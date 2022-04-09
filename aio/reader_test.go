@@ -12,13 +12,12 @@ import (
 var errTest = errors.New("test error")
 
 type testReader struct {
+	err        error
 	errOnCount int
 	errOnBytes int
-	err        error
 	nrPerRead  int
-
-	count int
-	nr    int
+	count      int
+	nr         int
 }
 
 func (r *testReader) Read(p []byte) (n int, err error) {

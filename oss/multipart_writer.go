@@ -42,32 +42,23 @@ type BlockList struct {
 }
 
 type MultiPartWriter struct {
-	cfg *Cfg
-
-	timeout   time.Duration
-	ctx       context.Context
-	cancel    context.CancelFunc
-	closeOnce sync.Once
-
-	uploadID  string
-	curPartNo int
-
-	parts     []*Part
-	blockList []string
-
-	parallelWg       sync.WaitGroup
-	parallelResult   []*uploadPartResult
-	parallelErrs     []error
-	mu               sync.Mutex
-	parallelChan     chan *uploadPartReq
-	parallelChanOnce sync.Once
-
-	// do complete if nil when closing, or else do abort
-	uploadErr error
-
-	// used by ReadFrom when need content length
-	bufw *bufio.Writer
-
+	ctx               context.Context
+	uploadErr         error
+	parallelChan      chan *uploadPartReq
+	bufw              *bufio.Writer
+	cancel            context.CancelFunc
+	cfg               *Cfg
+	uploadID          string
+	parts             []*Part
+	blockList         []string
+	parallelResult    []*uploadPartResult
+	parallelErrs      []error
+	parallelWg        sync.WaitGroup
+	curPartNo         int
+	timeout           time.Duration
+	parallelChanOnce  sync.Once
+	closeOnce         sync.Once
+	mu                sync.Mutex
 	initialized       bool
 	needContentLength bool
 	isBlob            bool
@@ -171,8 +162,8 @@ func (r *readerWrapper) Read(p []byte) (int, error) {
 }
 
 type uploadPartReq struct {
-	partNo int
 	b      *bytespool.Bytes
+	partNo int
 }
 
 type uploadPartResult struct {

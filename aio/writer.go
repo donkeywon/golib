@@ -9,21 +9,17 @@ import (
 )
 
 type AsyncWriter struct {
-	w   io.Writer
-	opt *option
-
-	mu    sync.Mutex
-	buf   *buffer.FixedBuffer
-	queue chan *buffer.FixedBuffer
-
-	asyncWriteOnce sync.Once
-	closeOnce      sync.Once
+	w              io.Writer
+	err            error
+	opt            *option
+	buf            *buffer.FixedBuffer
+	queue          chan *buffer.FixedBuffer
 	closed         chan struct{}
 	asyncDone      chan struct{}
-
-	deadlineTimer *time.Timer
-
-	err error
+	deadlineTimer  *time.Timer
+	asyncWriteOnce sync.Once
+	closeOnce      sync.Once
+	mu             sync.Mutex
 }
 
 func NewAsyncWriter(w io.Writer, opts ...Option) *AsyncWriter {
