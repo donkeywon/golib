@@ -15,6 +15,7 @@ import (
 	"github.com/donkeywon/golib/plugin"
 	"github.com/donkeywon/golib/ratelimit"
 	"github.com/donkeywon/golib/runner"
+	"github.com/donkeywon/golib/util/reflects"
 	"github.com/zeebo/xxh3"
 )
 
@@ -79,7 +80,7 @@ func doAllClose(closes []closeFunc) error {
 
 			e := c()
 			if e != nil {
-				err = append(err, errs.Wrap(e, "err on close"))
+				err = append(err, errs.Wrapf(e, "err on close %s", reflects.GetFuncName(c)))
 			}
 		}(c)
 	}
@@ -255,17 +256,8 @@ func (p *progressLogger) Write(b []byte) (n int, err error) {
 }
 
 func (p *progressLogger) logProgress() {
-	if p.sizeGetter == nil {
-		p.Warn("cannot get size, skip log progress")
-		return
-	}
-
-	if p.size <= 0 {
+	if p.sizeGetter != nil && p.size <= 0 {
 		p.size = p.sizeGetter()
-		if p.size <= 0 {
-			p.Warn("size le zero, skip log progress")
-			return
-		}
 	}
 
 	inc := p.offset - p.lastLogOffset
@@ -278,7 +270,11 @@ func (p *progressLogger) logProgress() {
 		return
 	}
 
-	percent := fmt.Sprintf("%.3f%%", float64(p.offset)/float64(p.size)*100)
+	percent := "-"
+	if p.size > 0 {
+		percent = fmt.Sprintf("%.3f%%", float64(p.offset)/float64(p.size)*100)
+	}
+
 	speed := float64(inc) / float64(interval) * 1000000000
 	switch {
 	case speed < 1024:
@@ -310,9 +306,14 @@ func (p *progressLogger) Set(c Common) {
 	}
 }
 
-func ProgressLog(interval time.Duration) Option {
+func ProgressLogRead(interval time.Duration) Option {
 	p := newProgressLogger(interval)
 	return multiOption{Tee(p), OnClose(p.Close)}
+}
+
+func ProgressLogWrite(interval time.Duration) Option {
+	p := newProgressLogger(interval)
+	return multiOption{MultiWrite(p), OnClose(p.Close)}
 }
 
 type rateLimit struct {
@@ -389,6 +390,10 @@ func (w *countWriter) Write(p []byte) (n int, err error) {
 func (w *countWriter) Close() error {
 	w.Common.Store(consts.FieldCount, w.c)
 	return nil
+}
+
+func (w *countWriter) Set(c Common) {
+	w.Common = c
 }
 
 func CountRead() Option {

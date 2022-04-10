@@ -343,6 +343,7 @@ func (w *MultiPartWriter) abort() error {
 			)
 		},
 		retry.Attempts(uint(w.cfg.Retry)),
+		retry.LastErrorOnly(true),
 	)
 
 	if err != nil {
@@ -440,11 +441,12 @@ func (w *MultiPartWriter) initMultiPart() (string, error) {
 			)
 			return err
 		},
+		retry.LastErrorOnly(true),
 		retry.Attempts(uint(w.cfg.Retry)),
 	)
 
 	if err != nil {
-		return "", errs.Wrapf(err, "retry do init multipart request fail, respStatus: %s", respStatus)
+		return "", errs.Wrapf(err, "retry do init multipart request failed, respStatus: %s", respStatus)
 	}
 
 	err = xml.Unmarshal(respBody.Bytes(), result)

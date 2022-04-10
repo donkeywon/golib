@@ -88,9 +88,7 @@ func (ito *CommonOption) toOptions(write bool) []Option {
 		} else {
 			opts = append(opts, EnableAsyncRead(ito.BufSize, ito.QueueSize))
 		}
-	}
-
-	if ito.BufSize > 0 {
+	} else if ito.BufSize > 0 {
 		if write {
 			opts = append(opts, EnableBufWrite(ito.BufSize))
 		} else {
@@ -99,12 +97,15 @@ func (ito *CommonOption) toOptions(write bool) []Option {
 	}
 
 	if ito.ProgressLogInterval > 0 {
-		opts = append(opts, ProgressLog(time.Second*time.Duration(ito.ProgressLogInterval)))
+		if write {
+			opts = append(opts, ProgressLogWrite(time.Second*time.Duration(ito.ProgressLogInterval)))
+		} else {
+			opts = append(opts, ProgressLogRead(time.Second*time.Duration(ito.ProgressLogInterval)))
+		}
 	}
 	if len(ito.Hash) > 0 && len(ito.Checksum) > 0 {
 		opts = append(opts, Checksum(ito.Checksum, initHash(ito.Hash)))
-	}
-	if len(ito.Hash) > 0 {
+	} else if len(ito.Hash) > 0 {
 		opts = append(opts, Hash(initHash(ito.Hash)))
 	}
 	if ito.RateLimitCfg != nil && ito.RateLimitCfg.Cfg != nil {

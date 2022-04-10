@@ -152,7 +152,9 @@ func (b *BaseWorker) Init() error {
 			ww.WrapWriter(b.ws[i+1])
 		}
 	}
-	b.w = b.ws[0]
+	if len(b.ws) > 0 {
+		b.w = b.ws[0]
+	}
 
 	for i := len(b.rs) - 2; i >= 0; i-- {
 		if rr, ok := b.rs[i].(readerWrapper); !ok {
@@ -162,7 +164,9 @@ func (b *BaseWorker) Init() error {
 			rr.WrapReader(b.rs[i+1])
 		}
 	}
-	b.r = b.rs[0]
+	if len(b.rs) > 0 {
+		b.r = b.rs[0]
+	}
 
 	var err error
 	for i := len(b.ws) - 1; i >= 0; i-- {

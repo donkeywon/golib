@@ -41,8 +41,7 @@ func (b *FixedBuffer) HasRemaining() bool {
 func (b *FixedBuffer) Write(p []byte) (n int, err error) {
 	n = copy(b.wremain(), p)
 	b.woff += n
-	if n <= len(p) {
-		// buf full
+	if b.Len() == b.Cap() {
 		err = ErrFull
 	}
 
@@ -57,7 +56,7 @@ func (b *FixedBuffer) Write(p []byte) (n int, err error) {
 func (b *FixedBuffer) ReadFrom(r io.Reader) (int64, error) {
 	nr, err := iou.ReadFill(r, b.wremain())
 	b.woff += nr
-	if err == nil {
+	if err == nil && b.Len() == b.Cap() {
 		// buf full and not EOF
 		err = ErrFull
 	}
