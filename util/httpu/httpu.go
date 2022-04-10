@@ -30,6 +30,8 @@ const (
 	HeaderRange             = "Range"
 	HeaderTransferEncoding  = "Transfer-Encoding"
 	HeaderServer            = "Server"
+	HeaderUserAgent         = "User-Agent"
+	HeaderAccept            = "Accept"
 
 	MIMEHTML              = "text/html"
 	MIMEHTMLUTF8          = "text/html; charset=utf-8"

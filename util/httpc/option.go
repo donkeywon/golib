@@ -49,6 +49,22 @@ func WithHeaders(headerKvs ...string) Option {
 	})
 }
 
+func WithHeader(h http.Header) Option {
+	return ReqOptionFunc(func(r *http.Request) error {
+		r.Header = h
+		return nil
+	})
+}
+
+func WithHeaderMap(h map[string]string) Option {
+	return ReqOptionFunc(func(r *http.Request) error {
+		for k, v := range h {
+			r.Header.Add(k, v)
+		}
+		return nil
+	})
+}
+
 func WithBody(body []byte) Option {
 	return WithBodyReader(bytes.NewReader(body))
 }
@@ -157,6 +173,15 @@ func CheckStatusCode(statusCode ...int) Option {
 			return errs.Errorf("unexpected response status code: %s", resp.Status)
 		}
 		return nil
+	})
+}
+
+func CheckStatusCodeRange(min, max int) Option {
+	return RespOptionFunc(func(resp *http.Response) error {
+		if resp.StatusCode >= min && resp.StatusCode <= max {
+			return nil
+		}
+		return errs.Errorf("unexpected response status code: %s", resp.Status)
 	})
 }
 
