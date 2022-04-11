@@ -133,9 +133,9 @@ func Delete(ctx context.Context, timeout time.Duration, url string, ak string, s
 		httpc.ReqOptionFunc(func(req *http.Request) error {
 			return Sign(req, ak, sk, region)
 		}),
-		httpc.CheckStatusCode(checkStatus...),
 		httpc.ToStatus(&respStatus),
 		httpc.ToBytesBuffer(respBody),
+		httpc.CheckStatusCode(checkStatus...),
 	)
 
 	if err != nil {

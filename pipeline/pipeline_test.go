@@ -5,7 +5,6 @@ import (
 
 	"github.com/donkeywon/golib/oss"
 	"github.com/donkeywon/golib/runner"
-	"github.com/donkeywon/golib/util/cmd"
 	"github.com/donkeywon/golib/util/tests"
 	"github.com/stretchr/testify/require"
 )
@@ -27,77 +26,57 @@ func (l *logWriter) Set(c Common) {
 }
 
 func TestPipelineWithCfg(t *testing.T) {
-	c := NewCfg().
-		AddWorker(&WorkerCfg{
-			CommonCfgWithOption: CommonCfgWithOption{
-				CommonCfg: CommonCfg{
-					Type: WorkerCopy,
-				},
-			},
-			Readers: []ReaderCfg{
-				{
-					CommonCfgWithOption: CommonCfgWithOption{
-						CommonCfg: CommonCfg{
-							Type: ReaderFile,
-							Cfg: &FileCfg{
-								Path: "/tmp/test.file",
-								Perm: 644,
-							},
-						},
-						CommonOption: CommonOption{
-							ProgressLogInterval: 1,
-							Hash:                "xxh3",
-						},
-					},
-				},
-			},
+	c := NewCfg()
+
+	c.Add(WorkerCopy, NewCopyCfg(), CommonOption{}).
+		ReadFrom(ReaderFile, &FileCfg{
+			Path: "/tmp/test.file",
+			Perm: 644,
+		}, CommonOption{
+			Count: true,
+			Hash:  "xxh3",
 		}).
-		AddWorker(&WorkerCfg{
-			CommonCfgWithOption: CommonCfgWithOption{
-				CommonCfg: CommonCfg{
-					Type: WorkerCmd,
-					Cfg:  &cmd.Cfg{Command: []string{"cat"}},
+		WriteTo(WriterCompress, &CompressCfg{
+			Type:        CompressTypeZstd,
+			Level:       CompressLevelFast,
+			Concurrency: 4,
+		}, CommonOption{}).
+		WriteTo(WriterOSS,
+			&OSSCfg{
+				Cfg: &oss.Cfg{
+					URL:     "",
+					Ak:      "",
+					Sk:      "",
+					Timeout: 10,
+					Region:  "",
 				},
+				Append: false,
 			},
-			Writers: []WriterCfg{
-				{
-					CommonCfgWithOption: CommonCfgWithOption{
-						CommonCfg: CommonCfg{
-							Type: WriterCompress,
-							Cfg: &CompressCfg{
-								Type:        CompressTypeZstd,
-								Level:       CompressLevelFast,
-								Concurrency: 4,
-							},
-						},
-					},
-				},
-				{
-					CommonCfgWithOption: CommonCfgWithOption{
-						CommonCfg: CommonCfg{
-							Type: WriterOSS,
-							Cfg: &OSSCfg{
-								Cfg: &oss.Cfg{
-									URL:     "",
-									Ak:      "",
-									Sk:      "",
-									Timeout: 10,
-									Region:  "",
-								},
-								Append: false,
-							},
-						},
-						CommonOption: CommonOption{
-							BufSize: 5 * 1024 * 1024,
-							//RateLimitCfg: &ratelimit.Cfg{
-							//	Type: ratelimit.TypeSleep,
-							//	Cfg:  &ratelimit.SleepRateLimiterCfg{Millisecond: 100},
-							//},
-						},
-					},
-				},
-			},
-		})
+			CommonOption{
+				ProgressLogInterval: 1,
+				BufSize:             5 * 1024 * 1024,
+			})
+
+	//c.Add(WorkerCmd, &cmd.Cfg{Command: []string{"cat"}}, CommonOption{}).
+	//	WriteTo(WriterCompress, &CompressCfg{
+	//		Type:        CompressTypeZstd,
+	//		Level:       CompressLevelFast,
+	//		Concurrency: 4,
+	//	}, CommonOption{}).
+	//	WriteTo(WriterOSS,
+	//		&OSSCfg{
+	//			Cfg: &oss.Cfg{
+	//				URL:     "",
+	//				Ak:      "",
+	//				Sk:      "",
+	//				Timeout: 10,
+	//				Region:  "",
+	//			},
+	//			Append: false,
+	//		},
+	//		CommonOption{
+	//			BufSize: 5 * 1024 * 1024,
+	//		})
 
 	ppl := New()
 	ppl.SetCfg(c)

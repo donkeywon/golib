@@ -4,7 +4,7 @@ const (
 	HeaderXmsDate      = "X-Ms-Date"
 	HeaderXmsVersion   = "X-Ms-Version"
 	HeaderXmsRequestID = "X-Ms-Request-Id"
-	HeaderXmsBlobType  = "X-Ms-Blob-Kind"
+	HeaderXmsBlobType  = "X-Ms-Blob-Type"
 
 	HeaderOSSAppendNextPositionHeader    = "X-Rgw-Next-Append-Position"
 	HeaderOBSAppendNextPositionHeader    = "X-Obs-Next-Append-Position"

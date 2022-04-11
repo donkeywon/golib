@@ -276,12 +276,12 @@ func (w *MultiPartWriter) init() error {
 
 	w.needContentLength = oss.NeedContentLength(w.cfg.URL)
 
+	var err error
 	if w.isBlob {
 		w.initialized = true
-		return nil
+		goto PARALLEL
 	}
 
-	var err error
 	w.uploadID, err = w.initMultiPart()
 	if err != nil {
 		return errs.Wrap(err, "init multi part failed")
@@ -289,6 +289,7 @@ func (w *MultiPartWriter) init() error {
 	w.initialized = true
 	w.curPartNo = 1
 
+PARALLEL:
 	if w.cfg.Parallel > 1 {
 		w.parallelWg.Add(w.cfg.Parallel)
 		w.parallelChan = make(chan *uploadPartReq)

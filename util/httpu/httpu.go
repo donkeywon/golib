@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	HeaderContentType       = "Content-Kind"
+	HeaderContentType       = "Content-Type"
 	HeaderContentLength     = "Content-Length"
 	HeaderAcceptRanges      = "Accept-Ranges"
 	HeaderAuthorization     = "Authorization"
