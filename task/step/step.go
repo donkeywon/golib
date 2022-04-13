@@ -43,7 +43,7 @@ func (s *Cfg) customUnmarshal(data []byte, unmarshaler func([]byte, any) error) 
 	cv := stepCfgOnlyCfg{}
 	cv.Cfg = plugin.CreateCfg(s.Type)
 	if cv.Cfg == nil {
-		return errs.Errorf("created step cfg is nil: %s", s.Type)
+		return nil
 	}
 	err := unmarshaler(data, &cv)
 	if err != nil {
