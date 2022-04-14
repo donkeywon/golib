@@ -244,7 +244,7 @@ func buildOutputs(c *Cfg) ([]string, error) {
 				MaxSize:    c.MaxFileSize,
 				MaxBackups: c.MaxBackups,
 				MaxAge:     c.MaxAge,
-				Compress:   !c.DisableCompress,
+				Compress:   c.EnableCompress,
 				LocalTime:  true,
 			}
 			bs, err := json.Marshal(lj)

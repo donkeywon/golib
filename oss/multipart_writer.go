@@ -133,13 +133,14 @@ func (w *MultiPartWriter) ReadFrom(r io.Reader) (int64, error) {
 	rr := &readerWrapper{Reader: r}
 	for {
 		lr := io.LimitReader(rr, w.cfg.PartSize)
-		r := w.uploadPart(w.curPartNo, httpc.WithBodyReader(lr))
+		result := w.uploadPart(w.curPartNo, httpc.WithBodyReader(lr))
 		w.curPartNo++
-		err = r.err
+		err = result.err
 		if err != nil {
+			w.uploadErr = err
 			break
 		}
-		w.handleUploadPartResult(r)
+		w.handleUploadPartResult(result)
 		if rr.eof {
 			break
 		}
@@ -157,7 +158,7 @@ type readerWrapper struct {
 func (r *readerWrapper) Read(p []byte) (int, error) {
 	nr, err := r.Reader.Read(p)
 	r.nr += int64(nr)
-	r.eof = errors.Is(err, io.EOF)
+	r.eof = err == io.EOF
 	return nr, err
 }
 

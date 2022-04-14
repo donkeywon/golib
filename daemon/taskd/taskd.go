@@ -36,12 +36,12 @@ type Taskd interface {
 	PauseTask(taskID string) error
 	ResumeTask(taskID string) (*task.Task, error)
 	IsTaskExists(taskID string) bool
-	IsTaskWaiting(taskID string) bool
+	IsTaskPending(taskID string) bool
 	IsTaskRunning(taskID string) bool
 	IsTaskPaused(taskID string) bool
 	ListAllTasks() []*task.Task
 	ListTaskIDs() []string
-	ListWaitingTaskIDs() []string
+	ListPendingTaskIDs() []string
 	ListRunningTaskIDs() []string
 	ListPausedTaskIDs() []string
 	GetTaskResult(taskID string) (any, error)
@@ -64,8 +64,8 @@ type taskd struct {
 	pools map[string]pond.Pool
 
 	mu               sync.Mutex
-	taskIDMap        map[string]struct{}   // task id map include waiting, except paused
-	taskMap          map[string]*task.Task // task map include waiting, except paused
+	taskIDMap        map[string]struct{}   // task id map include pending, except paused
+	taskMap          map[string]*task.Task // task map include pending, except paused
 	taskIDRunningMap map[string]struct{}   // running task id map
 	taskPausedMap    map[string]*task.Task // paused task map
 
@@ -212,14 +212,19 @@ func (td *taskd) ResumeTask(taskID string) (*task.Task, error) {
 
 	td.Info("resuming task", "task_id", taskID)
 	newT, err := td.createInitSubmit(td.Ctx(), t.Cfg, false, func(newT *task.Task, err error, hed *task.HookExtraData) {
+		data := t.LoadAll()
+		for k, v := range data {
+			newT.Store(k, v)
+		}
+
 		for i, newStep := range newT.Steps() {
-			data := t.Steps()[i].LoadAll()
+			data = t.Steps()[i].LoadAll()
 			for k, v := range data {
 				newStep.Store(k, v)
 			}
 		}
 		for i, newStep := range newT.DeferSteps() {
-			data := t.DeferSteps()[i].LoadAll()
+			data = t.DeferSteps()[i].LoadAll()
 			for k, v := range data {
 				newStep.Store(k, v)
 			}
@@ -474,7 +479,7 @@ func (td *taskd) IsTaskExists(taskID string) bool {
 	return exists
 }
 
-func (td *taskd) IsTaskWaiting(taskID string) bool {
+func (td *taskd) IsTaskPending(taskID string) bool {
 	td.mu.Lock()
 	defer td.mu.Unlock()
 	_, exists := td.taskIDMap[taskID]
@@ -512,7 +517,7 @@ func (td *taskd) ListTaskIDs() []string {
 	return ids
 }
 
-func (td *taskd) ListWaitingTaskIDs() []string {
+func (td *taskd) ListPendingTaskIDs() []string {
 	td.mu.Lock()
 	defer td.mu.Unlock()
 	ids := make([]string, len(td.taskIDMap)-len(td.taskIDRunningMap))
