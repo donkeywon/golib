@@ -140,6 +140,7 @@ func (w *AppendWriter) sealBlob() error {
 				return err != nil
 			}
 		}),
+		retry.LastErrorOnly(true),
 	)
 }
 
@@ -158,6 +159,7 @@ func (w *AppendWriter) init() error {
 				return err != nil
 			}
 		}),
+		retry.LastErrorOnly(true),
 	)
 	if err != nil {
 		return errs.Wrap(err, "create append blob failed")
@@ -208,6 +210,7 @@ func (w *AppendWriter) appendPart(opts ...httpc.Option) error {
 				return err != nil
 			}
 		}),
+		retry.LastErrorOnly(true),
 	)
 	if err != nil {
 		return errs.Wrapf(err, "append failed with max retry, respStatus: %s, respBody: %s", respStatus, respBody.String())
