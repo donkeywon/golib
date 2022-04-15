@@ -3,6 +3,7 @@ package pipeline
 import (
 	"errors"
 	"io"
+	"os"
 	"reflect"
 	"sync"
 
@@ -83,7 +84,20 @@ func (p *Pipeline) Init() error {
 	}
 
 	for i := 0; i < len(p.ws)-1; i++ {
-		pr, pw := io.Pipe()
+		var (
+			pr io.ReadCloser
+			pw io.WriteCloser
+		)
+		if p.ws[i].Name() == string(WorkerCmd) && p.ws[i+1].Name() == string(WorkerCmd) &&
+			len(p.ws[i].Writers()) == 0 && len(p.ws[i+1].Readers()) == 0 {
+			pr, pw, err = os.Pipe()
+			if err != nil {
+				return errs.Wrap(err, "create os pipe failed")
+			}
+		} else {
+			pr, pw = io.Pipe()
+		}
+
 		if len(p.ws[i].Writers()) > 0 {
 			if ww, ok := p.ws[i].LastWriter().(writerWrapper); !ok {
 				return errs.Errorf("worker(%d) %s last writer %s is not WriterWrapper", i, p.ws[i].Name(), reflect.TypeOf(p.ws[i].LastWriter()).String())

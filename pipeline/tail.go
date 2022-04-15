@@ -44,7 +44,7 @@ func (t *Tail) Init() error {
 		return errs.Wrapf(err, "create tail reader failed: %s:%d", t.c.Path, t.c.Offset)
 	}
 
-	t.WrapReader(t.t)
+	t.Reader.WrapReader(t.t)
 	return t.Reader.Init()
 }
 

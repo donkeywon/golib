@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"hash"
 	"io"
+	"slices"
 	"time"
 
 	"github.com/donkeywon/golib/aio"
@@ -153,11 +154,12 @@ func OnClose(c ...closeFunc) Option {
 type logger struct {
 	Common
 
-	msg string
+	msg       string
+	getFields func() []any
 }
 
 func (l *logger) Write(p []byte) (int, error) {
-	l.Info(l.msg, "len", len(p))
+	l.Info(l.msg, slices.Concat([]any{"len", len(p)}, l.getFields())...)
 	return len(p), nil
 }
 
@@ -165,12 +167,12 @@ func (l *logger) Set(c Common) {
 	l.Common = c
 }
 
-func LogWrite() Option {
-	return MultiWrite(&logger{msg: "write"})
+func LogWrite(getFields func() []any) Option {
+	return MultiWrite(&logger{msg: "write", getFields: getFields})
 }
 
-func LogRead() Option {
-	return Tee(&logger{msg: "read"})
+func LogRead(getFields func() []any) Option {
+	return Tee(&logger{msg: "read", getFields: getFields})
 }
 
 type hasher struct {
