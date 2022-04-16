@@ -149,6 +149,9 @@ func (aw *AsyncWriter) ReadFrom(r io.Reader) (n int64, err error) {
 		}
 
 		aw.mu.Unlock()
+		if err == nil {
+			continue
+		}
 		return
 	}
 }
