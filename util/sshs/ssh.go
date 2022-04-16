@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/donkeywon/golib/errs"
+	"github.com/donkeywon/golib/util/bufferpool"
 	"golang.org/x/crypto/ssh"
 )
 
@@ -66,4 +67,33 @@ func Close(cli *ssh.Client, sess *ssh.Session) error {
 		return errs.Wrap(err, "close ssh client failed")
 	}
 	return nil
+}
+
+func Exec(addr, user, pwd string, privateKey []byte, timeout time.Duration, cmd string) (stdout string, stderr string, err error) {
+	var (
+		cli  *ssh.Client
+		sess *ssh.Session
+	)
+	cli, sess, err = NewClient(addr, user, pwd, privateKey, timeout)
+	if err != nil {
+		return
+	}
+	defer cli.Close()
+	defer sess.Close()
+
+	stdoutBuf := bufferpool.Get()
+	defer stdoutBuf.Free()
+	stderrBuf := bufferpool.Get()
+	defer stderrBuf.Free()
+	sess.Stdout = stdoutBuf
+	sess.Stderr = stderrBuf
+
+	err = sess.Run(cmd)
+	if err != nil {
+		return
+	}
+
+	stdout = stdoutBuf.String()
+	stderr = stderrBuf.String()
+	return
 }
