@@ -63,10 +63,10 @@ func NewReader(filepath string, offset int64) (*Reader, error) {
 	return r, nil
 }
 
-func (r *Reader) Read(p []byte) (int, error) {
-	nr, err := r.read(p)
+func (r *Reader) Read(p []byte) (nr int, err error) {
+	nr, err = r.read(p)
 	if err != nil {
-		return nr, err
+		return
 	}
 
 	if nr > 0 {
@@ -87,7 +87,7 @@ func (r *Reader) Read(p []byte) (int, error) {
 func (r *Reader) read(p []byte) (int, error) {
 	nr, err := r.file.Read(p)
 	atomic.AddInt64(&r.offset, int64(nr))
-	if err == nil || errors.Is(err, io.EOF) {
+	if err == nil || err == io.EOF {
 		return nr, nil
 	}
 
