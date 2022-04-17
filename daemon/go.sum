@@ -1,5 +1,7 @@
 github.com/alitto/pond/v2 v2.3.2 h1:EAwwpi4Re7OE7poKDHqIUhJlq/mUBmtZN2PmDYCgRLE=
 github.com/alitto/pond/v2 v2.3.2/go.mod h1:xkjYEgQ05RSpWdfSd1nM3OVv7TBhLdy7rMp3+2Nq+yE=
+github.com/alitto/pond/v2 v2.3.3 h1:HoHTt3CFIe7H0+UB42FALyGxODi64Ixl+LIhOHhDKTo=
+github.com/alitto/pond/v2 v2.3.3/go.mod h1:xkjYEgQ05RSpWdfSd1nM3OVv7TBhLdy7rMp3+2Nq+yE=
 github.com/arl/statsviz v0.6.0 h1:jbW1QJkEYQkufd//4NDYRSNBpwJNrdzPahF7ZmoGdyE=
 github.com/arl/statsviz v0.6.0/go.mod h1:0toboo+YGSUXDaS4g1D5TVS4dXs7S7YYT5J/qnW2h8s=
 github.com/avast/retry-go/v4 v4.6.1 h1:VkOLRubHdisGrHnTu89g08aQEWEgRU7LVEop3GbIcMk=
