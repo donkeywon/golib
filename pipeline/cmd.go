@@ -11,7 +11,7 @@ import (
 )
 
 func init() {
-	plugin.RegWithCfg(WorkerCmd, func() Worker { return NewCmd() }, func() any { return cmd.NewCfg })
+	plugin.RegWithCfg(WorkerCmd, func() Worker { return NewCmd() }, func() any { return cmd.NewCfg() })
 }
 
 const WorkerCmd Type = "cmd"

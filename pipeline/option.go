@@ -201,7 +201,7 @@ func (h *hasher) Close() error {
 	hash := hex.EncodeToString(bs)
 	if len(h.checksum) > 0 {
 		if h.checksum != hash {
-			return errs.Errorf("checksum not match, wanted: %s, actual: %s", h.checksum, hash)
+			return errs.Errorf("checksum mismatch, expected: %s, actual: %s", h.checksum, hash)
 		}
 	}
 	h.c.Store(consts.FieldHash, hash)
