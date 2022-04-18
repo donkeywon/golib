@@ -78,6 +78,8 @@ func New() *Pipeline {
 }
 
 func (p *Pipeline) Init() error {
+	p.Debug("pipeline cfg", "cfg", p.cfg)
+
 	err := v.Struct(p.cfg)
 	if err != nil {
 		return errs.Wrap(err, "pipeline cfg validate failed")
