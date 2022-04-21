@@ -21,7 +21,6 @@ import (
 	"github.com/donkeywon/golib/util/httpu"
 	"github.com/donkeywon/golib/util/iou"
 	"github.com/donkeywon/golib/util/oss"
-	"github.com/google/uuid"
 )
 
 type InitiateMultipartUploadResult struct {
@@ -470,7 +469,7 @@ func (w *MultiPartWriter) uploadPart(partNo int, opts ...httpc.Option) *uploadPa
 		err         error
 	)
 	if w.isBlob {
-		blockID := base64.StdEncoding.EncodeToString([]byte(uuid.NewString()))
+		blockID := base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%08d", partNo)))
 		etag = blockID
 		url = fmt.Sprintf("%s?comp=block&blockid=%s", w.cfg.URL, blockID)
 		checkStatus = httpc.CheckStatusCode(http.StatusCreated)

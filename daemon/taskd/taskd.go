@@ -45,7 +45,7 @@ type Taskd interface {
 	ListPendingTaskIDs() []string
 	ListRunningTaskIDs() []string
 	ListPausedTaskIDs() []string
-	GetTaskResult(taskID string) (any, error)
+	GetTaskCfg(taskID string) (*task.Cfg, error)
 	OnTaskCreate(hooks ...task.Hook)
 	OnTaskInit(hooks ...task.Hook)
 	OnTaskSubmit(hooks ...task.Hook)
@@ -582,13 +582,14 @@ func (td *taskd) ListPausedTaskIDs() []string {
 	return ids
 }
 
-func (td *taskd) GetTaskResult(taskID string) (any, error) {
-	t := td.getTask(taskID)
-	if t == nil {
+func (td *taskd) GetTaskCfg(taskID string) (*task.Cfg, error) {
+	td.mu.Lock()
+	defer td.mu.Unlock()
+	t, exists := td.taskMap[taskID]
+	if !exists {
 		return nil, ErrTaskNotExists
 	}
-
-	return t.Result(), nil
+	return t.Cfg, nil
 }
 
 func (td *taskd) OnTaskCreate(hooks ...task.Hook) {

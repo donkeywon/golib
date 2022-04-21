@@ -51,18 +51,14 @@ func (r *Result) String() string {
 
 	buf.WriteString(`{"stdout":[`)
 	for i := range r.Stdout {
-		buf.WriteByte('"')
-		buf.WriteString(r.Stdout[i])
-		buf.WriteByte('"')
+		buf.WriteString(strconv.Quote(r.Stdout[i]))
 		if i < len(r.Stdout)-1 {
 			buf.WriteByte(',')
 		}
 	}
 	buf.WriteString(`],"stderr":[`)
 	for i := range r.Stderr {
-		buf.WriteByte('"')
-		buf.WriteString(r.Stderr[i])
-		buf.WriteByte('"')
+		buf.WriteString(strconv.Quote(r.Stderr[i]))
 		if i < len(r.Stderr)-1 {
 			buf.WriteByte(',')
 		}
@@ -99,16 +95,14 @@ func RunCmd(ctx context.Context, cmd *exec.Cmd, cfg *Cfg, beforeStart ...func(cm
 	if err != nil {
 		return &Result{err: err}
 	}
-	r := Start(cmd, append(cfgBeforeStart, beforeStart...)...)
-	Wait(ctx, cmd, r)
+	r := Start(ctx, cmd, append(cfgBeforeStart, beforeStart...)...)
 	<-r.Done()
 	return r
 }
 
 // Start start a command
 // you can get pid from Result.Pid, 0 means start fail.
-// Must call Wait after Start whether cmd fail or not.
-func Start(cmd *exec.Cmd, beforeRun ...func(cmd *exec.Cmd)) *Result {
+func Start(ctx context.Context, cmd *exec.Cmd, beforeRun ...func(cmd *exec.Cmd)) *Result {
 	r := &Result{
 		done: make(chan struct{}),
 	}
@@ -133,17 +127,13 @@ func Start(cmd *exec.Cmd, beforeRun ...func(cmd *exec.Cmd)) *Result {
 		r.Pid = cmd.Process.Pid
 	}
 
-	return r
-}
-
-// Wait wait command exit
-// Must called after Start.
-func Wait(ctx context.Context, cmd *exec.Cmd, startResult *Result) {
 	go func() {
-		defer close(startResult.done)
-		err := wait(ctx, cmd, startResult)
-		startResult.err = err
+		defer close(r.done)
+		err = wait(ctx, cmd, r)
+		r.err = err
 	}()
+
+	return r
 }
 
 func wait(ctx context.Context, cmd *exec.Cmd, startResult *Result) error {
