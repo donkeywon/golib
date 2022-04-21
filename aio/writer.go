@@ -4,8 +4,6 @@ import (
 	"io"
 	"sync"
 	"time"
-
-	"github.com/donkeywon/golib/util/bytespool"
 )
 
 type loadOnceError struct {
@@ -43,8 +41,9 @@ type AsyncWriter struct {
 	err            loadOnceError
 	opt            *option
 	off            int
-	buf            *bytespool.Bytes
-	queue          chan *bytespool.Bytes
+	buf            []byte
+	bufChan        chan []byte
+	queue          chan []byte
 	closed         chan struct{}
 	asyncDone      chan struct{}
 	deadlineTimer  *time.Timer
@@ -63,7 +62,7 @@ func NewAsyncWriter(w io.Writer, opts ...Option) *AsyncWriter {
 	for _, o := range opts {
 		o.apply(aw.opt)
 	}
-	aw.queue = make(chan *bytespool.Bytes, aw.opt.queueSize)
+	aw.queue = make(chan []byte, aw.opt.queueSize)
 	return aw
 }
 
@@ -85,12 +84,12 @@ func (aw *AsyncWriter) Write(p []byte) (n int, err error) {
 		aw.mu.Lock()
 
 		aw.prepareBuf()
-		nn = copy(aw.buf.B()[aw.off:], p)
+		nn = copy(aw.buf[aw.off:], p)
 		aw.off += nn
 		p = p[nn:]
 		n += nn
 
-		if aw.off == aw.buf.Len() {
+		if aw.off == len(aw.buf) {
 			aw.flushNoLock()
 		}
 
@@ -108,6 +107,8 @@ func (aw *AsyncWriter) Close() error {
 		aw.Flush()
 		close(aw.queue)
 		<-aw.asyncDone
+
+		close(aw.bufChan)
 
 		if aw.err.Has() {
 			err = aw.err.Load()
@@ -134,11 +135,11 @@ func (aw *AsyncWriter) ReadFrom(r io.Reader) (n int64, err error) {
 		aw.mu.Lock()
 
 		aw.prepareBuf()
-		nn, err = r.Read(aw.buf.B()[aw.off:])
+		nn, err = r.Read(aw.buf[aw.off:])
 		aw.off += nn
 		n += int64(nn)
 
-		if err == io.EOF || err == nil && aw.off == aw.buf.Len() {
+		if err == io.EOF || err == nil && aw.off == len(aw.buf) {
 			aw.flushNoLock()
 			aw.mu.Unlock()
 			if err == io.EOF {
@@ -168,11 +169,11 @@ func (aw *AsyncWriter) flushNoLock() {
 		return
 	}
 
-	if aw.buf == nil || aw.buf.Len() == 0 {
+	if aw.buf == nil || len(aw.buf) == 0 {
 		return
 	}
 
-	aw.buf.Shrink(aw.off)
+	aw.buf = aw.buf[:aw.off]
 	aw.queue <- aw.buf
 	aw.buf = nil
 	if aw.deadlineTimer != nil {
@@ -181,17 +182,24 @@ func (aw *AsyncWriter) flushNoLock() {
 }
 
 func (aw *AsyncWriter) prepareBuf() {
-	if aw.buf != nil && aw.off < aw.buf.Len() {
+	if aw.buf != nil && aw.off < len(aw.buf) {
 		// not full
 		return
 	}
 
-	aw.buf = bytespool.GetN(aw.opt.bufSize)
+	select {
+	case aw.buf = <-aw.bufChan:
+	default:
+		aw.buf = make([]byte, aw.opt.bufSize)
+	}
+	aw.buf = aw.buf[:cap(aw.buf)]
 	aw.off = 0
 }
 
 func (aw *AsyncWriter) initOnce() {
 	aw.asyncWriteOnce.Do(func() {
+		aw.bufChan = make(chan []byte, aw.opt.queueSize+2)
+
 		go aw.asyncWrite()
 		if aw.opt.deadline > 0 {
 			aw.deadlineTimer = time.NewTimer(aw.opt.deadline)
@@ -213,17 +221,17 @@ func (aw *AsyncWriter) asyncWrite() {
 		}
 
 		if aw.err.Has() {
-			b.Free()
+			aw.bufChan <- b
 			continue
 		}
 
-		nw, err = aw.w.Write(b.B())
-		b.Free()
+		nw, err = aw.w.Write(b)
+		aw.bufChan <- b
 		if err != nil {
 			aw.err.Store(err)
 			continue
 		}
-		if nw < b.Len() {
+		if nw < len(b) {
 			aw.err.Store(io.ErrShortWrite)
 			continue
 		}

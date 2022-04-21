@@ -69,7 +69,7 @@ func testWriter(t *testing.T, w io.Writer, c *Cfg, bufSize int) {
 	err := oss.Delete(context.TODO(), time.Minute, c.URL, c.Ak, c.Sk, c.Region)
 	require.NoError(t, err)
 
-	f, _ := os.OpenFile("/tmp/test.file.zst", os.O_CREATE|os.O_RDWR, 0644)
+	f, _ := os.OpenFile("/tmp/test.file", os.O_RDWR, 0644)
 	defer f.Close()
 
 	buf := make([]byte, bufSize)
