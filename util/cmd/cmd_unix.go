@@ -46,5 +46,13 @@ func beforeStartFromCfg(cfg *Cfg) ([]func(cmd *exec.Cmd), error) {
 			cmd.SysProcAttr.Credential = &syscall.Credential{Uid: uint32(uid), Gid: uint32(gid)}
 		})
 	}
+	if cfg.SetPgid {
+		beforeRun = append(beforeRun, func(cmd *exec.Cmd) {
+			if cmd.SysProcAttr == nil {
+				cmd.SysProcAttr = &syscall.SysProcAttr{}
+			}
+			cmd.SysProcAttr.Setpgid = true
+		})
+	}
 	return beforeRun, nil
 }

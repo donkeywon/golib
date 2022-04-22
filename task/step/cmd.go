@@ -1,14 +1,12 @@
 package step
 
 import (
-	"context"
-	"os/exec"
-
 	"github.com/donkeywon/golib/consts"
 	"github.com/donkeywon/golib/errs"
 	"github.com/donkeywon/golib/plugin"
 	"github.com/donkeywon/golib/util/cmd"
 	"github.com/donkeywon/golib/util/v"
+	"os/exec"
 )
 
 func init() {
@@ -50,6 +48,8 @@ func (c *CmdStep) Init() error {
 func (c *CmdStep) Start() error {
 	var err error
 
+	c.Cfg.SetPgid = true
+
 	result := cmd.RunCmd(c.Ctx(), c.cmd, c.Cfg, c.beforeStart...)
 	err = result.Err()
 	c.Info("cmd exit", "result", result)
@@ -80,7 +80,7 @@ func (c *CmdStep) Start() error {
 }
 
 func (c *CmdStep) Stop() error {
-	return cmd.MustStop(context.Background(), c.cmd)
+	return cmd.KillGroup(c.cmd)
 }
 
 func (c *CmdStep) SetCfg(cfg any) {
