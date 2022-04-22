@@ -315,7 +315,7 @@ func (w *MultiPartWriter) init() error {
 
 PARALLEL:
 	if w.cfg.Parallel > 1 {
-		w.bufChan = make(chan []byte)
+		w.bufChan = make(chan []byte, w.cfg.Parallel+1)
 		w.parallelWg.Add(w.cfg.Parallel)
 		w.parallelChan = make(chan *uploadPartReq)
 		for range w.cfg.Parallel {
