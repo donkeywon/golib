@@ -27,6 +27,7 @@ type HostRateLimiterCfg struct {
 	ReservePercent  int    `json:"reservePercent"  yaml:"reservePercent"`
 	MinMBps         int    `json:"minMBps"         yaml:"minMBps"`
 	FixedMBps       int    `json:"fixedMBps"       yaml:"fixedMBps"`
+	Burst           int    `json:"burst"           yaml:"burst"`
 }
 
 func NewHostRateLimiterCfg() *HostRateLimiterCfg {
@@ -67,8 +68,8 @@ func (h *HostRateLimiter) Init() error {
 		return err
 	}
 
-	h.rxRL = rate.NewLimiter(0, 0)
-	h.txRL = rate.NewLimiter(0, 0)
+	h.rxRL = rate.NewLimiter(0, h.Burst)
+	h.txRL = rate.NewLimiter(0, h.Burst)
 
 	if h.FixedMBps > 0 {
 		h.Info("use fixed limit", "limit", i2MBps(h.FixedMBps))
@@ -108,6 +109,7 @@ func (h *HostRateLimiter) Init() error {
 }
 
 func (h *HostRateLimiter) RxWaitN(n int, timeout int) error {
+	h.Debug("rx wait", "n", n, "timeout", timeout)
 	ctx := h.Ctx()
 	if timeout > 0 {
 		var cancel context.CancelFunc
@@ -122,6 +124,7 @@ func (h *HostRateLimiter) RxWaitN(n int, timeout int) error {
 }
 
 func (h *HostRateLimiter) TxWaitN(n int, timeout int) error {
+	h.Debug("tx wait", "n", n, "timeout", timeout)
 	ctx := h.Ctx()
 	if timeout > 0 {
 		var cancel context.CancelFunc
@@ -176,6 +179,7 @@ func (h *HostRateLimiter) monitorCurSpeed() {
 }
 
 func (h *HostRateLimiter) setRxTxLimit(rxL float64, txL float64) {
+	h.Debug("set limit", "rx_limit", rxL, "tx_limit", txL)
 	h.rxRL.SetLimit(rate.Limit(rxL * 1048576))
 	h.txRL.SetLimit(rate.Limit(txL * 1048576))
 }

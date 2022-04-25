@@ -82,10 +82,15 @@ func RegCfg(name string, cfg any) {
 	_cfgMap[name] = cfg
 }
 
+func UnRegDaemon(typ ...DaemonType) {
+	_daemons = slices.DeleteFunc(_daemons, func(d DaemonType) bool { return slices.Contains(typ, d) })
+}
+
 type options struct {
-	CfgPath      string `env:"CFG_PATH" flag-description:"config file path"        flag-long:"config"     flag-short:"c"`
-	PrintVersion bool   `flag-description:"print version info"                     flag-long:"version"    flag-short:"v"`
-	EnvPrefix    string `flag-description:"define a prefix for each env field tag" flag-long:"env-prefix"`
+	CfgPath        string `env:"CFG_PATH" flag-description:"config file path"        flag-long:"config"     flag-short:"c"`
+	PrintVersion   bool   `flag-description:"print version info"                     flag-long:"version"    flag-short:"v"`
+	EnvPrefix      string `flag-description:"define a prefix for each env field tag" flag-long:"env-prefix"`
+	onConfigLoaded OnConfigLoadedFunc
 }
 
 type Booter struct {
@@ -145,6 +150,10 @@ func (b *Booter) Init() error {
 	err = b.loadCfg()
 	if err != nil {
 		return errs.Wrap(err, "load cfg failed")
+	}
+
+	if b.options.onConfigLoaded != nil {
+		b.options.onConfigLoaded(b.cfgMap)
 	}
 
 	err = b.validateCfg()

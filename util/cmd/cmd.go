@@ -17,7 +17,7 @@ type Cfg struct {
 	RunAsUser  string            `json:"runAsUser"  yaml:"runAsUser"`
 	WorkingDir string            `json:"workingDir" yaml:"workingDir"`
 	Command    []string          `json:"command"    validate:"required" yaml:"command"`
-	SetPgid    bool              `json:"setPgid" yaml:"setPgid"`
+	SetPgid    bool              `json:"setPgid"    yaml:"setPgid"`
 }
 
 func NewCfg() *Cfg {
