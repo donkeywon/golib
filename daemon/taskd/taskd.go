@@ -254,8 +254,14 @@ func (td *taskd) createInit(ctx context.Context, taskCfg *task.Cfg, extra *task.
 	}
 
 	t, err := td.createTask(taskCfg)
-	for k, v := range taskCfg.Values {
-		t.Store(k, v)
+	if err == nil {
+		for k, value := range taskCfg.Values {
+			t.Store(k, value)
+		}
+
+		t.Inherit(td)
+		t.SetCtx(ctx)
+		t.WithLoggerFields("task_id", t.Cfg.ID, "task_type", t.Cfg.Type)
 	}
 	td.hookTask(t, err, td.createHooks, "create", extra)
 	if err != nil {
@@ -270,7 +276,7 @@ func (td *taskd) createInit(ctx context.Context, taskCfg *task.Cfg, extra *task.
 		h(t, nil, extra)
 	}
 
-	err = td.initTask(ctx, t)
+	err = td.initTask(t)
 	td.hookTask(t, err, td.initHooks, "init", extra)
 	if err != nil {
 		td.Error("init task failed", err, "cfg", taskCfg)
@@ -348,23 +354,20 @@ func (td *taskd) createTask(cfg *task.Cfg) (t *task.Task, err error) {
 	defer func() {
 		e := recover()
 		if e != nil {
-			err = errs.PanicToErr(e)
+			err = errs.PanicToErrWithMsg(e, "panic on create task")
 		}
 	}()
 	return plugin.CreateWithCfg[plugin.Type, *task.Task](task.PluginTypeTask, cfg), nil
 }
 
-func (td *taskd) initTask(ctx context.Context, t *task.Task) (err error) {
+func (td *taskd) initTask(t *task.Task) (err error) {
 	defer func() {
 		e := recover()
 		if e != nil {
-			err = errs.PanicToErr(e)
+			err = errs.PanicToErrWithMsg(e, "panic on init task")
 		}
 	}()
 
-	t.Inherit(td)
-	t.SetCtx(ctx)
-	t.WithLoggerFields("task_id", t.Cfg.ID, "task_type", t.Cfg.Type)
 	return runner.Init(t)
 }
 
