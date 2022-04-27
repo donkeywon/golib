@@ -208,9 +208,14 @@ func (h *hasher) Close() error {
 	return nil
 }
 
-func Hash(h hash.Hash) Option {
+func HashWrite(h hash.Hash) Option {
 	hs := &hasher{h: h}
 	return multiOption{MultiWrite(hs), OnClose(hs.Close)}
+}
+
+func HashRead(h hash.Hash) Option {
+	hs := &hasher{h: h}
+	return multiOption{Tee(hs), OnClose(hs.Close)}
 }
 
 func Checksum(checksum string, h hash.Hash) Option {
@@ -328,9 +333,10 @@ type rateLimit struct {
 	logTicker *time.Ticker
 }
 
-func newRateLimit(cfg *ratelimit.Cfg) *rateLimit {
+func newRateLimit(cfg *ratelimit.Cfg, write bool) *rateLimit {
 	return &rateLimit{
-		cfg: cfg,
+		cfg:   cfg,
+		write: write,
 	}
 }
 
@@ -384,15 +390,17 @@ func (rl *rateLimit) Set(c Common) {
 		rl.Error("init ratelimiter failed", err, "type", rl.cfg.Type, "cfg", rl.cfg.Cfg)
 		return
 	}
-	if _, ok := c.(Writer); ok {
-		rl.write = true
-	}
 	rl.rl = ratelimiter
 }
 
-func RateLimit(cfg *ratelimit.Cfg) Option {
-	rl := newRateLimit(cfg)
+func RateLimitWrite(cfg *ratelimit.Cfg) Option {
+	rl := newRateLimit(cfg, true)
 	return multiOption{MultiWrite(rl), OnClose(rl.Close)}
+}
+
+func RateLimitRead(cfg *ratelimit.Cfg) Option {
+	rl := newRateLimit(cfg, false)
+	return multiOption{Tee(rl), OnClose(rl.Close)}
 }
 
 type countWriter struct {
