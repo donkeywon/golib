@@ -106,6 +106,7 @@ func (aw *AsyncWriter) Close() error {
 
 		aw.Flush()
 		close(aw.queue)
+		aw.initOnce()
 		<-aw.asyncDone
 
 		close(aw.bufChan)

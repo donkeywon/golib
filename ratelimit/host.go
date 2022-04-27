@@ -68,8 +68,8 @@ func (h *HostRateLimiter) Init() error {
 		return err
 	}
 
-	h.rxRL = rate.NewLimiter(0, h.Burst)
-	h.txRL = rate.NewLimiter(0, h.Burst)
+	h.rxRL = rate.NewLimiter(rate.Limit(h.Burst), h.Burst)
+	h.txRL = rate.NewLimiter(rate.Limit(h.Burst), h.Burst)
 
 	if h.FixedMBps > 0 {
 		h.Info("use fixed limit", "limit", i2MBps(h.FixedMBps))
@@ -109,7 +109,6 @@ func (h *HostRateLimiter) Init() error {
 }
 
 func (h *HostRateLimiter) RxWaitN(n int, timeout int) error {
-	h.Debug("rx wait", "n", n, "timeout", timeout)
 	ctx := h.Ctx()
 	if timeout > 0 {
 		var cancel context.CancelFunc
@@ -124,7 +123,6 @@ func (h *HostRateLimiter) RxWaitN(n int, timeout int) error {
 }
 
 func (h *HostRateLimiter) TxWaitN(n int, timeout int) error {
-	h.Debug("tx wait", "n", n, "timeout", timeout)
 	ctx := h.Ctx()
 	if timeout > 0 {
 		var cancel context.CancelFunc

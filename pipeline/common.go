@@ -108,7 +108,7 @@ func (ito *CommonOption) toOptions(write bool) []Option {
 	} else if len(ito.Hash) > 0 {
 		opts = append(opts, Hash(initHash(ito.Hash)))
 	}
-	if ito.RateLimitCfg != nil && ito.RateLimitCfg.Cfg != nil {
+	if ito.RateLimitCfg != nil {
 		opts = append(opts, RateLimit(ito.RateLimitCfg))
 	}
 	if ito.Count {
