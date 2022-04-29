@@ -106,6 +106,7 @@ func (aw *AsyncWriter) Close() error {
 
 		aw.Flush()
 		close(aw.queue)
+		// 如果AsyncWriter创建后没有调用过Write直接Close，这里不init的话会死锁
 		aw.initOnce()
 		<-aw.asyncDone
 

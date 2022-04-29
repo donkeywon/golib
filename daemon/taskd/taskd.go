@@ -296,15 +296,14 @@ func (td *taskd) submit(t *task.Task, wait bool) {
 
 		td.Info("starting task", "task_id", t.Cfg.ID, "task_type", t.Cfg.Type)
 		runner.Start(t)
-		td.unmarkTaskAndTaskID(t.Cfg.ID)
-		td.hookTask(t, nil, td.doneHooks, "done", extra)
-
 		err := t.Err()
 		if err != nil {
 			td.Error("task failed", err, "task_id", t.Cfg.ID, "task_type", t.Cfg.Type)
 		} else {
 			td.Info("task done", "task_id", t.Cfg.ID, "task_type", t.Cfg.Type)
 		}
+		td.unmarkTaskAndTaskID(t.Cfg.ID)
+		td.hookTask(t, nil, td.doneHooks, "done", extra)
 	}
 
 	td.markTask(t)
