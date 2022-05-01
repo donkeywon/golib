@@ -9,7 +9,7 @@ func init() {
 		Version = versioninfo.Version
 	}
 	if Revision == "" {
-		Revision = versioninfo.Short()
+		Revision = versioninfo.Revision
 	}
 	if CommitTime == "" {
 		CommitTime = versioninfo.LastCommit.Local().Format("2006-01-02 15:04:05")
