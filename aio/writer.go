@@ -15,10 +15,6 @@ func (e *loadOnceError) Has() bool {
 	return e.err != nil
 }
 
-func (e *loadOnceError) Loaded() bool {
-	return e.loaded
-}
-
 func (e *loadOnceError) Load() error {
 	if e.loaded {
 		return nil
@@ -77,8 +73,9 @@ func (aw *AsyncWriter) Write(p []byte) (n int, err error) {
 
 	var nn int
 	for len(p) > 0 {
-		if aw.err.Has() {
-			return 0, aw.err.Err()
+		err = aw.err.Err()
+		if err != nil {
+			return
 		}
 
 		aw.mu.Lock()
@@ -112,9 +109,7 @@ func (aw *AsyncWriter) Close() error {
 
 		close(aw.bufChan)
 
-		if aw.err.Has() {
-			err = aw.err.Load()
-		}
+		err = aw.err.Load()
 	})
 	return err
 }
@@ -130,8 +125,9 @@ func (aw *AsyncWriter) ReadFrom(r io.Reader) (n int64, err error) {
 
 	var nn int
 	for {
-		if aw.err.Has() {
-			return 0, aw.err.Err()
+		err = aw.err.Err()
+		if err != nil {
+			return
 		}
 
 		aw.mu.Lock()

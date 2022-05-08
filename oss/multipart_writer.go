@@ -22,6 +22,43 @@ import (
 	"github.com/donkeywon/golib/util/oss"
 )
 
+type loadOnceError struct {
+	mu     sync.Mutex
+	err    []error
+	loaded bool
+}
+
+func (e *loadOnceError) Has() bool {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return len(e.err) > 0
+}
+
+func (e *loadOnceError) Load() error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	if e.loaded {
+		return nil
+	}
+	e.loaded = true
+	return errors.Join(e.err...)
+}
+
+func (e *loadOnceError) Err() error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	e.loaded = true
+	return errors.Join(e.err...)
+}
+
+func (e *loadOnceError) Store(err error) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.err = append(e.err, err)
+}
+
 type InitiateMultipartUploadResult struct {
 	UploadID string `xml:"UploadId"`
 }
@@ -51,7 +88,7 @@ type MultiPartWriter struct {
 	parts             []*Part
 	blockList         []string
 	parallelResult    []*uploadPartResult
-	parallelErrs      []error
+	parallelErrs      loadOnceError
 	parallelWg        sync.WaitGroup
 	curPartNo         int
 	timeout           time.Duration
@@ -109,6 +146,11 @@ func (w *MultiPartWriter) ReadFrom(r io.Reader) (int64, error) {
 			b     []byte
 		)
 		for {
+			err = w.parallelErrs.Err()
+			if err != nil {
+				break
+			}
+
 			select {
 			case b = <-w.bufChan:
 			default:
@@ -127,14 +169,11 @@ func (w *MultiPartWriter) ReadFrom(r io.Reader) (int64, error) {
 			}
 		}
 
-		w.closeParallelChan()
-		w.parallelWg.Wait()
-		w.closeBufChan()
 		if err == io.EOF {
 			err = nil
 		}
 
-		return total, errors.Join(err, w.parallelErr())
+		return total, err
 	}
 
 	rr := &readerWrapper{Reader: r}
@@ -200,7 +239,7 @@ func (w *MultiPartWriter) Write(p []byte) (int, error) {
 
 	var b []byte
 	if w.cfg.Parallel > 1 {
-		err = w.parallelErr()
+		err = w.parallelErrs.Err()
 		if err != nil {
 			return 0, err
 		}
@@ -231,12 +270,12 @@ func (w *MultiPartWriter) Write(p []byte) (int, error) {
 	return len(p), nil
 }
 
-func (w *MultiPartWriter) handleParallelResult(r *uploadPartResult) {
+func (w *MultiPartWriter) handleParallelResult(r *uploadPartResult, workerID int) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
 	if r.err != nil {
-		w.parallelErrs = append(w.parallelErrs, r.err)
+		w.parallelErrs.Store(errs.Wrapf(r.err, "upload worker %d failed", workerID))
 		return
 	}
 
@@ -251,12 +290,6 @@ func (w *MultiPartWriter) handleUploadPartResult(r *uploadPartResult) {
 	}
 }
 
-func (w *MultiPartWriter) parallelErr() error {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	return errors.Join(w.parallelErrs...)
-}
-
 func (w *MultiPartWriter) Close() error {
 	var err error
 	if w.bufw != nil {
@@ -268,10 +301,20 @@ func (w *MultiPartWriter) Close() error {
 		w.closeBufChan()
 
 		w.cancel()
-		if w.uploadErr == nil {
-			err = errors.Join(err, w.complete())
+
+		if w.cfg.Parallel > 1 {
+			parallelErr := w.parallelErrs.Load()
+			if parallelErr != nil {
+				err = errors.Join(err, parallelErr, w.abort())
+			} else {
+				err = errors.Join(err, w.complete())
+			}
 		} else {
-			err = errors.Join(err, w.abort())
+			if w.uploadErr == nil {
+				err = errors.Join(err, w.complete())
+			} else {
+				err = errors.Join(err, w.abort())
+			}
 		}
 	})
 	return err
@@ -301,32 +344,28 @@ func (w *MultiPartWriter) init() error {
 	w.needContentLength = oss.NeedContentLength(w.cfg.URL)
 
 	var err error
-	if w.isBlob {
-		w.initialized = true
-		goto PARALLEL
+	if !w.isBlob {
+		w.uploadID, err = w.initMultiPart()
+		if err != nil {
+			return errs.Wrap(err, "init multi part failed")
+		}
 	}
 
-	w.uploadID, err = w.initMultiPart()
-	if err != nil {
-		return errs.Wrap(err, "init multi part failed")
-	}
 	w.initialized = true
 	w.curPartNo = 1
-
-PARALLEL:
 	if w.cfg.Parallel > 1 {
 		w.bufChan = make(chan []byte, w.cfg.Parallel+1)
 		w.parallelWg.Add(w.cfg.Parallel)
 		w.parallelChan = make(chan *uploadPartReq)
-		for range w.cfg.Parallel {
-			go w.uploadWorker()
+		for i := range w.cfg.Parallel {
+			go w.uploadWorker(i)
 		}
 	}
 
 	return nil
 }
 
-func (w *MultiPartWriter) uploadWorker() {
+func (w *MultiPartWriter) uploadWorker(workerID int) {
 	defer w.parallelWg.Done()
 	for {
 		select {
@@ -336,15 +375,14 @@ func (w *MultiPartWriter) uploadWorker() {
 			if !ok {
 				return
 			}
-			err := w.parallelErr()
-			if err != nil {
+			if w.parallelErrs.Has() {
 				w.bufChan <- req.b
 				continue
 			}
 
 			r := w.retryUploadPart(req.partNo, req.b)
 			w.bufChan <- req.b
-			w.handleParallelResult(r)
+			w.handleParallelResult(r, workerID)
 		}
 	}
 }
