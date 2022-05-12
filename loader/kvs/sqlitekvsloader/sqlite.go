@@ -32,10 +32,7 @@ const (
         k
     )
 );
-CREATE INDEX IF NOT EXISTS "kv_idx_updated_at"
-ON %s (
-  updated_at
-);`
+CREATE INDEX IF NOT EXISTS kv_idx_updated_at ON %s (updated_at);`
 
 	insertOrUpdateSQL = `INSERT INTO %s (
                    k,
@@ -103,7 +100,7 @@ func (s *SQLiteKVS) Open() error {
 		return errs.Wrap(err, "get conn failed")
 	}
 	defer s.putConn(conn)
-	err = sqlitex.Execute(conn, s.buildDDL(), &sqlitex.ExecOptions{})
+	err = sqlitex.ExecuteScript(conn, s.buildDDL(), &sqlitex.ExecOptions{})
 	if err != nil {
 		return errs.Wrap(err, "exec ddl failed")
 	}
