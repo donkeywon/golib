@@ -31,6 +31,10 @@ const (
     PRIMARY KEY (
         k
     )
+);
+CREATE INDEX IF NOT EXISTS "kv_idx_updated_at"
+ON %s (
+  updated_at
 );`
 
 	insertOrUpdateSQL = `INSERT INTO %s (
@@ -50,9 +54,10 @@ const (
                v = excluded.v,
                updated_at = excluded.updated_at;`
 	insertOrIgnoreSQL = `INSERT OR IGNORE INTO %s (k, v, updated_at) VALUES (?, ?, ?)`
-	deleteSQL         = "DELETE FROM %s where k = ?"
-	querySQL          = "SELECT rowid, v, updated_at FROM %s where k = ?"
-	pageQuerySQL      = "SELECT rowid, k, v, updated_at FROM %s where rowid > ? LIMIT ?"
+	deleteSQL         = "DELETE FROM %s WHERE k = ?"
+	querySQL          = "SELECT rowid, v, updated_at FROM %s WHERE k = ?"
+	pageQuerySQL      = "SELECT rowid, k, v, updated_at FROM %s WHERE rowid > ? LIMIT ?"
+	cleanOutdatedSQL  = "DELETE FROM %s WHERE updated_at < ?"
 
 	TypeSQLite kvs.Type = "sqlite"
 )
@@ -98,7 +103,7 @@ func (s *SQLiteKVS) Open() error {
 		return errs.Wrap(err, "get conn failed")
 	}
 	defer s.putConn(conn)
-	err = sqlitex.Execute(conn, s.prepareSQL(defaultDDL), &sqlitex.ExecOptions{})
+	err = sqlitex.Execute(conn, s.buildDDL(), &sqlitex.ExecOptions{})
 	if err != nil {
 		return errs.Wrap(err, "exec ddl failed")
 	}
@@ -334,6 +339,22 @@ func (s *SQLiteKVS) LoadAllAsString() (map[string]string, error) {
 	return result, err
 }
 
+func (s *SQLiteKVS) buildDDL() string {
+	return fmt.Sprintf(defaultDDL, s.Table, s.Table)
+}
+
 func (s *SQLiteKVS) prepareSQL(sql string) string {
 	return fmt.Sprintf(sql, s.Table)
+}
+
+func (s *SQLiteKVS) CleanupOutdated(duration time.Duration) error {
+	conn, err := s.getConn()
+	if err != nil {
+		return errs.Wrap(err, "get conn failed")
+	}
+	defer s.putConn(conn)
+
+	return sqlitex.Execute(conn, s.prepareSQL(cleanOutdatedSQL), &sqlitex.ExecOptions{
+		Args: []any{time.Now().Add(-duration).UnixNano()},
+	})
 }

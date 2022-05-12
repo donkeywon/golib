@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/donkeywon/golib/util/bytespool"
 	"github.com/icza/backscanner"
 )
 
@@ -16,10 +15,9 @@ func ReadLines(r io.Reader, lines int, bufSize int) ([]string, error) {
 	if bufSize == 0 {
 		bufSize = defaultBufSize
 	}
-	bs := bytespool.GetN(bufSize)
-	defer bs.Free()
+	bs := make([]byte, bufSize)
 	scanner := bufio.NewScanner(r)
-	scanner.Buffer(bs.B(), bufSize)
+	scanner.Buffer(bs, bufSize)
 
 	var finalLines []string
 
