@@ -155,6 +155,9 @@ type CommonCfgWithOption struct {
 }
 
 func (cc *CommonCfgWithOption) UnmarshalJSON(data []byte) error {
+	if cc.CommonCfg == nil {
+		cc.CommonCfg = &CommonCfg{}
+	}
 	err := cc.CommonCfg.UnmarshalJSON(data)
 	if err != nil {
 		return err
@@ -163,7 +166,10 @@ func (cc *CommonCfgWithOption) UnmarshalJSON(data []byte) error {
 }
 
 func (cc *CommonCfgWithOption) UnmarshalYAML(data []byte) error {
-	err := cc.CommonCfg.UnmarshalJSON(data)
+	if cc.CommonCfg == nil {
+		cc.CommonCfg = &CommonCfg{}
+	}
+	err := cc.CommonCfg.UnmarshalYAML(data)
 	if err != nil {
 		return err
 	}

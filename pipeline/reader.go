@@ -35,6 +35,20 @@ type ReaderCfg struct {
 	*CommonCfgWithOption
 }
 
+func (rc *ReaderCfg) UnmarshalJSON(data []byte) error {
+	if rc.CommonCfgWithOption == nil {
+		rc.CommonCfgWithOption = &CommonCfgWithOption{}
+	}
+	return rc.CommonCfgWithOption.UnmarshalJSON(data)
+}
+
+func (rc *ReaderCfg) UnmarshalYAML(data []byte) error {
+	if rc.CommonCfgWithOption == nil {
+		rc.CommonCfgWithOption = &CommonCfgWithOption{}
+	}
+	return rc.CommonCfgWithOption.UnmarshalYAML(data)
+}
+
 func (rc *ReaderCfg) build() Reader {
 	r := plugin.CreateWithCfg[Type, Reader](rc.Type, rc.Cfg)
 	r.WithOptions(rc.toOptions(false)...)
