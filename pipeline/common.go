@@ -150,8 +150,8 @@ func initHash(algo string) hash.Hash {
 }
 
 type CommonCfgWithOption struct {
-	CommonCfg
-	CommonOption
+	*CommonCfg
+	*CommonOption
 }
 
 func (cc *CommonCfgWithOption) UnmarshalJSON(data []byte) error {
@@ -171,8 +171,8 @@ func (cc *CommonCfgWithOption) UnmarshalYAML(data []byte) error {
 }
 
 func (cc *CommonCfgWithOption) customUnmarshal(data []byte, unmarshaler func([]byte, any) error) error {
-	o := CommonOption{}
-	err := unmarshaler(data, &o)
+	o := &CommonOption{}
+	err := unmarshaler(data, o)
 	if err != nil {
 		return err
 	}

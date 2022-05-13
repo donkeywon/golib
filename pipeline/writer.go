@@ -19,7 +19,7 @@ type writerWrapper interface {
 }
 
 type WriterCfg struct {
-	CommonCfgWithOption
+	*CommonCfgWithOption
 }
 
 func (wc *WriterCfg) build() Writer {

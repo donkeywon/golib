@@ -173,9 +173,9 @@ func (u *upd) upgrade(vi *VerInfo) bool {
 
 func downloadPackage(downloadDstPath string, storeCfg *pipeline.ReaderCfg) error {
 	cfg := pipeline.NewCfg()
-	cfg.Add(pipeline.WorkerCopy, pipeline.NewCopyCfg(), pipeline.CommonOption{}).
+	cfg.Add(pipeline.WorkerCopy, pipeline.NewCopyCfg(), &pipeline.CommonOption{}).
 		ReadFromReader(storeCfg.CommonCfgWithOption).
-		WriteTo(pipeline.WriterFile, &pipeline.FileCfg{Path: downloadDstPath}, pipeline.CommonOption{})
+		WriteTo(pipeline.WriterFile, &pipeline.FileCfg{Path: downloadDstPath}, &pipeline.CommonOption{})
 
 	p := pipeline.New()
 	p.SetCfg(cfg)

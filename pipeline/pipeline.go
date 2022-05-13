@@ -48,10 +48,10 @@ func (c *Cfg) AddWorker(w *WorkerCfg) *Cfg {
 	return c
 }
 
-func (c *Cfg) Add(typ Type, cfg any, opt CommonOption) *WorkerCfg {
+func (c *Cfg) Add(typ Type, cfg any, opt *CommonOption) *WorkerCfg {
 	workerCfg := &WorkerCfg{
-		CommonCfgWithOption: CommonCfgWithOption{
-			CommonCfg: CommonCfg{
+		CommonCfgWithOption: &CommonCfgWithOption{
+			CommonCfg: &CommonCfg{
 				Type: typ,
 				Cfg:  cfg,
 			},
