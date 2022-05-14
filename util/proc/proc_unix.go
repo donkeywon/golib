@@ -8,78 +8,48 @@ import (
 	"time"
 )
 
-func Stop(pid int) error {
-	return syscall.Kill(pid, syscall.SIGTERM)
+func Kill(pid int, sig syscall.Signal) error {
+	return syscall.Kill(pid, sig)
 }
 
-func StopGroup(pid int) error {
-	return syscall.Kill(-pid, syscall.SIGTERM)
+func KillGroup(pid int, sig syscall.Signal) error {
+	return syscall.Kill(-pid, sig)
 }
 
-func MustStop(ctx context.Context, pid int) error {
+func MustKill(ctx context.Context, pid int, singleSigWaitExitSec int, sig ...syscall.Signal) error {
 	if !Exists(pid) {
 		return nil
 	}
 
-	err := syscall.Kill(pid, syscall.SIGTERM)
-	if err != nil {
-		return err
+	for _, s := range sig {
+		err := syscall.Kill(pid, s)
+		if err != nil {
+			return err
+		}
+
+		if WaitProcExit(ctx, pid, time.Second, singleSigWaitExitSec) {
+			return nil
+		}
 	}
 
-	if WaitProcExit(ctx, pid, time.Second, mustStopWaitSec) {
-		return nil
-	}
-
-	err = syscall.Kill(pid, syscall.SIGINT)
-	if err != nil {
-		return err
-	}
-
-	if WaitProcExit(ctx, pid, time.Second, mustStopWaitSec) {
-		return nil
-	}
-
-	err = syscall.Kill(pid, syscall.SIGKILL)
-	if err != nil {
-		return err
-	}
-
-	WaitProcExit(ctx, pid, time.Second, mustStopWaitSec)
 	return nil
 }
 
-func MustStopGroup(ctx context.Context, pid int) error {
+func MustKillGroup(ctx context.Context, pid int, singleSigWaitExitSec int, sig ...syscall.Signal) error {
 	if !Exists(pid) {
 		return nil
 	}
 
-	err := syscall.Kill(-pid, syscall.SIGTERM)
-	if err != nil {
-		return err
+	for _, s := range sig {
+		err := syscall.Kill(-pid, s)
+		if err != nil {
+			return err
+		}
+
+		if WaitProcExit(ctx, pid, time.Second, singleSigWaitExitSec) {
+			return nil
+		}
 	}
 
-	if WaitProcExit(ctx, pid, time.Second, mustStopWaitSec) {
-		return nil
-	}
-
-	err = syscall.Kill(-pid, syscall.SIGINT)
-	if err != nil {
-		return err
-	}
-
-	if WaitProcExit(ctx, pid, time.Second, mustStopWaitSec) {
-		return nil
-	}
-
-	err = syscall.Kill(-pid, syscall.SIGKILL)
-	if err != nil {
-		return err
-	}
-
-	WaitProcExit(ctx, pid, time.Second, mustStopWaitSec)
 	return nil
-}
-
-func KillGroup(pid int) error {
-	return syscall.Kill(-pid, syscall.SIGKILL)
 }
