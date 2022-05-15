@@ -47,7 +47,7 @@ func (c *Cmd) Start() error {
 
 	c.Debug("starting pipeline cmd", "commands", c.Cfg.Command)
 
-	result := cmd.RunCmd(context.Background(), c.c, c.Cfg, func(cmd *exec.Cmd) {
+	result := cmd.Start(context.Background(), c.c, c.Cfg, func(cmd *exec.Cmd) {
 		if c.Writer() != nil {
 			cmd.Stdout = c.Writer()
 		}
@@ -56,6 +56,7 @@ func (c *Cmd) Start() error {
 			cmd.Stdin = c.Reader()
 		}
 	})
+	<-result.Done()
 
 	c.Info("cmd exit", "result", result)
 	if result != nil {
