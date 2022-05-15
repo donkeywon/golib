@@ -135,7 +135,7 @@ func (t *Task) Start() error {
 }
 
 func (t *Task) Stop() error {
-	runner.Stop(t.CurStep())
+	t.Cancel()
 	return nil
 }
 
@@ -172,10 +172,6 @@ func (t *Task) Steps() []step.Step {
 	return t.steps
 }
 
-func (t *Task) CurStep() step.Step {
-	return t.Steps()[t.CurStepIdx]
-}
-
 func (t *Task) DeferSteps() []step.Step {
 	return t.deferSteps
 }
@@ -208,7 +204,7 @@ func (t *Task) createStep(idx int, stepCfg *step.Cfg, isDefer bool) step.Step {
 func (t *Task) recoverStepPanic() {
 	err := recover()
 	if err != nil {
-		t.AppendError(errs.PanicToErrWithMsg(err, fmt.Sprintf("step(%d) %s panic", t.CurStepIdx, t.CurStep().Name())))
+		t.AppendError(errs.PanicToErrWithMsg(err, fmt.Sprintf("step(%d) %s panic", t.CurStepIdx, t.Steps()[t.CurStepIdx].Name())))
 	}
 }
 
