@@ -8,7 +8,6 @@ import (
 	"github.com/donkeywon/golib/errs"
 	"github.com/donkeywon/golib/plugin"
 	"github.com/donkeywon/golib/util/cmd"
-	"github.com/donkeywon/golib/util/jsons"
 	"github.com/donkeywon/golib/util/proc"
 )
 
@@ -78,7 +77,7 @@ func (c *Cmd) Start() error {
 	}
 
 	if result.Err() != nil {
-		return errs.Wrapf(result.Err(), "pipeline cmd failed, stderr: %s, stdout: %s", jsons.MustMarshalString(result.Stderr), jsons.MustMarshalString(result.Stdout))
+		return errs.Wrap(result.Err(), "pipeline cmd failed")
 	}
 
 	return nil
