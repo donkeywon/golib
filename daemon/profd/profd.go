@@ -135,12 +135,12 @@ func (p *profd) startProf(w http.ResponseWriter, r *http.Request) []byte {
 	if err != nil {
 		return []byte(err.Error())
 	}
-	p.Info("start profiling", "mode", mode, "dir", paramDir, "timeout", timeout, filepath, "filepath")
+	p.Info("start profiling", "mode", mode, "dir", paramDir, "timeout", timeout, "filepath", filepath)
 	if done != nil {
 		go func() {
 			select {
 			case <-done:
-				p.Info("profiling done", "mode", mode, "dir", paramDir, "timeout", timeout, filepath, "filepath")
+				p.Info("profiling done", "mode", mode, "dir", paramDir, "timeout", timeout, "filepath", filepath)
 			case <-p.Stopping():
 			}
 		}()

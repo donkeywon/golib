@@ -47,6 +47,8 @@ type Writer interface {
 	io.Writer
 	io.ReaderFrom
 	writerWrapper
+
+	DirectWriter() io.Writer // for zero copy
 }
 
 type flusher interface {
@@ -183,4 +185,11 @@ func (b *BaseWriter) ReadFrom(r io.Reader) (int64, error) {
 
 func (b *BaseWriter) WithOptions(opts ...Option) {
 	b.opt.with(opts...)
+}
+
+func (b *BaseWriter) DirectWriter() io.Writer {
+	if b.originWriter == b.Writer {
+		return b.originWriter
+	}
+	return b
 }

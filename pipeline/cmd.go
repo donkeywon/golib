@@ -48,11 +48,21 @@ func (c *Cmd) Start() error {
 
 	result := cmd.Start(context.Background(), c.c, c.Cfg, func(cmd *exec.Cmd) {
 		if c.Writer() != nil {
-			cmd.Stdout = c.Writer()
+			switch w := c.Writer().(type) {
+			case Writer:
+				cmd.Stdout = w.DirectWriter()
+			default:
+				cmd.Stdout = c.Writer()
+			}
 		}
 
 		if c.Reader() != nil {
-			cmd.Stdin = c.Reader()
+			switch r := c.Reader().(type) {
+			case Reader:
+				cmd.Stdin = r.DirectReader()
+			default:
+				cmd.Stdin = c.Reader()
+			}
 		}
 	})
 	<-result.Done()
