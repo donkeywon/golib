@@ -139,14 +139,6 @@ func (t *Task) Stop() error {
 	return nil
 }
 
-func (t *Task) CloneTask() *Task {
-	tc := New()
-	tc.Runner = t.Runner.Clone()
-	tc.stepDoneHooks = t.stepDoneHooks
-	tc.deferStepDoneHooks = t.deferStepDoneHooks
-	return tc
-}
-
 func (t *Task) HookStepDone(hook ...StepHook) {
 	t.stepDoneHooks = append(t.stepDoneHooks, hook...)
 }

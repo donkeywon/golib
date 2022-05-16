@@ -26,11 +26,9 @@ type Runner interface {
 	Ctx() context.Context
 	SetCtx(context.Context)
 	Cancel()
-	setCtxAndCancel(context.Context)
 	initCtx()
 
 	Inherit(Runner)
-	Clone() Runner
 
 	Started() <-chan struct{}
 	Stopping() <-chan struct{}
@@ -65,9 +63,11 @@ func Init(r Runner) (err error) {
 			err = errs.PanicToErrWithMsg(p, fmt.Sprintf("panic on %s init", r.Name()))
 		}
 	}()
+	r.initCtx()
 	r.Info("init")
 	err = r.Init()
 	if err != nil {
+		r.Cancel()
 		return
 	}
 	r.Info("init done")
@@ -76,6 +76,7 @@ func Init(r Runner) (err error) {
 		child.SetParent(r)
 		err = Init(child)
 		if err != nil {
+			r.Cancel()
 			return
 		}
 	}
@@ -88,8 +89,6 @@ func Start(r Runner) {
 		r.Info("already started")
 		return
 	}
-
-	r.initCtx()
 
 	defer func() {
 		err := recover()
@@ -157,7 +156,6 @@ func Start(r Runner) {
 
 // StartBG start a runner and its children in the background.
 func StartBG(r Runner) {
-	r.initCtx()
 	go Start(r)
 	for _, c := range r.Children() {
 		go Start(c)
@@ -246,7 +244,6 @@ type baseRunner struct {
 	stopping     chan struct{}
 	name         string
 	children     []Runner
-	initCtxOnce  sync.Once
 	startedOnce  sync.Once
 	doneOnce     sync.Once
 	stopDoneOnce sync.Once
@@ -259,7 +256,6 @@ func newBase(name string) Runner {
 	br := &baseRunner{
 		Logger:      log.NewNopLogger(),
 		name:        name,
-		ctx:         context.Background(),
 		started:     make(chan struct{}),
 		stopping:    make(chan struct{}),
 		stopDone:    make(chan struct{}),
@@ -312,22 +308,11 @@ func (br *baseRunner) Stop() error {
 	return nil
 }
 
-func (br *baseRunner) Clone() Runner {
-	c := newBase(br.name).(*baseRunner)
-	c.parent = br.parent
-	for k, v := range br.LoadAll() {
-		c.Store(k, v)
-	}
-	for i := range br.children {
-		c.AppendRunner(br.children[i].Clone())
-	}
-
-	return c
-}
-
 func (br *baseRunner) Inherit(r Runner) {
 	br.WithLoggerFrom(r)
-	br.SetCtx(r.Ctx())
+	if br.ctx == nil {
+		br.SetCtx(r.Ctx())
+	}
 }
 
 func (br *baseRunner) SetCtx(ctx context.Context) {
@@ -346,22 +331,11 @@ func (br *baseRunner) Cancel() {
 	})
 }
 
-func (br *baseRunner) setCtxAndCancel(ctx context.Context) {
-	br.ctx, br.cancel = context.WithCancel(ctx)
-}
-
 func (br *baseRunner) initCtx() {
-	br.initCtxOnce.Do(func() {
-		if br.ctx == nil {
-			br.ctx = context.Background()
-		}
-		br.ctx, br.cancel = context.WithCancel(br.ctx)
-
-		for _, c := range br.Children() {
-			c.SetCtx(br.ctx)
-			c.initCtx()
-		}
-	})
+	if br.ctx == nil {
+		br.ctx = context.Background()
+	}
+	br.ctx, br.cancel = context.WithCancel(br.ctx)
 }
 
 func (br *baseRunner) Ctx() context.Context {

@@ -1,14 +1,10 @@
 package step
 
 import (
-	"bytes"
-	"strconv"
-
 	"github.com/donkeywon/golib/consts"
 	"github.com/donkeywon/golib/errs"
 	"github.com/donkeywon/golib/ftp"
 	"github.com/donkeywon/golib/plugin"
-	"github.com/donkeywon/golib/util/conv"
 	"github.com/donkeywon/golib/util/v"
 )
 
@@ -27,38 +23,6 @@ type FtpStepCfg struct {
 
 	Cmd  string   `json:"cmd"     yaml:"cmd"     validate:"required"`
 	Args []string `json:"args"    yaml:"args"`
-}
-
-func (c FtpStepCfg) MarshalJSON() (ret []byte, err error) {
-	buf := bytes.NewBuffer(make([]byte, 0, 192))
-	buf.WriteByte('{')
-	buf.WriteString(`"addr":`)
-	buf.WriteString(strconv.Quote(c.Addr))
-	buf.WriteByte(',')
-	buf.WriteString(`"retry":`)
-	buf.WriteString(strconv.Itoa(c.Retry))
-	buf.WriteByte(',')
-	buf.WriteString(`"timeout":`)
-	buf.WriteString(strconv.Itoa(c.Timeout))
-	buf.WriteByte(',')
-	buf.WriteString(`"cmd":`)
-	buf.WriteString(strconv.Quote(c.Cmd))
-	buf.WriteByte(',')
-	buf.WriteString(`"args":[`)
-	for i, arg := range c.Args {
-		buf.WriteString(strconv.Quote(arg))
-		if i != len(c.Args)-1 {
-			buf.WriteByte(',')
-		}
-	}
-	buf.WriteByte(']')
-	buf.WriteByte('}')
-	return buf.Bytes(), nil
-}
-
-func (c *FtpStepCfg) String() string {
-	b, _ := c.MarshalJSON()
-	return conv.Bytes2String(b)
 }
 
 func NewFtpStepCfg() *FtpStepCfg {
