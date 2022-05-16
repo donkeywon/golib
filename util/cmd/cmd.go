@@ -90,7 +90,9 @@ func Run(command ...string) *Result {
 
 func RunCtx(ctx context.Context, command ...string) *Result {
 	cmd := exec.CommandContext(ctx, command[0], command[1:]...)
-	return Start(ctx, cmd, nil)
+	r := Start(ctx, cmd, nil)
+	<-r.Done()
+	return r
 }
 
 // Start start a command
