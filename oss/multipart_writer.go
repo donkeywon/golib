@@ -291,6 +291,10 @@ func (w *MultiPartWriter) handleUploadPartResult(r *uploadPartResult) {
 }
 
 func (w *MultiPartWriter) Close() error {
+	if !w.initialized {
+		return nil
+	}
+
 	var err error
 	if w.bufw != nil {
 		err = w.bufw.Flush()
