@@ -25,7 +25,7 @@ var D Profd = New()
 type Profd interface {
 	boot.Daemon
 	SetMux(*http.ServeMux)
-	SetAllowedIPsGetter(func() []string)
+	SetAllowedIPsGetter(func() map[string]struct{})
 }
 
 type profd struct {
@@ -34,7 +34,7 @@ type profd struct {
 
 	mux *http.ServeMux
 
-	allowedIPsGetter func() []string
+	allowedIPsGetter func() map[string]struct{}
 
 	prettystackMu       sync.Mutex
 	prettystackLastTime time.Time
@@ -133,7 +133,7 @@ func (p *profd) SetMux(mux *http.ServeMux) {
 	p.mux = mux
 }
 
-func (p *profd) SetAllowedIPsGetter(allowedIPsGetter func() []string) {
+func (p *profd) SetAllowedIPsGetter(allowedIPsGetter func() map[string]struct{}) {
 	p.allowedIPsGetter = allowedIPsGetter
 }
 
@@ -192,13 +192,8 @@ func (p *profd) ipAllowed(w http.ResponseWriter, r *http.Request) bool {
 		return true
 	}
 
-	m := make(map[string]struct{}, len(ips))
-	for _, ip := range ips {
-		m[ip] = struct{}{}
-	}
-
 	remoteIP := httpu.GetRealRemoteIP(r)
-	if _, exist := m[remoteIP]; exist {
+	if _, exist := ips[remoteIP]; exist {
 		return true
 	}
 
