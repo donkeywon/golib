@@ -138,7 +138,7 @@ func logAndRecoverMiddleware(next http.Handler) http.Handler {
 			e := recover()
 			if e != nil {
 				err := errs.PanicToErr(e)
-				D.Error("handle req failed, panic occurred", err, logFields(r, w.(*recordResponseWriter), start, end)...)
+				D.Error("panic on handle req", err, logFields(r, w.(*recordResponseWriter), start, end)...)
 				httpu.RespRaw(w, http.StatusInternalServerError, conv.String2Bytes(err.Error()))
 			} else {
 				D.Debug("end handle req", logFields(r, w.(*recordResponseWriter), start, end)...)
