@@ -3,12 +3,13 @@ package cmd
 import (
 	"os/exec"
 
+	"github.com/donkeywon/golib/errs"
 	"github.com/donkeywon/golib/util/paths"
 )
 
 func beforeStartFromCfg(cfg *Cfg) ([]func(cmd *exec.Cmd), error) {
 	if cfg == nil {
-		return nil
+		return nil, nil
 	}
 	var beforeRun []func(cmd *exec.Cmd)
 	if len(cfg.Env) > 0 {
