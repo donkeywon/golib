@@ -8,12 +8,10 @@ import (
 )
 
 var (
-	_ip, _ = GetHostIP()
-)
+	MyIP, _ = GetHostIP(true)
 
-func MyIP() string {
-	return _ip
-}
+	TryIfaces = []string{"eth0", "eth1", "eth2", "eth3", "eth4", "eth5", "bond0", "bond1", "bond2", "bond3", "bond4", "bond5"}
+)
 
 func GetHostname() (string, error) {
 	return os.Hostname()
@@ -21,7 +19,7 @@ func GetHostname() (string, error) {
 
 // below inspired by https://github.com/alibaba/ilogtail/blob/main/core/common/MachineInfoUtil.cpp
 
-func GetHostIP() (string, error) {
+func GetHostIP(v4 bool) (string, error) {
 	h, err := os.Hostname()
 	if err != nil {
 		return "", err
@@ -32,18 +30,14 @@ func GetHostIP() (string, error) {
 		return ip, nil
 	}
 
-	if strings.HasPrefix(ip, "127.") || ip == "" {
-		ip, err = GetHostIPByInterface("eth0", true)
-		if strings.HasPrefix(ip, "127.") || ip == "" {
-			ip, err = GetHostIPByInterface("bond0", true)
+	for _, iface := range TryIfaces {
+		ip, err = GetHostIPByInterface(iface, v4)
+		if ip != "" && !strings.HasPrefix(ip, "127.") {
+			return ip, nil
 		}
 	}
 
-	if ip != "" {
-		return ip, err
-	}
-
-	return GetAnyAvailableIP()
+	return GetAnyAvailableIP(v4)
 }
 
 func GetHostIPByHostname(h string) (string, error) {
@@ -74,7 +68,39 @@ func GetHostIPByInterface(iface string, v4 bool) (string, error) {
 			return "", fmt.Errorf("%s has no addrs", iface)
 		}
 
-		switch v := addrs[0].(type) {
+		ip, er := GetAnyAvailableIPFromAddrs(addrs, v4)
+		if er != nil {
+			return "", er
+		}
+		if ip != "" {
+			return ip, nil
+		}
+	}
+
+	return "", nil
+}
+
+func GetAnyAvailableIP(v4 bool) (string, error) {
+	addrs, err := net.InterfaceAddrs()
+	if err != nil {
+		return "", err
+	}
+
+	return GetAnyAvailableIPFromAddrs(addrs, v4)
+}
+
+func GetAllAvailableIPs(v4 bool) ([]string, error) {
+	addrs, err := net.InterfaceAddrs()
+	if err != nil {
+		return nil, err
+	}
+
+	return GetAllAvailableIPsFromAddrs(addrs, v4)
+}
+
+func GetAnyAvailableIPFromAddrs(addrs []net.Addr, v4 bool) (string, error) {
+	for _, addr := range addrs {
+		switch v := addr.(type) {
 		case *net.IPNet:
 			if !v.IP.IsLoopback() {
 				if v4 && v.IP.To4() != nil || !v4 && v.IP.To16() != nil {
@@ -93,24 +119,23 @@ func GetHostIPByInterface(iface string, v4 bool) (string, error) {
 	return "", nil
 }
 
-func GetAnyAvailableIP() (string, error) {
-	addrs, err := net.InterfaceAddrs()
-	if err != nil {
-		return "", err
-	}
-
+func GetAllAvailableIPsFromAddrs(addrs []net.Addr, v4 bool) ([]string, error) {
+	var ips []string
 	for _, addr := range addrs {
 		switch v := addr.(type) {
 		case *net.IPNet:
-			if !v.IP.IsLoopback() && v.IP.To4() != nil {
-				return v.IP.String(), nil
+			if !v.IP.IsLoopback() {
+				if v4 && v.IP.To4() != nil || !v4 && v.IP.To16() != nil {
+					ips = append(ips, v.IP.String())
+				}
 			}
 		case *net.IPAddr:
-			if !v.IP.IsLoopback() && v.IP.To4() != nil {
-				return v.IP.String(), nil
+			if !v.IP.IsLoopback() {
+				if v4 && v.IP.To4() != nil || !v4 && v.IP.To16() != nil {
+					ips = append(ips, v.IP.String())
+				}
 			}
 		}
 	}
-
-	return "", nil
+	return ips, nil
 }
