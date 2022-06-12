@@ -69,12 +69,12 @@ func (frl *FixedRateLimiter) TxWaitN(n int, timeout int) error {
 	return frl.waitN(n, timeout, frl.txRl)
 }
 
-func (frl *FixedRateLimiter) SetRxLimit(n int) {
+func (frl *FixedRateLimiter) SetRxLimit(n int, burst int) {
 	frl.rxRl.SetLimit(rate.Limit(n))
-	frl.rxRl.SetBurst(n)
+	frl.rxRl.SetBurst(burst)
 }
 
-func (frl *FixedRateLimiter) SetTxLimit(n int) {
+func (frl *FixedRateLimiter) SetTxLimit(n int, burst int) {
 	frl.txRl.SetLimit(rate.Limit(n))
-	frl.txRl.SetBurst(n)
+	frl.txRl.SetBurst(burst)
 }
