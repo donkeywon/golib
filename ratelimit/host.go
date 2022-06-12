@@ -159,7 +159,6 @@ func (h *HostRateLimiter) monitor() {
 }
 
 func (h *HostRateLimiter) setRxTxLimit(rxL float64, txL float64) {
-	h.Debug("set limit", "rx_limit", rxL, "tx_limit", txL)
 	h.rxRL.SetLimit(rate.Limit(rxL * 1048576))
 	h.txRL.SetLimit(rate.Limit(txL * 1048576))
 }

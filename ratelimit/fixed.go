@@ -39,8 +39,8 @@ func NewFixedRateLimiter() *FixedRateLimiter {
 }
 
 func (frl *FixedRateLimiter) Init() error {
-	if frl.N <= 0 {
-		return errs.Errorf("fixed rate limiter N must gt 0: %d", frl.N)
+	if frl.N < 0 {
+		return errs.Errorf("fixed rate limiter N must ge 0: %d", frl.N)
 	}
 	frl.rxRl = rate.NewLimiter(rate.Limit(frl.N), frl.N)
 	frl.txRl = rate.NewLimiter(rate.Limit(frl.N), frl.N)
@@ -67,4 +67,14 @@ func (frl *FixedRateLimiter) RxWaitN(n int, timeout int) error {
 
 func (frl *FixedRateLimiter) TxWaitN(n int, timeout int) error {
 	return frl.waitN(n, timeout, frl.txRl)
+}
+
+func (frl *FixedRateLimiter) SetRxLimit(n int) {
+	frl.rxRl.SetLimit(rate.Limit(n))
+	frl.rxRl.SetBurst(n)
+}
+
+func (frl *FixedRateLimiter) SetTxLimit(n int) {
+	frl.txRl.SetLimit(rate.Limit(n))
+	frl.txRl.SetBurst(n)
 }
