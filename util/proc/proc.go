@@ -2,6 +2,7 @@ package proc
 
 import (
 	"context"
+	"os"
 	"syscall"
 	"time"
 
@@ -45,4 +46,97 @@ func WaitProcExit(ctx context.Context, pid int, interval time.Duration, count in
 			}
 		}
 	}
+}
+
+func GetSelfAndAllChildrenProcess() ([]*process.Process, error) {
+	all := make([]*process.Process, 0, 4)
+
+	self, err := process.NewProcess(int32(os.Getpid()))
+	if err != nil {
+		return nil, err
+	}
+	all = append(all, self)
+
+	allChildren, err := ListAllChildrenProcess(self)
+	if err != nil {
+		return nil, err
+	}
+
+	all = append(all, allChildren...)
+	return all, nil
+}
+
+func ListAllChildrenProcess(p *process.Process) ([]*process.Process, error) {
+	children, err := p.Children()
+	if err != nil {
+		return nil, err
+	}
+
+	var allChildren []*process.Process
+	for _, child := range children {
+		allChildren = append(allChildren, child)
+		subChildren, err := ListAllChildrenProcess(child)
+		if err != nil {
+			return nil, err
+		}
+		allChildren = append(allChildren, subChildren...)
+	}
+
+	return allChildren, nil
+}
+
+func CalcSelfCPUPercent() (float64, error) {
+	self, err := process.NewProcess(int32(os.Getpid()))
+	if err != nil {
+		return 0, err
+	}
+	return CalcCPUPercent([]*process.Process{self})
+}
+
+func CalcSelfAndAllChildrenCPUPercent() (float64, error) {
+	ps, err := GetSelfAndAllChildrenProcess()
+	if err != nil {
+		return 0, err
+	}
+	return CalcCPUPercent(ps)
+}
+
+func CalcSelfMemoryUsage() (uint64, error) {
+	self, err := process.NewProcess(int32(os.Getpid()))
+	if err != nil {
+		return 0, err
+	}
+	return CalcMemoryUsage([]*process.Process{self})
+}
+
+func CalcSelfAndAllChildrenMemoryUsage() (uint64, error) {
+	ps, err := GetSelfAndAllChildrenProcess()
+	if err != nil {
+		return 0, err
+	}
+	return CalcMemoryUsage(ps)
+}
+
+func CalcCPUPercent(ps []*process.Process) (float64, error) {
+	var totalCPU float64
+	for _, p := range ps {
+		cpuPercent, err := p.CPUPercent()
+		if err != nil {
+			return 0, err
+		}
+		totalCPU += cpuPercent
+	}
+	return totalCPU, nil
+}
+
+func CalcMemoryUsage(ps []*process.Process) (uint64, error) {
+	var totalMemory uint64
+	for _, p := range ps {
+		memInfo, err := p.MemoryInfo()
+		if err != nil {
+			return 0, err
+		}
+		totalMemory += memInfo.RSS
+	}
+	return totalMemory, nil
 }
