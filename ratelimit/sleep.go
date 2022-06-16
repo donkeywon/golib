@@ -1,6 +1,7 @@
 package ratelimit
 
 import (
+	"context"
 	"time"
 
 	"github.com/donkeywon/golib/errs"
@@ -15,7 +16,7 @@ func init() {
 const TypeSleep Type = "sleep"
 
 type SleepRateLimiterCfg struct {
-	Millisecond int
+	Microsecond int
 }
 
 func NewSleepRateLimiterCfg() *SleepRateLimiterCfg {
@@ -35,29 +36,32 @@ func NewSleepRateLimiter() *SleepRateLimiter {
 }
 
 func (srl *SleepRateLimiter) Init() error {
-	if srl.SleepRateLimiterCfg.Millisecond <= 0 {
-		return errs.Errorf("sleep rate limiter Millisecond must gt 0: %d", srl.SleepRateLimiterCfg.Millisecond)
+	if srl.SleepRateLimiterCfg.Microsecond <= 0 {
+		return errs.Errorf("sleep rate limiter Microsecond must gt 0: %d", srl.SleepRateLimiterCfg.Microsecond)
 	}
 	return srl.Runner.Init()
 }
 
-func (srl *SleepRateLimiter) waitN(n int, timeout int) error {
+func (srl *SleepRateLimiter) waitN(ctx context.Context, n int, timeout time.Duration) error {
 	if n == 0 {
 		return nil
 	}
 
-	sn := srl.Millisecond
-	if timeout > 0 && timeout < srl.Millisecond*1000 {
+	sn := time.Duration(srl.Microsecond) * time.Microsecond
+	if timeout > 0 && timeout < sn {
 		sn = timeout
 	}
-	time.Sleep(time.Millisecond * time.Duration(sn))
+	var cancel context.CancelFunc
+	ctx, cancel = context.WithTimeout(ctx, sn)
+	defer cancel()
+	<-ctx.Done()
 	return nil
 }
 
-func (srl *SleepRateLimiter) RxWaitN(n int, timeout int) error {
-	return srl.waitN(n, timeout)
+func (srl *SleepRateLimiter) RxWaitN(ctx context.Context, n int, timeout time.Duration) error {
+	return srl.waitN(ctx, n, timeout)
 }
 
-func (srl *SleepRateLimiter) TxWaitN(n int, timeout int) error {
-	return srl.waitN(n, timeout)
+func (srl *SleepRateLimiter) TxWaitN(ctx context.Context, n int, timeout time.Duration) error {
+	return srl.waitN(ctx, n, timeout)
 }
