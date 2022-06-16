@@ -39,6 +39,7 @@ func (c *Cmd) Init() error {
 
 func (c *Cmd) Start() error {
 	defer c.Close()
+	defer c.Cancel()
 
 	c.Cfg.SetPgid = true
 
