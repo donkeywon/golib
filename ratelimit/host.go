@@ -3,7 +3,6 @@ package ratelimit
 import (
 	"context"
 	"fmt"
-	"sync/atomic"
 	"time"
 
 	"github.com/donkeywon/golib/errs"
@@ -22,11 +21,11 @@ func init() {
 const TypeHost Type = "host"
 
 type HostRateLimiterCfg struct {
-	Nic             string `json:"nic"             validate:"required"    yaml:"nic"`
-	MonitorInterval int    `json:"monitorInterval" yaml:"monitorInterval"`
-	ReservePercent  int    `json:"reservePercent"  yaml:"reservePercent"`
-	MinMBps         int    `json:"minMBps"         yaml:"minMBps"`
-	Burst           int    `json:"burst"           yaml:"burst"`
+	Nic              string `json:"nic"              yaml:"nic" validate:"required"`
+	MonitorInterval  int    `json:"monitorInterval"  yaml:"monitorInterval"`
+	ReservePercent   int    `json:"reservePercent"   yaml:"reservePercent"`
+	ReserveFixedMBps int    `json:"reserveFixedMBps" yaml:"reserveFixedMBps"`
+	MinMBps          int    `json:"minMBps"          yaml:"minMBps"`
 }
 
 func NewHostRateLimiterCfg() *HostRateLimiterCfg {
@@ -37,18 +36,14 @@ type HostRateLimiter struct {
 	runner.Runner
 	*HostRateLimiterCfg
 
-	minMBps float64
+	reserveMBps int
+	minMBps     float64
 
 	nicSpeedMbps int
 	nicSpeedMBps int
 
 	rxRL *rate.Limiter
 	txRL *rate.Limiter
-
-	rxPass     uint64
-	txPass     uint64
-	lastRxPass uint64
-	lastTxPass uint64
 
 	lastNicRxBytes uint64
 	lastNicTxBytes uint64
@@ -66,9 +61,6 @@ func (h *HostRateLimiter) Init() error {
 	if err != nil {
 		return err
 	}
-
-	h.rxRL = rate.NewLimiter(rate.Limit(h.Burst), h.Burst)
-	h.txRL = rate.NewLimiter(rate.Limit(h.Burst), h.Burst)
 
 	h.Info("use nic", "nic", h.Nic)
 	h.nicSpeedMbps, err = eth.GetNicSpeed(h.Nic)
@@ -93,9 +85,22 @@ func (h *HostRateLimiter) Init() error {
 	}
 
 	h.nicSpeedMBps = h.nicSpeedMbps / 8
+	h.reserveMBps = h.nicSpeedMBps / h.ReservePercent
+	if h.ReserveFixedMBps > h.reserveMBps {
+		h.reserveMBps = h.ReserveFixedMBps
+	}
 	h.minMBps = float64(h.MinMBps)
 
-	h.Info("nic speed", "B", i2MBps(h.nicSpeedMBps), "b", fmt.Sprintf("%d Mb/s", h.nicSpeedMbps))
+	initRateLimitBurst := h.nicSpeedMBps - h.reserveMBps
+	h.rxRL = rate.NewLimiter(rate.Limit(initRateLimitBurst*1048576), initRateLimitBurst*1048576)
+	h.txRL = rate.NewLimiter(rate.Limit(initRateLimitBurst*1048576), initRateLimitBurst*1048576)
+
+	h.Info("nic rate limit info",
+		"nic_speed", i2MBps(h.nicSpeedMBps),
+		"reserve", i2MBps(h.reserveMBps),
+		"min", i2MBps(h.MinMBps),
+		"burst", i2MBps(initRateLimitBurst),
+	)
 
 	go h.monitor()
 
@@ -109,11 +114,7 @@ func (h *HostRateLimiter) RxWaitN(n int, timeout int) error {
 		ctx, cancel = context.WithTimeout(h.Ctx(), time.Second*time.Duration(timeout))
 		defer cancel()
 	}
-	err := h.rxRL.WaitN(ctx, n)
-	if err == nil {
-		atomic.AddUint64(&h.rxPass, uint64(n))
-	}
-	return err
+	return h.rxRL.WaitN(ctx, n)
 }
 
 func (h *HostRateLimiter) TxWaitN(n int, timeout int) error {
@@ -123,11 +124,7 @@ func (h *HostRateLimiter) TxWaitN(n int, timeout int) error {
 		ctx, cancel = context.WithTimeout(h.Ctx(), time.Second*time.Duration(timeout))
 		defer cancel()
 	}
-	err := h.txRL.WaitN(ctx, n)
-	if err == nil {
-		atomic.AddUint64(&h.txPass, uint64(n))
-	}
-	return err
+	return h.txRL.WaitN(ctx, n)
 }
 
 func (h *HostRateLimiter) monitor() {
@@ -195,12 +192,12 @@ func (h *HostRateLimiter) handleNetDevStats(stat *eth.NetDevStats) {
 
 	rxMBps := float64(rxSub) / 1024 / 1024 / float64(h.MonitorInterval)
 	txMBps := float64(txSub) / 1024 / 1024 / float64(h.MonitorInterval)
-	rxLimit := calcLimit(rxMBps, float64(h.nicSpeedMBps), float64(h.ReservePercent), float64(h.MinMBps))
-	txLimit := calcLimit(txMBps, float64(h.nicSpeedMBps), float64(h.ReservePercent), float64(h.MinMBps))
+	rxLimit := calcLimit(rxMBps, float64(h.nicSpeedMBps), float64(h.reserveMBps), h.minMBps)
+	txLimit := calcLimit(txMBps, float64(h.nicSpeedMBps), float64(h.reserveMBps), h.minMBps)
 	h.Info("nic limit",
 		"rx_limit", f2MBPS(rxLimit), "tx_limit", f2MBPS(txLimit),
 		"nic_rx_bytes", curNicRxBytes, "nic_tx_bytes", curNicTxBytes,
-		"max", i2MBps(h.nicSpeedMBps), "reserve_percent", h.ReservePercent, "min", i2MBps(h.MinMBps))
+		"max", i2MBps(h.nicSpeedMBps), "reserve", i2MBps(h.reserveMBps), "min", i2MBps(h.MinMBps))
 	h.setRxTxLimit(rxLimit, txLimit)
 
 	h.lastNicRxBytes = curNicRxBytes
@@ -215,8 +212,8 @@ func i2MBps(i int) string {
 	return fmt.Sprintf("%d MB/s", i)
 }
 
-func calcLimit(cur float64, max float64, reservePercent float64, min float64) float64 {
-	limit := max - (cur + max*reservePercent/100)
+func calcLimit(cur float64, max float64, reserve float64, min float64) float64 {
+	limit := max - (cur + reserve)
 	if limit <= min {
 		return min
 	}
