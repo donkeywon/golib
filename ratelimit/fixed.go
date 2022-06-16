@@ -59,7 +59,7 @@ func (frl *FixedRateLimiter) waitN(n int, timeout int, rl *rate.Limiter) error {
 	ctx := context.Background()
 	var cancel context.CancelFunc
 	if timeout > 0 {
-		ctx, cancel = context.WithTimeout(ctx, time.Millisecond*time.Duration(timeout))
+		ctx, cancel = context.WithTimeout(ctx, time.Second*time.Duration(timeout))
 		defer cancel()
 	}
 	return rl.WaitN(ctx, n)
