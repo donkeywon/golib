@@ -39,7 +39,6 @@ func (c *Cmd) Init() error {
 
 func (c *Cmd) Start() error {
 	defer c.Close()
-	defer c.Cancel()
 
 	c.Cfg.SetPgid = true
 
@@ -95,6 +94,7 @@ func (c *Cmd) Start() error {
 }
 
 func (c *Cmd) Stop() error {
+	defer c.Cancel()
 	if c.c == nil || c.c.Process == nil {
 		return nil
 	}

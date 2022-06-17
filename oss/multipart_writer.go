@@ -304,20 +304,26 @@ func (w *MultiPartWriter) Close() error {
 		w.parallelWg.Wait()
 		w.closeBufChan()
 
+		var alreadyCancelled bool
+		select {
+		case <-w.ctx.Done():
+			alreadyCancelled = true
+		default:
+		}
 		w.cancel()
 
 		if w.cfg.Parallel > 1 {
 			parallelErr := w.parallelErrs.Load()
-			if parallelErr != nil {
+			if parallelErr != nil || alreadyCancelled {
 				err = errors.Join(err, parallelErr, w.abort())
 			} else {
 				err = errors.Join(err, w.complete())
 			}
 		} else {
-			if w.uploadErr == nil {
-				err = errors.Join(err, w.complete())
-			} else {
+			if w.uploadErr != nil || alreadyCancelled {
 				err = errors.Join(err, w.abort())
+			} else {
+				err = errors.Join(err, w.complete())
 			}
 		}
 	})
