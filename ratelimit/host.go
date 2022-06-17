@@ -137,13 +137,13 @@ func (h *HostRateLimiter) monitor() {
 		case <-t.C:
 			stats, err := eth.GetNetDevStats()
 			if err != nil {
-				h.setRxTxLimit(h.MinMBps, h.MinMBps)
+				h.setRxTxLimit(float64(h.MinMBps), float64(h.MinMBps))
 				h.Error("get net dev stats fail, use min limit", err, "min_limit", i2MBps(h.MinMBps))
 				continue
 			}
 
 			if _, exists := stats[nic]; !exists {
-				h.setRxTxLimit(h.MinMBps, h.MinMBps)
+				h.setRxTxLimit(float64(h.MinMBps), float64(h.MinMBps))
 				h.Error("nic stats is empty, use min limit", nil, "min_limit", i2MBps(h.MinMBps), "stats", stats)
 				continue
 			}
@@ -153,7 +153,7 @@ func (h *HostRateLimiter) monitor() {
 	}
 }
 
-func (h *HostRateLimiter) setRxTxLimit(rxL int, txL int) {
+func (h *HostRateLimiter) setRxTxLimit(rxL float64, txL float64) {
 	h.rxRL.SetLimit(rate.Limit(rxL * 1048576))
 	h.txRL.SetLimit(rate.Limit(txL * 1048576))
 }
@@ -163,7 +163,7 @@ func (h *HostRateLimiter) handleNetDevStats(stat *eth.NetDevStats) {
 	curNicTxBytes := stat.TxBytes
 
 	if h.lastNicRxBytes == 0 || h.lastNicTxBytes == 0 {
-		h.setRxTxLimit(h.MinMBps, h.MinMBps)
+		h.setRxTxLimit(float64(h.MinMBps), float64(h.MinMBps))
 		h.Debug("last rx or tx is 0, use min limit",
 			"last_nic_rx_bytes", h.lastNicRxBytes, "last_nic_tx_bytes", h.lastNicTxBytes, "min", i2MBps(h.MinMBps))
 		h.lastNicRxBytes = curNicRxBytes
@@ -188,13 +188,13 @@ func (h *HostRateLimiter) handleNetDevStats(stat *eth.NetDevStats) {
 		txSub = curNicTxBytes - h.lastNicTxBytes
 	}
 
-	rxMBps := int(rxSub / 1024 / 1024 / uint64(h.MonitorInterval))
-	txMBps := int(txSub / 1024 / 1024 / uint64(h.MonitorInterval))
+	rxMBps := float64(rxSub) / float64(1048576) / float64(h.MonitorInterval)
+	txMBps := float64(txSub) / float64(1048576) / float64(h.MonitorInterval)
 	rxLimit := calcLimit(rxMBps, h.maxMBps, h.MinMBps)
 	txLimit := calcLimit(txMBps, h.maxMBps, h.MinMBps)
 	h.Info("nic limit",
-		"nic_speed", i2MBps(h.nicSpeedMBps), "rx_speed", i2MBps(rxMBps), "tx_speed", i2MBps(txMBps),
-		"rx_limit", i2MBps(rxLimit), "tx_limit", i2MBps(txLimit),
+		"nic_speed", i2MBps(h.nicSpeedMBps), "rx_speed", f2MBps(rxMBps), "tx_speed", f2MBps(txMBps),
+		"rx_limit", f2MBps(rxLimit), "tx_limit", f2MBps(txLimit),
 		"max", i2MBps(h.maxMBps), "min", i2MBps(h.MinMBps),
 		"nic_rx_bytes", curNicRxBytes, "nic_tx_bytes", curNicTxBytes,
 	)
@@ -204,14 +204,18 @@ func (h *HostRateLimiter) handleNetDevStats(stat *eth.NetDevStats) {
 	h.lastNicTxBytes = curNicTxBytes
 }
 
+func f2MBps(f float64) string {
+	return fmt.Sprintf("%.3f MB/s", f)
+}
+
 func i2MBps(i int) string {
 	return fmt.Sprintf("%d MB/s", i)
 }
 
-func calcLimit(cur int, max int, min int) int {
-	limit := max - cur
-	if limit <= min {
-		return min
+func calcLimit(cur float64, max int, min int) float64 {
+	limit := float64(max) - cur
+	if limit <= float64(min) {
+		return float64(min)
 	}
 	return limit
 }
