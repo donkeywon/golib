@@ -2,6 +2,7 @@ package proc
 
 import (
 	"context"
+	"errors"
 	"os"
 	"syscall"
 	"time"
@@ -121,6 +122,9 @@ func CalcCPUPercent(ps []*process.Process) (float64, error) {
 	var totalCPU float64
 	for _, p := range ps {
 		cpuPercent, err := p.CPUPercent()
+		if errors.Is(err, os.ErrNotExist) {
+			continue
+		}
 		if err != nil {
 			return 0, err
 		}
@@ -133,6 +137,9 @@ func CalcMemoryUsage(ps []*process.Process) (uint64, error) {
 	var totalMemory uint64
 	for _, p := range ps {
 		memInfo, err := p.MemoryInfo()
+		if errors.Is(err, os.ErrNotExist) {
+			continue
+		}
 		if err != nil {
 			return 0, err
 		}
