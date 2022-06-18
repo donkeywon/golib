@@ -378,22 +378,23 @@ func (w *MultiPartWriter) init() error {
 func (w *MultiPartWriter) uploadWorker(workerID int) {
 	defer w.parallelWg.Done()
 	for {
+		req, ok := <-w.parallelChan
+		if !ok {
+			return
+		}
 		select {
 		case <-w.ctx.Done():
-			return
-		case req, ok := <-w.parallelChan:
-			if !ok {
-				return
-			}
-			if w.parallelErrs.Has() {
-				w.bufChan <- req.b
-				continue
-			}
-
-			r := w.retryUploadPart(req.partNo, req.b)
-			w.bufChan <- req.b
-			w.handleParallelResult(r, workerID)
+			continue
+		default:
 		}
+		if w.parallelErrs.Has() {
+			w.bufChan <- req.b
+			continue
+		}
+
+		r := w.retryUploadPart(req.partNo, req.b)
+		w.bufChan <- req.b
+		w.handleParallelResult(r, workerID)
 	}
 }
 
