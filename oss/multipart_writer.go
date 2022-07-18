@@ -16,11 +16,15 @@ import (
 
 	"github.com/avast/retry-go/v4"
 	"github.com/donkeywon/golib/errs"
+	"github.com/donkeywon/golib/util/conv"
 	"github.com/donkeywon/golib/util/httpc"
 	"github.com/donkeywon/golib/util/httpu"
 	"github.com/donkeywon/golib/util/iou"
 	"github.com/donkeywon/golib/util/oss"
 )
+
+type UploadHook func(uploadWorker int, partNo int, partSize int, etag string, err error)
+type CompleteHook func(uploadID string, body string, err error)
 
 type loadOnceError struct {
 	mu     sync.Mutex
@@ -99,6 +103,8 @@ type MultiPartWriter struct {
 	initialized       bool
 	needContentLength bool
 	isBlob            bool
+	uploadHooks       []UploadHook
+	completeHooks     []CompleteHook
 }
 
 func NewMultiPartWriter(ctx context.Context, cfg *Cfg) *MultiPartWriter {
@@ -111,6 +117,14 @@ func NewMultiPartWriter(ctx context.Context, cfg *Cfg) *MultiPartWriter {
 	}
 	w.ctx, w.cancel = context.WithCancel(ctx)
 	return w
+}
+
+func (w *MultiPartWriter) OnUploadPart(h ...UploadHook) {
+	w.uploadHooks = append(w.uploadHooks, h...)
+}
+
+func (w *MultiPartWriter) OnComplete(h ...CompleteHook) {
+	w.completeHooks = append(w.completeHooks, h...)
 }
 
 type noReadFrom struct{}
@@ -180,6 +194,7 @@ func (w *MultiPartWriter) ReadFrom(r io.Reader) (int64, error) {
 	for {
 		lr := io.LimitReader(rr, w.cfg.PartSize)
 		result := w.uploadPart(w.curPartNo, httpc.WithBodyReader(lr))
+		w.hookUpload(0, w.curPartNo, int(w.cfg.PartSize-lr.(*io.LimitedReader).N), result.ETag(), result.err)
 		w.curPartNo++
 		err = result.err
 		if err != nil {
@@ -193,6 +208,12 @@ func (w *MultiPartWriter) ReadFrom(r io.Reader) (int64, error) {
 	}
 
 	return rr.nr, err
+}
+
+func (w *MultiPartWriter) hookUpload(uploadWorker int, partNo int, partSize int, etag string, err error) {
+	for _, h := range w.uploadHooks {
+		h(uploadWorker, partNo, partSize, etag, err)
+	}
 }
 
 type readerWrapper struct {
@@ -219,6 +240,16 @@ type uploadPartResult struct {
 	block string
 
 	partNo int
+}
+
+func (r *uploadPartResult) ETag() string {
+	if r.block != "" {
+		return r.block
+	}
+	if r.part != nil {
+		return r.part.ETag
+	}
+	return ""
 }
 
 func (w *MultiPartWriter) Write(p []byte) (int, error) {
@@ -258,6 +289,7 @@ func (w *MultiPartWriter) Write(p []byte) (int, error) {
 	}
 
 	r := w.retryUploadPart(w.curPartNo, p)
+	w.hookUpload(0, w.curPartNo, len(p), r.ETag(), r.err)
 	w.curPartNo++
 	if r.err != nil {
 		if w.uploadErr == nil {
@@ -393,6 +425,7 @@ func (w *MultiPartWriter) uploadWorker(workerID int) {
 		}
 
 		r := w.retryUploadPart(req.partNo, req.b)
+		w.hookUpload(workerID, req.partNo, len(req.b), r.ETag(), r.err)
 		w.bufChan <- req.b
 		w.handleParallelResult(r, workerID)
 	}
@@ -488,6 +521,15 @@ func (w *MultiPartWriter) complete() error {
 		retry.LastErrorOnly(true),
 		retry.Attempts(uint(w.cfg.Retry)),
 	)
+
+	for _, h := range w.completeHooks {
+		bodyBS, e := xml.Marshal(body)
+		if e != nil {
+			h(w.uploadID, conv.Bytes2String(bodyBS), errors.Join(err, e))
+		} else {
+			h(w.uploadID, conv.Bytes2String(bodyBS), err)
+		}
+	}
 
 	if err != nil {
 		return errs.Wrapf(err, "retry do complete multipart request fail, respStatus: %s, respBody: %s", respStatus, respBody.String())
