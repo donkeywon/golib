@@ -894,7 +894,7 @@ func (b *BaseRW) hookChecksum(_ int, _ []byte, err error, _ int64, _ ...interfac
 
 	checksum := b.Hash()
 	if b.checksum != checksum {
-		return errs.Errorf("checksum not match: expect: %s, actual: %s", b.checksum, checksum)
+		return errs.Errorf("checksum not match, expect: %s, actual: %s", b.checksum, checksum)
 	}
 
 	return nil

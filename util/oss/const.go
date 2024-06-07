@@ -24,7 +24,8 @@ const (
 	HeaderAzblobAppendOffsetHeader    = "x-ms-blob-append-offset"
 	HeaderAzblobAppendPositionHeader  = "x-ms-blob-condition-appendpos"
 
-	HeaderAmzDate = "X-Amz-Date"
+	HeaderAmzDate          = "X-Amz-Date"
+	HeaderAmzContentSHA256 = "X-Amz-Content-Sha256"
 
 	AmzServiceS3          = "s3"
 	S3UnsignedPayloadHash = "UNSIGNED-PAYLOAD"
