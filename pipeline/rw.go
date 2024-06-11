@@ -589,7 +589,9 @@ func (b *BaseRW) prepareReadBuf() error {
 	b.Debug("receive buf from reader", "nr", nr, "buf_len", b.buf.Len(), "err", err)
 	b.buf.Shrink(nr)
 	if err != nil {
-		err = errs.Wrap(err, "read to buf fail")
+		if err != io.EOF {
+			err = errs.Wrap(err, "read to buf fail")
+		}
 		b.rerr.Store(err)
 	}
 	if nr > 0 {

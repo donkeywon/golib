@@ -136,7 +136,6 @@ func ErrToStack(err error, buf *bufferpool.Buffer, errsDepth int) {
 		if buf.Len() > 0 {
 			buf.WriteByte('\n')
 		}
-		writeIndent(buf, _errsIndent, errsDepth, false, "error: ")
 		buf.WriteString(terr.Error())
 	}
 }
