@@ -42,7 +42,7 @@ func (f *FileRW) Init() error {
 	var err error
 
 	if f.Perm == 0 {
-		f.Perm = 660
+		f.Perm = 644
 	}
 	f.parsedPerm, err = strconv.ParseInt(strconv.Itoa(int(f.Perm)), 8, 32)
 	if err != nil {
