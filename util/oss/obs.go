@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-var obsURLRegex = regexp.MustCompile(`([a-z0-9\-\.]{3,63})\.obs\..+\.com(/.*)`)
+var obsURLRegex = regexp.MustCompile(`([a-z0-9\-\.]{3,63})\.obs\..+\.com(\/.*)`)
 
 const obsURLMatchCount = 3
 

@@ -19,16 +19,21 @@ const (
 	HeaderXmsRequestID = "x-ms-request-id"
 	HeaderXmsBlobType  = "x-ms-blob-type"
 
-	HeaderOssAppendNextPositionHeader = "X-Rgw-Next-Append-Position"
-	HeaderObsAppendNextPositionHeader = "X-Obs-Next-Append-Position"
-	HeaderAzblobAppendOffsetHeader    = "x-ms-blob-append-offset"
-	HeaderAzblobAppendPositionHeader  = "x-ms-blob-condition-appendpos"
+	HeaderOssAppendNextPositionHeader    = "X-Rgw-Next-Append-Position"
+	HeaderObsAppendNextPositionHeader    = "X-Obs-Next-Append-Position"
+	HeaderAliOssAppendNextPositionHeader = "X-Oss-Next-Append-Position"
+	HeaderAzblobAppendOffsetHeader       = "x-ms-blob-append-offset"
+	HeaderAzblobAppendPositionHeader     = "x-ms-blob-condition-appendpos"
 
 	HeaderAmzDate          = "X-Amz-Date"
 	HeaderAmzContentSHA256 = "X-Amz-Content-Sha256"
 
+	HeaderAliOssPrefix     = "x-oss-"
+	HeaderAliContentSHA256 = "X-Oss-Content-Sha256"
+	HeaderAliDate          = "X-Oss-Date"
+
 	AmzServiceS3          = "s3"
-	S3UnsignedPayloadHash = "UNSIGNED-PAYLOAD"
+	UnsignedPayloadHash   = "UNSIGNED-PAYLOAD"
 	AmzS3SigningAlgorithm = "AWS4-HMAC-SHA256"
 	AuthorizationHeader   = "Authorization"
 )
@@ -40,6 +45,7 @@ const (
 	OssTypeAmz     Type = "amz"
 	OssTypeBlob    Type = "blob"
 	OssTypeObs     Type = "obs"
+	OssTypeAliOss  Type = "alioss"
 )
 
 var (

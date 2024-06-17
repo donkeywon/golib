@@ -57,7 +57,7 @@ func AmzSign(req *http.Request, ak string, sk string, region string) error {
 	nowFormat := now.UTC().Format("20060102T150405Z")
 
 	headers.Set(HeaderAmzDate, nowFormat)
-	headers.Set(HeaderAmzContentSHA256, S3UnsignedPayloadHash)
+	headers.Set(HeaderAmzContentSHA256, UnsignedPayloadHash)
 
 	for key := range query {
 		sort.Strings(query[key])
@@ -85,12 +85,12 @@ func AmzSign(req *http.Request, ak string, sk string, region string) error {
 		req.Method,
 		canonicalURI,
 		rawQuery.String(),
-		signedHeadersStr,
 		canonicalHeaderStr,
+		signedHeadersStr,
 	)
 
 	strToSign := buildStringToSign(nowFormat, credentialScope, canonicalString)
-	signingSignature := buildSignature(sk, region, strToSign, nowShortFormat)
+	signingSignature := buildSignature(sk, AmzServiceS3, region, strToSign, nowShortFormat)
 
 	headers.Set(AuthorizationHeader, buildAuthorizationHeader(credentialStr, signedHeadersStr, signingSignature))
 	return nil
@@ -137,8 +137,8 @@ func deriveKey(secret, service, region, timeShortFormat string) []byte {
 	return HMACSHA256(hmacService, []byte("aws4_request"))
 }
 
-func buildSignature(sk, region, strToSign, timeShortFormat string) string {
-	key := deriveKey(sk, AmzServiceS3, region, timeShortFormat)
+func buildSignature(sk, service, region, strToSign, timeShortFormat string) string {
+	key := deriveKey(sk, service, region, timeShortFormat)
 	return hex.EncodeToString(HMACSHA256(key, []byte(strToSign)))
 }
 
@@ -157,14 +157,14 @@ func buildStringToSign(timeFormat, credentialScope, canonicalRequestString strin
 	}, "\n")
 }
 
-func buildCanonicalString(method, uri, query, signedHeaders, canonicalHeaders string) string {
+func buildCanonicalString(method, uri, query, canonicalHeaders, signedHeaders string) string {
 	return strings.Join([]string{
 		method,
 		uri,
 		query,
 		canonicalHeaders,
 		signedHeaders,
-		S3UnsignedPayloadHash,
+		UnsignedPayloadHash,
 	}, "\n")
 }
 
