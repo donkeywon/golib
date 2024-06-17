@@ -32,6 +32,7 @@ type Cmd struct {
 func NewCmdStep() *Cmd {
 	return &Cmd{
 		Step: NewBase("cmd"),
+		Cfg:  NewCmdCfg(),
 	}
 }
 

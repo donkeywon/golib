@@ -30,7 +30,8 @@ type SleepRateLimiter struct {
 
 func NewSleepRateLimiter() *SleepRateLimiter {
 	return &SleepRateLimiter{
-		Runner: runner.NewBase("sleepRateLimiter"),
+		Runner:              runner.NewBase("sleepRateLimiter"),
+		SleepRateLimiterCfg: NewSleepRateLimiterCfg(),
 	}
 }
 

@@ -56,7 +56,8 @@ type HostRateLimiter struct {
 
 func NewHostRateLimiter() *HostRateLimiter {
 	return &HostRateLimiter{
-		Runner: runner.NewBase("hostRateLimiter"),
+		Runner:             runner.NewBase("hostRateLimiter"),
+		HostRateLimiterCfg: NewHostRateLimiterCfg(),
 	}
 }
 
