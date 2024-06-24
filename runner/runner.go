@@ -165,7 +165,7 @@ func stop(r Runner) {
 		// 这种情况下必须要调用runner.Init执行初始化，Init、Start、Stop都可以不用实现.
 		r.Info("stopping before started")
 		r.markStopping()
-		stopAndRecover(r)
+		safeStop(r)
 		r.Info("stop done before started")
 		r.markStopDone()
 		r.markDone()
@@ -181,14 +181,14 @@ func stop(r Runner) {
 
 	if r.markStopping() {
 		r.Info("stopping")
-		stopAndRecover(r)
+		safeStop(r)
 		r.Info("stop done")
 		r.markStopDone()
 		<-r.Done()
 	}
 }
 
-func stopAndRecover(r Runner) {
+func safeStop(r Runner) {
 	defer func() {
 		err := recover()
 		if err != nil {
