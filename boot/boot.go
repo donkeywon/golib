@@ -33,7 +33,7 @@ func init() {
 	plugin.RegisterCfg(pluginLog, func() interface{} { return log.NewCfg() })
 }
 
-func Run(cfgPath string) {
+func Boot(cfgPath string) {
 	b := New(cfgPath)
 	err := runner.Init(b)
 	if err != nil {
@@ -61,14 +61,14 @@ func RegisterSvc(typ SvcType, creator plugin.Creator, cfgCreator plugin.CfgCreat
 	_svcs = append(_svcs, typ)
 }
 
-type Boot struct {
+type Booter struct {
 	runner.Runner
 	cfgMap  map[SvcType]interface{}
 	cancel  context.CancelFunc
 	cfgPath string
 }
 
-func New(cfgPath string) *Boot {
+func New(cfgPath string) *Booter {
 	cfgMap := make(map[SvcType]interface{})
 	for _, svcType := range _svcs {
 		cfgMap[svcType] = plugin.CreateCfg(svcType)
@@ -77,7 +77,7 @@ func New(cfgPath string) *Boot {
 
 	ctx, cancel := context.WithCancel(context.Background())
 
-	b := &Boot{
+	b := &Booter{
 		Runner:  runner.NewBase("boot"),
 		cfgPath: cfgPath,
 		cfgMap:  cfgMap,
@@ -88,7 +88,7 @@ func New(cfgPath string) *Boot {
 	return b
 }
 
-func (b *Boot) Init() error {
+func (b *Booter) Init() error {
 	err := b.loadCfg()
 	if err != nil {
 		return err
@@ -98,7 +98,10 @@ func (b *Boot) Init() error {
 	if err != nil {
 		return err
 	}
-	b.WithLogger(l)
+	ok := util.ReflectSet(b.Runner, l.Named(b.Name()))
+	if !ok {
+		return errs.Errorf("boot set logger fail")
+	}
 
 	for name, cfg := range b.cfgMap {
 		b.Info("load config", "name", name, "cfg", cfg)
@@ -115,7 +118,7 @@ func (b *Boot) Init() error {
 	return b.Runner.Init()
 }
 
-func (b *Boot) Start() error {
+func (b *Booter) Start() error {
 	signalCh := make(chan os.Signal, 1)
 	signal.Notify(signalCh, signals...)
 
@@ -126,11 +129,11 @@ func (b *Boot) Start() error {
 	return nil
 }
 
-func (b *Boot) Cancel() {
+func (b *Booter) Cancel() {
 	b.cancel()
 }
 
-func (b *Boot) OnChildDone(child runner.Runner) error {
+func (b *Booter) OnChildDone(child runner.Runner) error {
 	b.Info("on svc done", "svc", child.Name())
 	select {
 	case <-b.Stopping():
@@ -143,7 +146,7 @@ func (b *Boot) OnChildDone(child runner.Runner) error {
 	return nil
 }
 
-func (b *Boot) loadCfgFromEnv() error {
+func (b *Booter) loadCfgFromEnv() error {
 	for _, cfg := range b.cfgMap {
 		err := env.Parse(cfg)
 		if err != nil {
@@ -153,7 +156,7 @@ func (b *Boot) loadCfgFromEnv() error {
 	return nil
 }
 
-func (b *Boot) loadCfgFromFile(path string) error {
+func (b *Booter) loadCfgFromFile(path string) error {
 	if path == "" {
 		path = common.CfgPath
 		if !util.FileExist(path) {
@@ -191,11 +194,11 @@ func (b *Boot) loadCfgFromFile(path string) error {
 	return nil
 }
 
-func (b *Boot) loadCfg() error {
+func (b *Booter) loadCfg() error {
 	return errors.Join(b.loadCfgFromFile(b.cfgPath), b.loadCfgFromEnv())
 }
 
-func (b *Boot) buildLogger() (*zap.Logger, error) {
+func (b *Booter) buildLogger() (*zap.Logger, error) {
 	lc, ok := b.cfgMap[pluginLog].(*log.Cfg)
 	if !ok {
 		return nil, errs.Errorf("unexpected log Cfg type")

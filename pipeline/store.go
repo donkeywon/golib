@@ -112,7 +112,7 @@ func (s *StoreRW) Init() error {
 	}
 	s.EnableCalcHash()
 
-	s.WithLoggerNoName(s.Logger(), "store", s.StoreRWCfg.Type)
+	s.WithLoggerFields("store", s.StoreRWCfg.Type)
 	s.RegisterReadHook(s.hookLogRead)
 	s.RegisterWriteHook(s.hookLogWrite)
 

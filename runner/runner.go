@@ -3,17 +3,30 @@ package runner
 import (
 	"context"
 	"errors"
-	"strconv"
 	"sync"
 
-	"github.com/bytedance/sonic"
 	"github.com/donkeywon/golib/errs"
 	"github.com/donkeywon/golib/log"
 	"github.com/donkeywon/golib/util"
 	"go.uber.org/zap"
 )
 
+var (
+	l           = log.Debug()
+	debugRunner = &struct {
+		Runner
+	}{
+		Runner: NewBase(""),
+	}
+)
+
+func init() {
+	util.ReflectSet(debugRunner.Runner, l)
+}
+
 type Runner interface {
+	kvs
+
 	Init() error
 	Start() error
 	Stop() error
@@ -22,32 +35,6 @@ type Runner interface {
 	SetName(string)
 	Ctx() context.Context
 	SetCtx(context.Context)
-
-	Logger() *zap.Logger
-	WithLogger(l *zap.Logger, kvs ...any)
-	WithLoggerNoName(l *zap.Logger, kvs ...any)
-
-	Debug(msg string, kvs ...any)
-	Info(msg string, kvs ...any)
-	Warn(msg string, kvs ...any)
-	Err(msg string, err error, kvs ...any)
-
-	Store(k string, v any)
-	DelKey(k string)
-	HasKey(k string) bool
-	BoolValue(k string) bool
-	StringValue(k string) string
-	StringValueOr(k string, d string) string
-	IntValue(k string) int
-	IntValueOr(k string, d int) int
-	Int64Value(k string) int64
-	Int64ValueOr(k string, d int64) int64
-	FloatValue(k string) float64
-	FloatValueOr(k string, d float64) float64
-	ValueTo(k string, to any) error
-	Collect() map[string]string
-	CollectF(func(map[string]string))
-	StoreValues(map[string]string)
 
 	Started() <-chan struct{}
 	Stopping() <-chan struct{}
@@ -70,6 +57,25 @@ type Runner interface {
 	AppendError(err ...error)
 	Error() error
 	SelfError() error
+
+	getLogger() *zap.Logger
+	WithLoggerFrom(r Runner, kvs ...any)
+	WithLoggerFields(kvs ...any)
+	Debug(msg string, kvs ...any)
+	Info(msg string, kvs ...any)
+	Warn(msg string, kvs ...any)
+	Err(msg string, err error, kvs ...any)
+}
+
+// DebugInherit for test only.
+func DebugInherit(to Runner) {
+	to.WithLoggerFrom(debugRunner)
+	to.SetCtx(debugRunner.Ctx())
+}
+
+func Inherit(to Runner, from Runner) {
+	to.WithLoggerFrom(from)
+	to.SetCtx(from.Ctx())
 }
 
 func Init(r Runner) error {
@@ -88,8 +94,7 @@ func Init(r Runner) error {
 	}
 	r.Info("init done")
 	for _, child := range r.Children() {
-		child.WithLogger(r.Logger())
-		child.SetCtx(r.Ctx())
+		Inherit(child, r)
 		child.SetParent(r)
 		err = Init(child)
 		if err != nil {
@@ -160,7 +165,7 @@ func stop(r Runner) {
 	default:
 		// 这里不直接return的原因是：
 		// 有些struct组合了Runner接口，但是并不需要Start，只是依赖Runner的一些公共方法
-		// 例如Log相关方法、Value相关方法，Ctx和信号通知相关方法
+		// 例如Log相关方法、Value相关方法，Ctx和事件通知相关方法
 		// 所以这里支持在Runner没有Start的情况下做Stop操作
 		// 这种情况下必须要调用runner.Init执行初始化，Init、Start、Stop都可以不用实现.
 		r.Info("stopping before started")
@@ -198,14 +203,14 @@ func safeStop(r Runner) {
 	r.AppendError(r.Stop())
 }
 
-type BaseRunner struct {
+type baseRunner struct {
+	kvs
 	ctx          context.Context
 	err          error
 	parent       Runner
 	started      chan struct{}
-	kvs          map[string]string
 	childrenMap  map[string]Runner
-	l            *zap.Logger
+	Logger       *zap.Logger
 	done         chan struct{}
 	stopDone     chan struct{}
 	stopping     chan struct{}
@@ -216,12 +221,11 @@ type BaseRunner struct {
 	stopDoneOnce sync.Once
 	stoppingOnce sync.Once
 	errMu        sync.Mutex
-	kvsMu        sync.Mutex
 }
 
-func NewBase(name string) *BaseRunner {
-	return &BaseRunner{
-		l:           zap.NewNop(),
+func NewBase(name string) Runner {
+	return &baseRunner{
+		Logger:      zap.NewNop(),
 		name:        name,
 		ctx:         context.Background(),
 		started:     make(chan struct{}),
@@ -229,21 +233,21 @@ func NewBase(name string) *BaseRunner {
 		stopDone:    make(chan struct{}),
 		done:        make(chan struct{}),
 		childrenMap: make(map[string]Runner, 0),
-		kvs:         make(map[string]string, 0),
+		kvs:         newSimpleInMemKvs(),
 	}
 }
 
-func (br *BaseRunner) SetName(n string) {
+func (br *baseRunner) SetName(n string) {
 	br.name = n
 }
 
-func (br *BaseRunner) Name() string {
+func (br *baseRunner) Name() string {
 	return br.name
 }
 
-func (br *BaseRunner) Init() error {
-	if br.l == nil {
-		br.l = zap.NewNop()
+func (br *baseRunner) Init() error {
+	if br.Logger == nil {
+		br.Logger = zap.NewNop()
 	}
 	if br.started == nil {
 		br.started = make(chan struct{})
@@ -261,212 +265,73 @@ func (br *BaseRunner) Init() error {
 		br.childrenMap = make(map[string]Runner, 0)
 	}
 	if br.kvs == nil {
-		br.kvs = make(map[string]string, 0)
+		br.kvs = newSimpleInMemKvs()
 	}
 	return nil
 }
 
-func (br *BaseRunner) Start() error {
+func (br *baseRunner) Start() error {
 	<-br.Stopping()
 	return nil
 }
 
-func (br *BaseRunner) Stop() error {
+func (br *baseRunner) Stop() error {
 	return nil
 }
 
-func (br *BaseRunner) SetCtx(ctx context.Context) {
+func (br *baseRunner) SetCtx(ctx context.Context) {
 	br.ctx = ctx
 }
 
-func (br *BaseRunner) Ctx() context.Context {
+func (br *baseRunner) Ctx() context.Context {
 	return br.ctx
 }
 
-func (br *BaseRunner) Store(k string, v any) {
-	var vs string
-
-	switch vv := v.(type) {
-	case uint8:
-		vs = strconv.FormatUint(uint64(vv), 10)
-	case uint16:
-		vs = strconv.FormatUint(uint64(vv), 10)
-	case uint32:
-		vs = strconv.FormatUint(uint64(vv), 10)
-	case uint64:
-		vs = strconv.FormatUint(vv, 10)
-	case int8:
-		vs = strconv.FormatInt(int64(vv), 10)
-	case int16:
-		vs = strconv.FormatInt(int64(vv), 10)
-	case int32:
-		vs = strconv.FormatInt(int64(vv), 10)
-	case int64:
-		vs = strconv.FormatInt(vv, 10)
-	case float32:
-		vs = strconv.FormatFloat(float64(vv), 'f', 10, 64)
-	case uint:
-		vs = strconv.FormatUint(uint64(vv), 10)
-	case float64:
-		vs = strconv.FormatFloat(float64(vv), 'f', 10, 64)
-	case string:
-		vs = vv
-	case int:
-		vs = strconv.FormatInt(int64(vv), 10)
-	case bool:
-		vs = strconv.FormatBool(vv)
-	default:
-		vs, _ = sonic.MarshalString(vv)
-	}
-
-	br.kvsMu.Lock()
-	defer br.kvsMu.Unlock()
-	br.kvs[k] = vs
-}
-
-func (br *BaseRunner) HasKey(k string) bool {
-	br.kvsMu.Lock()
-	defer br.kvsMu.Unlock()
-	_, exists := br.kvs[k]
-	return exists
-}
-
-func (br *BaseRunner) DelKey(k string) {
-	br.kvsMu.Lock()
-	defer br.kvsMu.Unlock()
-	delete(br.kvs, k)
-}
-
-func (br *BaseRunner) StringValue(k string) string {
-	br.kvsMu.Lock()
-	defer br.kvsMu.Unlock()
-	return br.kvs[k]
-}
-
-func (br *BaseRunner) StringValueOr(k string, d string) string {
-	v := br.StringValue(k)
-	if v == "" {
-		return d
-	}
-	return v
-}
-
-func (br *BaseRunner) BoolValue(k string) bool {
-	s := br.StringValue(k)
-	return s == "true"
-}
-
-func (br *BaseRunner) IntValue(k string) int {
-	return br.IntValueOr(k, 0)
-}
-
-func (br *BaseRunner) IntValueOr(k string, d int) int {
-	i, err := strconv.Atoi(br.StringValueOr(k, strconv.FormatInt(int64(d), 10)))
-	if err != nil {
-		panic(err)
-	}
-	return i
-}
-
-func (br *BaseRunner) Int64Value(k string) int64 {
-	return br.Int64ValueOr(k, int64(0))
-}
-
-func (br *BaseRunner) Int64ValueOr(k string, d int64) int64 {
-	return int64(br.IntValueOr(k, int(d)))
-}
-
-func (br *BaseRunner) FloatValue(k string) float64 {
-	return br.FloatValueOr(k, 0.0)
-}
-
-func (br *BaseRunner) FloatValueOr(k string, d float64) float64 {
-	f, err := strconv.ParseFloat(br.StringValueOr(k, strconv.FormatFloat(d, 'f', 10, 64)), 64)
-	if err != nil {
-		panic(err)
-	}
-	return f
-}
-
-func (br *BaseRunner) ValueTo(k string, to any) error {
-	v := br.StringValue(k)
-	if v == "" {
-		return nil
-	}
-
-	return sonic.Unmarshal(util.String2Bytes(v), to)
-}
-
-func (br *BaseRunner) Collect() map[string]string {
-	c := make(map[string]string)
-	br.CollectF(func(m map[string]string) {
-		for k, v := range m {
-			c[k] = v
-		}
-	})
-	return c
-}
-
-func (br *BaseRunner) CollectF(f func(map[string]string)) {
-	br.kvsMu.Lock()
-	defer br.kvsMu.Unlock()
-	f(br.kvs)
-}
-
-func (br *BaseRunner) StoreValues(m map[string]string) {
-	if m == nil {
-		return
-	}
-	br.kvsMu.Lock()
-	defer br.kvsMu.Unlock()
-	br.kvs = m
-}
-
-func (br *BaseRunner) Debug(msg string, kvs ...any) {
-	br.l.Debug(msg, log.HandleZapFields(kvs)...)
-}
-
-func (br *BaseRunner) Info(msg string, kvs ...any) {
-	br.l.Info(msg, log.HandleZapFields(kvs)...)
-}
-
-func (br *BaseRunner) Warn(msg string, kvs ...any) {
-	br.l.Warn(msg, log.HandleZapFields(kvs)...)
-}
-
-func (br *BaseRunner) Err(msg string, err error, kvs ...any) {
-	br.l.Error(msg, log.HandleZapFields(kvs, zap.Error(err))...)
-}
-
-func (br *BaseRunner) Logger() *zap.Logger {
-	return br.l
-}
-
-func (br *BaseRunner) WithLogger(l *zap.Logger, kvs ...any) {
-	br.l = l.Named(br.Name()).With(log.HandleZapFields(kvs)...)
-}
-
-func (br *BaseRunner) WithLoggerNoName(l *zap.Logger, kvs ...any) {
-	br.l = l.With(log.HandleZapFields(kvs)...)
-}
-
-func (br *BaseRunner) Started() <-chan struct{} {
+func (br *baseRunner) Started() <-chan struct{} {
 	return br.started
 }
 
-func (br *BaseRunner) Stopping() <-chan struct{} {
+func (br *baseRunner) Stopping() <-chan struct{} {
 	return br.stopping
 }
 
-func (br *BaseRunner) StopDone() <-chan struct{} {
+func (br *baseRunner) StopDone() <-chan struct{} {
 	return br.stopDone
 }
 
-func (br *BaseRunner) Done() <-chan struct{} {
+func (br *baseRunner) Done() <-chan struct{} {
 	return br.done
 }
 
-func (br *BaseRunner) markStarted() bool {
+func (br *baseRunner) getLogger() *zap.Logger {
+	return br.Logger
+}
+
+func (br *baseRunner) WithLoggerFrom(r Runner, kvs ...any) {
+	br.Logger = r.getLogger().Named(br.Name()).With(log.HandleZapFields(kvs)...)
+}
+
+func (br *baseRunner) WithLoggerFields(kvs ...any) {
+	br.Logger = br.Logger.With(log.HandleZapFields(kvs)...)
+}
+
+func (br *baseRunner) Debug(msg string, kvs ...any) {
+	br.Logger.Debug(msg, log.HandleZapFields(kvs)...)
+}
+
+func (br *baseRunner) Info(msg string, kvs ...any) {
+	br.Logger.Info(msg, log.HandleZapFields(kvs)...)
+}
+
+func (br *baseRunner) Warn(msg string, kvs ...any) {
+	br.Logger.Warn(msg, log.HandleZapFields(kvs)...)
+}
+
+func (br *baseRunner) Err(msg string, err error, kvs ...any) {
+	br.Logger.Error(msg, log.HandleZapFields(kvs, zap.Error(err))...)
+}
+
+func (br *baseRunner) markStarted() bool {
 	marked := false
 	br.startedOnce.Do(func() {
 		close(br.started)
@@ -475,7 +340,7 @@ func (br *BaseRunner) markStarted() bool {
 	return marked
 }
 
-func (br *BaseRunner) markStopping() bool {
+func (br *baseRunner) markStopping() bool {
 	marked := false
 	br.stoppingOnce.Do(func() {
 		close(br.stopping)
@@ -484,7 +349,7 @@ func (br *BaseRunner) markStopping() bool {
 	return marked
 }
 
-func (br *BaseRunner) markStopDone() bool {
+func (br *baseRunner) markStopDone() bool {
 	marked := false
 	br.stopDoneOnce.Do(func() {
 		close(br.stopDone)
@@ -493,7 +358,7 @@ func (br *BaseRunner) markStopDone() bool {
 	return marked
 }
 
-func (br *BaseRunner) markDone() bool {
+func (br *baseRunner) markDone() bool {
 	marked := false
 	br.doneOnce.Do(func() {
 		close(br.done)
@@ -502,15 +367,15 @@ func (br *BaseRunner) markDone() bool {
 	return marked
 }
 
-func (br *BaseRunner) GetChild(name string) Runner {
+func (br *baseRunner) GetChild(name string) Runner {
 	return br.childrenMap[name]
 }
 
-func (br *BaseRunner) Children() []Runner {
+func (br *baseRunner) Children() []Runner {
 	return br.children
 }
 
-func (br *BaseRunner) WaitChildrenDone() {
+func (br *baseRunner) WaitChildrenDone() {
 	for _, child := range br.Children() {
 		select {
 		case <-child.Started():
@@ -521,19 +386,19 @@ func (br *BaseRunner) WaitChildrenDone() {
 	}
 }
 
-func (br *BaseRunner) SetParent(r Runner) {
+func (br *baseRunner) SetParent(r Runner) {
 	br.parent = r
 }
 
-func (br *BaseRunner) Parent() Runner {
+func (br *baseRunner) Parent() Runner {
 	return br.parent
 }
 
-func (br *BaseRunner) OnChildDone(_ Runner) error {
+func (br *baseRunner) OnChildDone(_ Runner) error {
 	return nil
 }
 
-func (br *BaseRunner) AppendRunner(r Runner) bool {
+func (br *baseRunner) AppendRunner(r Runner) bool {
 	if r == nil {
 		return false
 	}
@@ -546,7 +411,7 @@ func (br *BaseRunner) AppendRunner(r Runner) bool {
 	return true
 }
 
-func (br *BaseRunner) AppendError(err ...error) {
+func (br *baseRunner) AppendError(err ...error) {
 	br.errMu.Lock()
 	defer br.errMu.Unlock()
 	var res []error
@@ -562,11 +427,17 @@ func (br *BaseRunner) AppendError(err ...error) {
 	br.err = errors.Join(res...)
 }
 
-func (br *BaseRunner) Error() error {
+func (br *baseRunner) Error() error {
+	if len(br.Children()) == 0 {
+		return br.SelfError()
+	}
 	return errors.Join(br.SelfError(), br.ChildrenError())
 }
 
-func (br *BaseRunner) ChildrenError() error {
+func (br *baseRunner) ChildrenError() error {
+	if len(br.Children()) == 0 {
+		return nil
+	}
 	var err error
 	for _, child := range br.Children() {
 		err = errors.Join(err, child.Error())
@@ -574,7 +445,7 @@ func (br *BaseRunner) ChildrenError() error {
 	return err
 }
 
-func (br *BaseRunner) SelfError() error {
+func (br *baseRunner) SelfError() error {
 	br.errMu.Lock()
 	defer br.errMu.Unlock()
 	return br.err

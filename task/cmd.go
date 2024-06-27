@@ -42,7 +42,7 @@ func (c *Cmd) Init() error {
 		return err
 	}
 
-	c.WithLoggerNoName(c.Logger(), "cmd", c.Command[0])
+	c.WithLoggerFields("cmd", c.Command[0])
 
 	return c.Step.Init()
 }

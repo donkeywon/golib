@@ -63,7 +63,7 @@ func TestMultiGroupPipeline(t *testing.T) {
 
 	p := New()
 	p.Cfg = cfg
-	p.WithLogger(l)
+	runner.DebugInherit(p)
 	err := runner.Init(p)
 	require.NoError(t, err)
 
