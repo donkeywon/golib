@@ -3,6 +3,8 @@ package boot
 import (
 	"context"
 	"errors"
+	"flag"
+	"fmt"
 	"os"
 	"os/signal"
 	"slices"
@@ -20,6 +22,11 @@ import (
 	"go.uber.org/zap"
 )
 
+var (
+	flagPrintVersion bool
+	flagCfgPath      string
+)
+
 type SvcType string
 
 type Svc interface {
@@ -31,13 +38,20 @@ const pluginLog SvcType = "log"
 
 func init() {
 	plugin.RegisterCfg(pluginLog, func() interface{} { return log.NewCfg() })
+
+	parseFlag()
+	if flagPrintVersion {
+		fmt.Printf("version:%s\ngithash:%s\nbuildstamp:%s\n", common.Version, common.GitHash, common.BuildStamp)
+		os.Exit(0)
+	}
 }
 
 func Boot(cfgPath string) {
 	b := New(cfgPath)
 	err := runner.Init(b)
 	if err != nil {
-		panic(errs.ErrToStackString(err))
+		b.Error("boot init fail", err)
+		os.Exit(1)
 	}
 	runner.StartBG(b)
 	<-b.Done()
@@ -84,6 +98,9 @@ func New(cfgPath string) *Booter {
 		cancel:  cancel,
 	}
 
+	// use default logger as temp logger
+	util.ReflectSet(b.Runner, log.Default())
+
 	b.SetCtx(ctx)
 	return b
 }
@@ -108,8 +125,8 @@ func (b *Booter) Init() error {
 	}
 
 	for _, svcType := range _svcs {
-		svc, ok := plugin.CreateWithCfg(svcType, b.cfgMap[svcType]).(Svc)
-		if !ok {
+		svc, isSvc := plugin.CreateWithCfg(svcType, b.cfgMap[svcType]).(Svc)
+		if !isSvc {
 			return errs.Errorf("svc %+v is not a Svc", svcType)
 		}
 		b.AppendRunner(svc)
@@ -156,7 +173,11 @@ func (b *Booter) loadCfgFromEnv() error {
 	return nil
 }
 
-func (b *Booter) loadCfgFromFile(path string) error {
+func (b *Booter) loadCfgFromFile() error {
+	var path = flagCfgPath
+	if path == "" {
+		path = b.cfgPath
+	}
 	if path == "" {
 		path = common.CfgPath
 		if !util.FileExist(path) {
@@ -195,7 +216,7 @@ func (b *Booter) loadCfgFromFile(path string) error {
 }
 
 func (b *Booter) loadCfg() error {
-	return errors.Join(b.loadCfgFromFile(b.cfgPath), b.loadCfgFromEnv())
+	return errors.Join(b.loadCfgFromFile(), b.loadCfgFromEnv())
 }
 
 func (b *Booter) buildLogger() (*zap.Logger, error) {
@@ -214,4 +235,10 @@ func durationUnmarshaler(d *time.Duration, b []byte) error {
 
 	*d = tmp
 	return nil
+}
+
+func parseFlag() {
+	flag.BoolVar(&flagPrintVersion, "v", false, "print version info")
+	flag.StringVar(&flagCfgPath, "c", "", "specify config file path")
+	flag.Parse()
 }
