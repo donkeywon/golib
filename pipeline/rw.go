@@ -732,7 +732,7 @@ func (b *BaseRW) asyncRead() {
 		if err != nil {
 			b.rerr.Store(errs.Wrap(err, "async read fail"))
 			close(b.asyncChan)
-			b.Err("async read finished caused by error occurred", err)
+			b.Error("async read finished caused by error occurred", err)
 			return
 		}
 	}

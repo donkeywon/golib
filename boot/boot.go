@@ -41,9 +41,9 @@ func Boot(cfgPath string) {
 	}
 	runner.StartBG(b)
 	<-b.Done()
-	err = b.Error()
+	err = b.Err()
 	if err != nil {
-		b.Err("error occurred", err)
+		b.Error("error occurred", err)
 		os.Exit(1)
 	}
 }
@@ -139,7 +139,7 @@ func (b *Booter) OnChildDone(child runner.Runner) error {
 	case <-b.Stopping():
 		return nil
 	default:
-		if child.Error() != nil {
+		if child.Err() != nil {
 			runner.Stop(b)
 		}
 	}

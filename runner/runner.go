@@ -14,14 +14,15 @@ import (
 var (
 	l           = log.Debug()
 	debugRunner = &struct {
-		Runner
+		*baseRunner
 	}{
-		Runner: NewBase(""),
+		baseRunner: NewBase("").(*baseRunner),
 	}
 )
 
 func init() {
-	util.ReflectSet(debugRunner.Runner, l)
+	debugRunner.Logger = l
+	debugRunner.SetCtx(context.Background())
 }
 
 type Runner interface {
@@ -55,8 +56,8 @@ type Runner interface {
 	OnChildDone(Runner) error
 
 	AppendError(err ...error)
-	Error() error
-	SelfError() error
+	Err() error
+	SelfErr() error
 
 	getLogger() *zap.Logger
 	WithLoggerFrom(r Runner, kvs ...any)
@@ -64,7 +65,7 @@ type Runner interface {
 	Debug(msg string, kvs ...any)
 	Info(msg string, kvs ...any)
 	Warn(msg string, kvs ...any)
-	Err(msg string, err error, kvs ...any)
+	Error(msg string, err error, kvs ...any)
 }
 
 // DebugInherit for test only.
@@ -327,7 +328,7 @@ func (br *baseRunner) Warn(msg string, kvs ...any) {
 	br.Logger.Warn(msg, log.HandleZapFields(kvs)...)
 }
 
-func (br *baseRunner) Err(msg string, err error, kvs ...any) {
+func (br *baseRunner) Error(msg string, err error, kvs ...any) {
 	br.Logger.Error(msg, log.HandleZapFields(kvs, zap.Error(err))...)
 }
 
@@ -427,11 +428,11 @@ func (br *baseRunner) AppendError(err ...error) {
 	br.err = errors.Join(res...)
 }
 
-func (br *baseRunner) Error() error {
+func (br *baseRunner) Err() error {
 	if len(br.Children()) == 0 {
-		return br.SelfError()
+		return br.SelfErr()
 	}
-	return errors.Join(br.SelfError(), br.ChildrenError())
+	return errors.Join(br.SelfErr(), br.ChildrenError())
 }
 
 func (br *baseRunner) ChildrenError() error {
@@ -440,12 +441,12 @@ func (br *baseRunner) ChildrenError() error {
 	}
 	var err error
 	for _, child := range br.Children() {
-		err = errors.Join(err, child.Error())
+		err = errors.Join(err, child.Err())
 	}
 	return err
 }
 
-func (br *baseRunner) SelfError() error {
+func (br *baseRunner) SelfErr() error {
 	br.errMu.Lock()
 	defer br.errMu.Unlock()
 	return br.err

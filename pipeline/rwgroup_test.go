@@ -29,7 +29,7 @@ func TestGroup(t *testing.T) {
 	}()
 
 	runner.Start(g)
-	require.NoError(t, g.Error())
+	require.NoError(t, g.Err())
 }
 
 func TestStore(t *testing.T) {
@@ -59,7 +59,7 @@ func TestStore(t *testing.T) {
 	}()
 
 	runner.Start(g)
-	require.NoError(t, g.Error())
+	require.NoError(t, g.Err())
 }
 
 func TestFtp(t *testing.T) {
@@ -84,7 +84,7 @@ func TestFtp(t *testing.T) {
 	require.NoError(t, runner.Init(g))
 
 	runner.Start(g)
-	require.NoError(t, g.Error())
+	require.NoError(t, g.Err())
 }
 
 func TestOSS(t *testing.T) {
@@ -113,5 +113,5 @@ func TestOSS(t *testing.T) {
 	require.NoError(t, runner.Init(g))
 
 	runner.Start(g)
-	require.NoError(t, g.Error())
+	require.NoError(t, g.Err())
 }

@@ -29,7 +29,7 @@ func TestTask(t *testing.T) {
 	require.NoError(t, runner.Init(task))
 
 	runner.Start(task)
-	require.NoError(t, task.Error())
+	require.NoError(t, task.Err())
 
 	task.Info("result", "result", task.Result())
 }
