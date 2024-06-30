@@ -33,7 +33,6 @@ type Runner interface {
 
 	GetChild(string) Runner
 	Children() []Runner
-	ChildrenError() error
 	AppendRunner(Runner) bool
 	WaitChildrenDone()
 	SetParent(Runner)
@@ -43,6 +42,7 @@ type Runner interface {
 	AppendError(err ...error)
 	Err() error
 	SelfErr() error
+	ChildrenErr() error
 
 	getLogger() *zap.Logger
 	WithLoggerFrom(r Runner, kvs ...any)
@@ -407,10 +407,10 @@ func (br *baseRunner) Err() error {
 	if len(br.Children()) == 0 {
 		return br.SelfErr()
 	}
-	return errors.Join(br.SelfErr(), br.ChildrenError())
+	return errors.Join(br.SelfErr(), br.ChildrenErr())
 }
 
-func (br *baseRunner) ChildrenError() error {
+func (br *baseRunner) ChildrenErr() error {
 	if len(br.Children()) == 0 {
 		return nil
 	}
