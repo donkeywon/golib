@@ -33,7 +33,7 @@ func NewCfg() *Cfg {
 	return &Cfg{}
 }
 
-func (c *Cfg) To(role RWRole, typ RWType, cfg interface{}, commonCfg *RWCommonCfg) *Cfg {
+func (c *Cfg) Add(role RWRole, typ RWType, cfg interface{}, commonCfg *RWCommonCfg) *Cfg {
 	c.RWs = append(c.RWs, &RWCfg{
 		Type:      typ,
 		Cfg:       cfg,

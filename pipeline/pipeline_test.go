@@ -57,10 +57,10 @@ func TestGroupByStarter(t *testing.T) {
 
 func TestMultiGroupPipeline(t *testing.T) {
 	cfg := NewCfg().
-		To(RWRoleReader, RWTypeFile, &FileRWCfg{Path: "/root/test.file"}, nil).
-		To(RWRoleStarter, RWTypeCopy, &CopyRWCfg{BufSize: 32 * 1024}, nil).
-		To(RWRoleWriter, RWTypeCompress, &CompressRWCfg{Type: CompressTypeZstd, Level: CompressLevelFast}, nil).
-		To(RWRoleStarter, RWTypeCmd, &cmd.Cfg{Command: []string{"bash", "-c", "cat > /root/test.file1"}}, nil)
+		Add(RWRoleReader, RWTypeFile, &FileRWCfg{Path: "/root/test.file"}, nil).
+		Add(RWRoleStarter, RWTypeCopy, &CopyRWCfg{BufSize: 32 * 1024}, nil).
+		Add(RWRoleWriter, RWTypeCompress, &CompressRWCfg{Type: CompressTypeZstd, Level: CompressLevelFast}, nil).
+		Add(RWRoleStarter, RWTypeCmd, &cmd.Cfg{Command: []string{"bash", "-c", "cat > /root/test.file1"}}, nil)
 
 	p := New()
 	p.Cfg = cfg
