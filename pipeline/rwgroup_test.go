@@ -34,7 +34,7 @@ func TestGroup(t *testing.T) {
 }
 
 func TestStore(t *testing.T) {
-	cfg := NewRWGroupCfg().SetStarter(RWTypeStore, &StoreRWCfg{
+	cfg := NewRWGroupCfg().SetStarter(RWTypeStore, &StoreCfg{
 		Type: StoreTypeSSH,
 		Cfg: &SSHCfg{
 			Addr: "127.0.0.1:22",
@@ -66,7 +66,7 @@ func TestStore(t *testing.T) {
 func TestFtp(t *testing.T) {
 	cfg := NewRWGroupCfg().SetStarter(RWTypeCopy, &CopyRWCfg{BufSize: 32 * 1024}, nil).
 		FromReader(RWTypeFile, &FileRWCfg{Path: "/root/test.file"}, nil).
-		ToWriter(RWTypeStore, &StoreRWCfg{
+		ToWriter(RWTypeStore, &StoreCfg{
 			Type: StoreTypeFtp,
 			Cfg: &FtpCfg{
 				Addr: "127.0.0.1:21",
@@ -91,7 +91,7 @@ func TestFtp(t *testing.T) {
 func TestOSS(t *testing.T) {
 	cfg := NewRWGroupCfg().SetStarter(RWTypeCopy, &CopyRWCfg{BufSize: 1024 * 1024}, nil).
 		FromReader(RWTypeFile, &FileRWCfg{Path: "/root/test.file.zst"}, nil).
-		ToWriter(RWTypeStore, &StoreRWCfg{
+		ToWriter(RWTypeStore, &StoreCfg{
 			Type: StoreTypeOss,
 			Cfg: &OssCfg{
 				Ak:     "",

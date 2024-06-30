@@ -50,7 +50,7 @@ type SSHCfg struct {
 	PrivateKey string `json:"privateKey" yaml:"privateKey"`
 }
 
-type StoreRWCfg struct {
+type StoreCfg struct {
 	Type     StoreType   `json:"type"     validate:"required" yaml:"type"`
 	Cfg      interface{} `json:"cfg"      validate:"required" yaml:"cfg"`
 	URL      string      `json:"url"      validate:"min=1"    yaml:"url"`
@@ -59,13 +59,13 @@ type StoreRWCfg struct {
 	Timeout  int         `json:"timeout"  validate:"gte=1"    yaml:"timeout"`
 }
 
-func NewStoreCfg() *StoreRWCfg {
-	return &StoreRWCfg{}
+func NewStoreCfg() *StoreCfg {
+	return &StoreCfg{}
 }
 
 type StoreRW struct {
 	RW
-	*StoreRWCfg
+	*StoreCfg
 
 	r io.ReadCloser
 	w io.WriteCloser
@@ -89,7 +89,7 @@ func (s *StoreRW) Init() error {
 
 	var err error
 
-	switch s.StoreRWCfg.Type {
+	switch s.StoreCfg.Type {
 	case StoreTypeFtp:
 		err = s.initFtp()
 	case StoreTypeOss:
@@ -97,7 +97,7 @@ func (s *StoreRW) Init() error {
 	case StoreTypeSSH:
 		err = s.initSSH()
 	default:
-		return errs.Errorf("unknown store type: %+v", s.StoreRWCfg.Type)
+		return errs.Errorf("unknown store type: %+v", s.StoreCfg.Type)
 	}
 
 	if err != nil {
@@ -106,13 +106,13 @@ func (s *StoreRW) Init() error {
 
 	if s.IsReader() {
 		_ = s.NestReader(s.r)
-		s.EnableChecksum(s.StoreRWCfg.Checksum)
+		s.EnableChecksum(s.StoreCfg.Checksum)
 	} else if s.IsWriter() {
 		_ = s.NestWriter(s.w)
 	}
 	s.EnableCalcHash()
 
-	s.WithLoggerFields("store", s.StoreRWCfg.Type)
+	s.WithLoggerFields("store", s.StoreCfg.Type)
 	s.RegisterReadHook(s.hookLogRead)
 	s.RegisterWriteHook(s.hookLogWrite)
 
@@ -132,8 +132,8 @@ func (s *StoreRW) Start() error {
 		}
 	}()
 
-	if s.StoreRWCfg.Type != StoreTypeSSH {
-		return errs.Errorf("non-runnable store type: %+v", s.StoreRWCfg.Type)
+	if s.StoreCfg.Type != StoreTypeSSH {
+		return errs.Errorf("non-runnable store type: %+v", s.StoreCfg.Type)
 	}
 	err := s.sshSess.Run(s.sshCmd)
 	if errors.Is(err, ErrStoppedManually) {
@@ -143,7 +143,7 @@ func (s *StoreRW) Start() error {
 }
 
 func (s *StoreRW) Close() error {
-	if s.StoreRWCfg.Type == StoreTypeSSH {
+	if s.StoreCfg.Type == StoreTypeSSH {
 		closeErr := s.closeSSHSessionAndCli()
 		if errors.Is(closeErr, io.EOF) {
 			closeErr = nil
@@ -158,30 +158,30 @@ func (s *StoreRW) Type() interface{} {
 }
 
 func (s *StoreRW) GetCfg() interface{} {
-	return s.StoreRWCfg
+	return s.StoreCfg
 }
 
 func (s *StoreRW) initFtp() error {
 	var err error
-	cfg, _ := s.StoreRWCfg.Cfg.(*FtpCfg)
+	cfg, _ := s.StoreCfg.Cfg.(*FtpCfg)
 	if s.IsReader() {
-		s.r, err = createFtpReader(s.StoreRWCfg, cfg)
+		s.r, err = createFtpReader(s.StoreCfg, cfg)
 	} else {
-		s.w, err = createFtpWriter(s.StoreRWCfg, cfg)
+		s.w, err = createFtpWriter(s.StoreCfg, cfg)
 	}
 	return err
 }
 
 func (s *StoreRW) initOSS() error {
 	var err error
-	cfg, _ := s.StoreRWCfg.Cfg.(*OssCfg)
+	cfg, _ := s.StoreCfg.Cfg.(*OssCfg)
 	if s.IsReader() {
-		s.r, err = createOssReader(s.StoreRWCfg, cfg)
+		s.r, err = createOssReader(s.StoreCfg, cfg)
 	} else {
 		if cfg.Append {
-			s.w, err = createOssAppendWriter(s.StoreRWCfg, cfg)
+			s.w, err = createOssAppendWriter(s.StoreCfg, cfg)
 		} else {
-			s.w, err = createOssMultipartWriter(s.StoreRWCfg, cfg)
+			s.w, err = createOssMultipartWriter(s.StoreCfg, cfg)
 		}
 	}
 	return err
@@ -189,19 +189,19 @@ func (s *StoreRW) initOSS() error {
 
 func (s *StoreRW) initSSH() error {
 	var err error
-	cfg, _ := s.StoreRWCfg.Cfg.(*SSHCfg)
+	cfg, _ := s.StoreCfg.Cfg.(*SSHCfg)
 	if !s.IsStarter() {
 		return errs.Errorf("ssh store must be Starter")
 	}
-	s.sshCli, s.sshSess, err = createSSHStarter(s.StoreRWCfg, cfg)
+	s.sshCli, s.sshSess, err = createSSHStarter(s.StoreCfg, cfg)
 	if err != nil {
 		return errs.Wrap(err, "create ssh cli and sess fail")
 	}
 	if s.Reader() != nil {
-		s.sshCmd = sshWriteCmd(s.StoreRWCfg.URL)
+		s.sshCmd = sshWriteCmd(s.StoreCfg.URL)
 		s.sshSess.Stdin = s
 	} else if s.Writer() != nil {
-		s.sshCmd = sshReadCmd(s.StoreRWCfg.URL)
+		s.sshCmd = sshReadCmd(s.StoreCfg.URL)
 		s.sshSess.Stdout = s
 	} else {
 		return errs.Errorf("ssh store must has Reader or Writer")
@@ -228,7 +228,7 @@ func (s *StoreRW) hookLogRead(n int, bs []byte, err error, cost int64, misc ...i
 	return nil
 }
 
-func createFtpCfg(storeCfg *StoreRWCfg, ftpCfg *FtpCfg) *ftp.Cfg {
+func createFtpCfg(storeCfg *StoreCfg, ftpCfg *FtpCfg) *ftp.Cfg {
 	return &ftp.Cfg{
 		Addr:    ftpCfg.Addr,
 		User:    ftpCfg.User,
@@ -238,7 +238,7 @@ func createFtpCfg(storeCfg *StoreRWCfg, ftpCfg *FtpCfg) *ftp.Cfg {
 	}
 }
 
-func createFtpReader(storeCfg *StoreRWCfg, ftpCfg *FtpCfg) (*ftp.Reader, error) {
+func createFtpReader(storeCfg *StoreCfg, ftpCfg *FtpCfg) (*ftp.Reader, error) {
 	r := ftp.NewReader()
 	r.Cfg = createFtpCfg(storeCfg, ftpCfg)
 	r.Path = storeCfg.URL
@@ -251,7 +251,7 @@ func createFtpReader(storeCfg *StoreRWCfg, ftpCfg *FtpCfg) (*ftp.Reader, error) 
 	return r, nil
 }
 
-func createFtpWriter(storeCfg *StoreRWCfg, ftpCfg *FtpCfg) (*ftp.Writer, error) {
+func createFtpWriter(storeCfg *StoreCfg, ftpCfg *FtpCfg) (*ftp.Writer, error) {
 	w := ftp.NewWriter()
 	w.Cfg = createFtpCfg(storeCfg, ftpCfg)
 	w.Path = storeCfg.URL
@@ -264,7 +264,7 @@ func createFtpWriter(storeCfg *StoreRWCfg, ftpCfg *FtpCfg) (*ftp.Writer, error) 
 	return w, nil
 }
 
-func createOssCfg(storeCfg *StoreRWCfg, ossCfg *OssCfg) *oss.Cfg {
+func createOssCfg(storeCfg *StoreCfg, ossCfg *OssCfg) *oss.Cfg {
 	return &oss.Cfg{
 		URL:     storeCfg.URL,
 		Ak:      ossCfg.Ak,
@@ -275,26 +275,26 @@ func createOssCfg(storeCfg *StoreRWCfg, ossCfg *OssCfg) *oss.Cfg {
 	}
 }
 
-func createOssReader(storeCfg *StoreRWCfg, ossCfg *OssCfg) (*oss.Reader, error) {
+func createOssReader(storeCfg *StoreCfg, ossCfg *OssCfg) (*oss.Reader, error) {
 	r := oss.NewReader()
 	r.Cfg = createOssCfg(storeCfg, ossCfg)
 
 	return r, nil
 }
 
-func createOssAppendWriter(storeCfg *StoreRWCfg, ossCfg *OssCfg) (*oss.AppendWriter, error) {
+func createOssAppendWriter(storeCfg *StoreCfg, ossCfg *OssCfg) (*oss.AppendWriter, error) {
 	w := oss.NewAppendWriter()
 	w.Cfg = createOssCfg(storeCfg, ossCfg)
 	return w, nil
 }
 
-func createOssMultipartWriter(storeCfg *StoreRWCfg, ossCfg *OssCfg) (*oss.MultiPartWriter, error) {
+func createOssMultipartWriter(storeCfg *StoreCfg, ossCfg *OssCfg) (*oss.MultiPartWriter, error) {
 	w := oss.NewMultiPartWriter()
 	w.Cfg = createOssCfg(storeCfg, ossCfg)
 	return w, nil
 }
 
-func createSSHStarter(storeCfg *StoreRWCfg, sshCfg *SSHCfg) (*ssh.Client, *ssh.Session, error) {
+func createSSHStarter(storeCfg *StoreCfg, sshCfg *SSHCfg) (*ssh.Client, *ssh.Session, error) {
 	return sshutil.NewClient(sshCfg.Addr, sshCfg.User, sshCfg.Pwd, []byte(sshCfg.PrivateKey), storeCfg.Timeout)
 }
 
