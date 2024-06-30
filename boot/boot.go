@@ -53,6 +53,11 @@ func Boot(cfgPath string) {
 		b.Error("boot init fail", err)
 		os.Exit(1)
 	}
+	err = util.V.Struct(b)
+	if err != nil {
+		b.Error("boot validate fail", err)
+		os.Exit(1)
+	}
 	runner.StartBG(b)
 	<-b.Done()
 	err = b.Err()

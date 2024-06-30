@@ -7,7 +7,6 @@ import (
 
 	"github.com/donkeywon/golib/errs"
 	"github.com/donkeywon/golib/log"
-	"github.com/donkeywon/golib/util"
 	"go.uber.org/zap"
 )
 
@@ -62,10 +61,6 @@ func Inherit(to Runner, from Runner) {
 func Init(r Runner) error {
 	var err error
 	r.Info("init")
-	err = util.V.Struct(r)
-	if err != nil {
-		return errs.Wrap(err, "validate fail")
-	}
 	if r.Ctx() == nil {
 		r.SetCtx(context.Background())
 	}
