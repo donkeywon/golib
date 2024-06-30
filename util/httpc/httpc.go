@@ -10,8 +10,11 @@ import (
 )
 
 var (
-	C                        = http.DefaultClient // allowed to reset
-	ErrRespStatusNotExpected = errors.New("status not expected")
+	C = &http.Client{
+		Transport: http.DefaultTransport,
+		Timeout:   time.Second * 30,
+	} // allowed to reset
+	ErrRespStatusCodeNotExpected = errors.New("response status code not expected")
 )
 
 func Get(url string, headersKV ...string) (*http.Response, error) {
@@ -136,7 +139,7 @@ func DoRawCtx(ctx context.Context, method string, url string, body []byte, check
 	}
 
 	if checkCode > 0 && checkCode != resp.StatusCode {
-		return resp, ErrRespStatusNotExpected
+		return resp, ErrRespStatusCodeNotExpected
 	}
 
 	return resp, nil

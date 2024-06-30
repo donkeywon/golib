@@ -67,22 +67,28 @@ func (h *HostRateLimiter) Init() error {
 		return err
 	}
 
+	h.rxRL = rate.NewLimiter(0, 0)
+	h.txRL = rate.NewLimiter(0, 0)
+
 	if h.FixedMBps > 0 {
 		h.Info("use fixed limit", "limit", i2MBps(h.FixedMBps))
 		h.setRxTxLimit(float64(h.FixedMBps), float64(h.FixedMBps))
 	} else {
 		h.Info("use nic", "nic", h.Nic)
-		cloudType := multicloud.CloudType()
-		if cloudType != multicloud.CloudTypeUnknown {
+		h.nicSpeedMbps, err = util.GetNicSpeed(h.Nic)
+		if err != nil {
+			h.Error("get nic speed fail", err)
+			h.Info("try get nic speed on cloud")
+
+			cloudType := multicloud.CloudType()
+			if cloudType == multicloud.CloudTypeUnknown {
+				return errs.Errorf("unknown cloud type")
+			}
+
 			h.Info("host on cloud", "type", cloudType)
 			h.nicSpeedMbps, err = multicloud.GetNicSpeed()
 			if err != nil {
 				return errs.Wrapf(err, "get cloud(%s) network nic speed fail", cloudType)
-			}
-		} else {
-			h.nicSpeedMbps, err = util.GetNicSpeed(h.Nic)
-			if err != nil {
-				return errs.Wrap(err, "get nic speed fail")
 			}
 		}
 
@@ -182,6 +188,8 @@ func (h *HostRateLimiter) handleNetDevStats(stats map[string]uint64) {
 		h.setRxTxLimit(h.minMBps, h.minMBps)
 		h.Info("last rx or tx is 0, use min limit",
 			"last_nic_rx_bytes", h.lastNicRxBytes, "last_nic_tx_bytes", h.lastNicTxBytes, "min", i2MBps(h.MinMBps))
+		h.lastNicRxBytes = curNicRxBytes
+		h.lastNicTxBytes = curNicTxBytes
 		return
 	}
 

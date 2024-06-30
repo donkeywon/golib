@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/donkeywon/golib/log"
 	"github.com/stretchr/testify/require"
 )
 
@@ -100,7 +101,7 @@ var rc = &runC{
 }
 
 func init() {
-	DebugInherit(ra)
+	ra.Runner.(*baseRunner).Logger = log.Debug()
 }
 
 func TestSimpleRun(_ *testing.T) {
