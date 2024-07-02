@@ -144,10 +144,15 @@ func (b *Booter) Start() error {
 	signalCh := make(chan os.Signal, 1)
 	signal.Notify(signalCh, signals...)
 
-	sig := <-signalCh
-	b.Info("received signal, exit", "signal", sig.String())
-	go runner.Stop(b)
-	<-b.StopDone()
+	select {
+	case sig := <-signalCh:
+		b.Info("received signal, exit", "signal", sig.String())
+		go runner.Stop(b)
+		<-b.StopDone()
+	case <-b.Stopping():
+		b.Info("exit due to stopping")
+	}
+
 	return nil
 }
 
