@@ -116,6 +116,11 @@ func (b *Booter) Init() error {
 		return err
 	}
 
+	err = b.validateCfg()
+	if err != nil {
+		return err
+	}
+
 	l, err := b.buildLogger()
 	if err != nil {
 		return err
@@ -224,6 +229,16 @@ func (b *Booter) loadCfgFromFile() error {
 
 func (b *Booter) loadCfg() error {
 	return errors.Join(b.loadCfgFromFile(), b.loadCfgFromEnv())
+}
+
+func (b *Booter) validateCfg() error {
+	for s, cfg := range b.cfgMap {
+		err := util.V.Struct(cfg)
+		if err != nil {
+			return errs.Wrapf(err, "invalid svc(%s) cfg", s)
+		}
+	}
+	return nil
 }
 
 func (b *Booter) buildLogger() (*zap.Logger, error) {
