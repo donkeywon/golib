@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/avast/retry-go/v4"
-	"github.com/donkeywon/golib/common"
 	"github.com/donkeywon/golib/errs"
 	"github.com/donkeywon/golib/util/httpc"
 	"github.com/donkeywon/golib/util/oss"
@@ -68,7 +67,7 @@ func NewMultiPartWriter() *MultiPartWriter {
 func (w *MultiPartWriter) Write(p []byte) (int, error) {
 	select {
 	case <-w.closed:
-		return 0, common.ErrWriteToClosedWriter
+		return 0, errs.ErrWriteToClosedWriter
 	default:
 	}
 

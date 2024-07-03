@@ -3,7 +3,7 @@ package task
 import (
 	"time"
 
-	"github.com/donkeywon/golib/common"
+	"github.com/donkeywon/golib/consts"
 	"github.com/donkeywon/golib/errs"
 	"github.com/donkeywon/golib/plugin"
 	"github.com/donkeywon/golib/runner"
@@ -136,7 +136,7 @@ func (t *Task) Start() error {
 	defer t.runDeferSteps()
 	defer t.recoverStepPanic()
 
-	t.Store(common.FieldStartTimeNano, time.Now().Unix())
+	t.Store(consts.FieldStartTimeNano, time.Now().Unix())
 	t.runSteps()
 
 	return nil
@@ -212,7 +212,7 @@ func (t *Task) recoverStepPanic() {
 }
 
 func (t *Task) final() {
-	t.Store(common.FieldStopTimeNano, time.Now().Unix())
+	t.Store(consts.FieldStopTimeNano, time.Now().Unix())
 }
 
 func (t *Task) runSteps() {
@@ -222,9 +222,9 @@ func (t *Task) runSteps() {
 			return
 		default:
 			step := t.Steps()[t.CurStepIdx]
-			step.Store(common.FieldStartTimeNano, time.Now().UnixNano())
+			step.Store(consts.FieldStartTimeNano, time.Now().UnixNano())
 			runner.Start(step)
-			step.Store(common.FieldStopTimeNano, time.Now().UnixNano())
+			step.Store(consts.FieldStopTimeNano, time.Now().UnixNano())
 			for _, hook := range t.stepDoneHooks {
 				hook(t, t.CurStepIdx, step)
 			}
@@ -252,9 +252,9 @@ func (t *Task) runDeferSteps() {
 					}
 				}()
 
-				deferStep.Store(common.FieldStartTimeNano, time.Now().Unix())
+				deferStep.Store(consts.FieldStartTimeNano, time.Now().Unix())
 				runner.Start(deferStep)
-				deferStep.Store(common.FieldStopTimeNano, time.Now().Unix())
+				deferStep.Store(consts.FieldStopTimeNano, time.Now().Unix())
 				for _, hook := range t.deferStepDoneHooks {
 					hook(t, t.CurDeferStepIdx, deferStep)
 				}

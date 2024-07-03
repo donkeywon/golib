@@ -4,7 +4,7 @@ import (
 	"context"
 	"os/exec"
 
-	"github.com/donkeywon/golib/common"
+	"github.com/donkeywon/golib/consts"
 	"github.com/donkeywon/golib/errs"
 	"github.com/donkeywon/golib/plugin"
 	"github.com/donkeywon/golib/util"
@@ -59,12 +59,12 @@ func (c *Cmd) Start() error {
 	c.Info("cmd exit", "result", result)
 
 	if result != nil {
-		c.Store(common.FieldCmdStdout, result.Stdout)
-		c.Store(common.FieldCmdStderr, result.Stderr)
-		c.Store(common.FieldCmdExitCode, result.ExitCode)
-		c.Store(common.FieldStartTimeNano, result.StartTimeNano)
-		c.Store(common.FieldStopTimeNano, result.StopTimeNano)
-		c.Store(common.FieldCmdSignaled, result.Signaled)
+		c.Store(consts.FieldCmdStdout, result.Stdout)
+		c.Store(consts.FieldCmdStderr, result.Stderr)
+		c.Store(consts.FieldCmdExitCode, result.ExitCode)
+		c.Store(consts.FieldStartTimeNano, result.StartTimeNano)
+		c.Store(consts.FieldStopTimeNano, result.StopTimeNano)
+		c.Store(consts.FieldCmdSignaled, result.Signaled)
 	}
 
 	if result != nil && result.Signaled {
