@@ -106,11 +106,11 @@ func (s *StoreRW) Init() error {
 
 	if s.IsReader() {
 		_ = s.NestReader(s.r)
-		s.EnableChecksum(s.StoreCfg.Checksum)
+		s.EnableChecksum(s.StoreCfg.Checksum, "")
 	} else if s.IsWriter() {
 		_ = s.NestWriter(s.w)
 	}
-	s.EnableCalcHash()
+	s.EnableCalcHash("")
 
 	s.WithLoggerFields("store", s.StoreCfg.Type)
 	s.RegisterReadHook(s.hookLogRead)
