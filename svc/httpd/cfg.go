@@ -12,7 +12,7 @@ const (
 )
 
 type Cfg struct {
-	Addr              string        `env:"HTTPD_ADDR"                yaml:"addr"`
+	Addr              string        `env:"HTTPD_ADDR"                validate:"required"      yaml:"addr"`
 	WriteTimeout      time.Duration `env:"HTTPD_WRITE_TIMEOUT"       yaml:"writeTimeout"`
 	ReadTimeout       time.Duration `env:"HTTPD_READ_TIMEOUT"        yaml:"readTimeout"`
 	ReadHeaderTimeout time.Duration `env:"HTTPD_READ_HEADER_TIMEOUT" yaml:"readHeaderTimeout"`
