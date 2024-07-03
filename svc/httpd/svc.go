@@ -83,13 +83,13 @@ func (h *Httpd) logHandler(next http.Handler) http.Handler {
 				h.Error("handle req fail", errs.Errorf("panic: %+v", err),
 					"url", r.RequestURI,
 					"remote", r.RemoteAddr,
-					"cost", fmt.Sprintf("%.6fms", float64(end-start)/1000000))
+					"cost", fmt.Sprintf("%.6fms", float64(end-start)/float64(time.Millisecond)))
 				w.WriteHeader(http.StatusInternalServerError)
 			} else {
 				h.Info("handle req",
 					"url", r.RequestURI,
 					"remote", r.RemoteAddr,
-					"cost", fmt.Sprintf("%.6fms", float64(end-start)/1000000))
+					"cost", fmt.Sprintf("%.6fms", float64(end-start)/float64(time.Millisecond)))
 			}
 		}()
 
