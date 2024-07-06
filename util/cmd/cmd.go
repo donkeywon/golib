@@ -26,40 +26,78 @@ type Result struct {
 	StartTimeNano int64    `json:"startTimeNano"`
 	StopTimeNano  int64    `json:"stopTimeNano"`
 	Signaled      bool     `json:"signaled"`
+
+	stdoutBuf *bufferpool.Buffer
+	stderrBuf *bufferpool.Buffer
 }
 
 func Run(command ...string) (*Result, error) {
 	cfg := &Cfg{
 		Command: command,
 	}
-	return RunRaw(context.Background(), nil, cfg)
+	return RunRaw(context.Background(), cfg)
 }
 
-func RunRaw(ctx context.Context, beforeRun func(cmd *exec.Cmd), cfg *Cfg) (*Result, error) {
+func RunRaw(ctx context.Context, cfg *Cfg, beforeRun ...func(cmd *exec.Cmd)) (*Result, error) {
 	cmd, err := Create(cfg)
 	if err != nil {
 		return nil, err
 	}
-	return RunCmd(ctx, beforeRun, cmd)
+	return RunCmd(ctx, cmd, beforeRun...)
 }
 
-func RunCmd(ctx context.Context, beforeRun func(cmd *exec.Cmd), cmd *exec.Cmd) (*Result, error) {
-	stderrBuf := bufferpool.GetBuffer()
-	defer stderrBuf.Free()
-	stdoutBuf := bufferpool.GetBuffer()
-	defer stdoutBuf.Free()
+func RunCmd(ctx context.Context, cmd *exec.Cmd, beforeRun ...func(cmd *exec.Cmd)) (*Result, error) {
+	r, err := StartCmd(cmd, beforeRun...)
+	return WaitCmd(ctx, cmd, r, err)
+}
 
-	cmd.Stderr = stderrBuf
-	cmd.Stdout = stdoutBuf
-
-	if beforeRun != nil {
-		beforeRun(cmd)
+// StartCmd start a command
+// if error is nil, you can get pid from Result.Pid.
+// Must call WaitCmd after StartCmd whether error is nil or not
+func StartCmd(cmd *exec.Cmd, beforeRun ...func(cmd *exec.Cmd)) (*Result, error) {
+	if len(beforeRun) > 0 {
+		for _, f := range beforeRun {
+			f(cmd)
+		}
 	}
 
-	startTSNano := time.Now().UnixNano()
-	var stopTSNano int64
+	r := &Result{}
+
+	if cmd.Stdout == nil {
+		r.stdoutBuf = bufferpool.GetBuffer()
+		cmd.Stdout = r.stdoutBuf
+	}
+	if cmd.Stderr == nil {
+		r.stderrBuf = bufferpool.GetBuffer()
+		cmd.Stderr = r.stderrBuf
+	}
+	r.StartTimeNano = time.Now().UnixNano()
 	err := cmd.Start()
 	if err == nil {
+		r.Pid = cmd.Process.Pid
+	}
+
+	return r, err
+}
+
+// WaitCmd wait command exit
+// Must called after StartCmd
+func WaitCmd(ctx context.Context, cmd *exec.Cmd, startResult *Result, startErr error) (*Result, error) {
+	if startResult.stdoutBuf != nil {
+		defer func() {
+			startResult.stdoutBuf.Free()
+			startResult.stdoutBuf = nil
+		}()
+	}
+	if startResult.stderrBuf != nil {
+		defer func() {
+			startResult.stderrBuf.Free()
+			startResult.stderrBuf = nil
+		}()
+	}
+
+	var waitErr error
+	if startErr == nil {
 		cmdDone := make(chan struct{})
 		go func() {
 			select {
@@ -69,35 +107,27 @@ func RunCmd(ctx context.Context, beforeRun func(cmd *exec.Cmd), cmd *exec.Cmd) (
 				return
 			}
 		}()
-		err = cmd.Wait()
-		stopTSNano = time.Now().UnixNano()
+		waitErr = cmd.Wait()
+		startResult.StopTimeNano = time.Now().UnixNano()
 		close(cmdDone)
 	}
 
-	pid := 0
+	startResult.Signaled = IsSignaled(waitErr)
 	if cmd.ProcessState != nil {
-		pid = cmd.ProcessState.Pid()
+		startResult.Pid = cmd.ProcessState.Pid()
+		startResult.ExitCode = cmd.ProcessState.ExitCode()
 	}
 
-	signaled := IsSignaled(err)
-	exitCode := cmd.ProcessState.ExitCode()
-
-	stderr := stderrBuf.Lines()
-	stdout := stdoutBuf.Lines()
-
-	r := &Result{
-		Stdout:        stdout,
-		Stderr:        stderr,
-		ExitCode:      exitCode,
-		Pid:           pid,
-		StartTimeNano: startTSNano,
-		StopTimeNano:  stopTSNano,
-		Signaled:      signaled,
+	if startResult.stdoutBuf != nil {
+		startResult.Stdout = startResult.stdoutBuf.Lines()
 	}
-	return r, err
+	if startResult.stderrBuf != nil {
+		startResult.Stderr = startResult.stderrBuf.Lines()
+	}
+	return startResult, waitErr
 }
 
-// err is Cmd.Wait() or Cmd.Run() result error.
+// IsSignaled err is Cmd.Wait() or Cmd.Run() result error.
 func IsSignaled(err error) bool {
 	if err == nil {
 		return false

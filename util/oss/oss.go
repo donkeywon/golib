@@ -109,9 +109,11 @@ func Head(ctx context.Context, url string, ak string, sk string, region string) 
 		return nil, err
 	}
 
-	err = Sign(req, ak, sk, region)
-	if err != nil {
-		return nil, err
+	if ak != "" || sk != "" {
+		err = Sign(req, ak, sk, region)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	resp, err := httpc.Do(req)
