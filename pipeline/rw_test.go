@@ -30,7 +30,7 @@ type mockReader struct {
 
 func (m *mockReader) Read(b []byte) (int, error) {
 	var nr int
-	for i := range len(b) {
+	for i := 0; i < len(b); i++ {
 		if m.limit == 0 {
 			return nr, io.EOF
 		}

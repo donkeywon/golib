@@ -21,7 +21,7 @@ func (ra *runA) Init() error {
 func (ra *runA) Start() error {
 	t := time.NewTicker(time.Second)
 	defer t.Stop()
-	for i := range 5 {
+	for i := 0; i < 5; i++ {
 		select {
 		case <-ra.Stopping():
 			return nil
@@ -47,7 +47,7 @@ func (rb *runB) Init() error {
 func (rb *runB) Start() error {
 	t := time.NewTicker(time.Second)
 	defer t.Stop()
-	for i := range 5 {
+	for i := 0; i < 5; i++ {
 		select {
 		case <-rb.Stopping():
 			return nil
@@ -73,7 +73,7 @@ func (rc *runC) Init() error {
 func (rc *runC) Start() error {
 	t := time.NewTicker(time.Second)
 	defer t.Stop()
-	for i := range 5 {
+	for i := 0; i < 5; i++ {
 		select {
 		case <-rc.Stopping():
 			return nil

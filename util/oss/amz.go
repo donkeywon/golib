@@ -171,7 +171,7 @@ func buildCanonicalString(method, uri, query, canonicalHeaders, signedHeaders st
 // EscapePath escapes part of a URL path in Amazon style.
 func escapePath(path string, encodeSep bool) string {
 	var buf bytes.Buffer
-	for i := range len(path) {
+	for i := 0; i < len(path); i++ {
 		c := path[i]
 		if noEscape[c] || (c == '/' && !encodeSep) {
 			buf.WriteByte(c)
@@ -224,7 +224,7 @@ func buildCanonicalHeaders(host string, header http.Header, length int64) (
 	var canonicalHeaders strings.Builder
 	n := len(headers)
 	const colon = ':'
-	for i := range n {
+	for i := 0; i < n; i++ {
 		if headers[i] == hostHeader {
 			canonicalHeaders.WriteString(hostHeader)
 			canonicalHeaders.WriteRune(colon)
@@ -294,7 +294,7 @@ func stripExcessSpaces(str string) string {
 	}
 
 	// Trim leading spaces
-	for k = range j {
+	for k = 0; k < j; k++ {
 		if str[k] != ' ' {
 			break
 		}
