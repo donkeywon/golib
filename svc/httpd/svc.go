@@ -15,7 +15,7 @@ import (
 const SvcTypeHttpd boot.SvcType = "httpd"
 
 var _h = &Httpd{
-	Runner: runner.NewBase("httpd"),
+	Runner: runner.NewBase(string(SvcTypeHttpd)),
 	mux:    http.NewServeMux(),
 }
 
