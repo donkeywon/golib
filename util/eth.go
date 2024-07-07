@@ -3,7 +3,6 @@ package util
 import (
 	"fmt"
 	"os"
-	"slices"
 	"strconv"
 	"strings"
 
@@ -48,7 +47,7 @@ func NetDevStats(nic ...string) (map[string]map[string]uint64, error) {
 	metrics := make(map[string]map[string]uint64)
 
 	for _, stats := range netDev {
-		if !slices.Contains(nic, stats.Name) {
+		if !Contains(nic, stats.Name) {
 			continue
 		}
 

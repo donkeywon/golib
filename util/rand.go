@@ -1,13 +1,11 @@
 package util
 
-import (
-	"math/rand/v2"
-)
+import "math/rand"
 
-func RandInt(min, max int) int {
+func RandInt(min int, max int) int {
 	if max <= min {
 		return min
 	}
 
-	return min + rand.IntN(max-min)
+	return min + rand.Intn(max-min)
 }
