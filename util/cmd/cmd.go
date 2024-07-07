@@ -38,26 +38,24 @@ func Run(command ...string) (*Result, error) {
 	return RunRaw(context.Background(), cfg)
 }
 
-func RunRaw(ctx context.Context, cfg *Cfg, beforeRun ...func(cmd *exec.Cmd)) (*Result, error) {
-	cmd, err := Create(cfg)
-	if err != nil {
-		return nil, err
-	}
-	return RunCmd(ctx, cmd, beforeRun...)
+func RunRaw(ctx context.Context, cfg *Cfg, beforeRun ...func(cmd *exec.Cmd) error) (*Result, error) {
+	cmd := exec.CommandContext(ctx, cfg.Command[0], cfg.Command[1:]...)
+	return RunCmd(ctx, cmd, cfg, beforeRun...)
 }
 
-func RunCmd(ctx context.Context, cmd *exec.Cmd, beforeRun ...func(cmd *exec.Cmd)) (*Result, error) {
-	r, err := StartCmd(cmd, beforeRun...)
+func RunCmd(ctx context.Context, cmd *exec.Cmd, cfg *Cfg, beforeRun ...func(cmd *exec.Cmd) error) (*Result, error) {
+	r, err := StartCmd(cmd, append(beforeRunFromCfg(cfg), beforeRun...)...)
 	return WaitCmd(ctx, cmd, r, err)
 }
 
 // StartCmd start a command
 // if error is nil, you can get pid from Result.Pid.
 // Must call WaitCmd after StartCmd whether error is nil or not
-func StartCmd(cmd *exec.Cmd, beforeRun ...func(cmd *exec.Cmd)) (*Result, error) {
+func StartCmd(cmd *exec.Cmd, beforeRun ...func(cmd *exec.Cmd) error) (*Result, error) {
 	if len(beforeRun) > 0 {
 		for _, f := range beforeRun {
-			f(cmd)
+			err := f(cmd)
+			return nil, err
 		}
 	}
 
@@ -145,6 +143,9 @@ func IsSignaled(err error) bool {
 }
 
 func Stop(cmd *exec.Cmd) error {
+	if cmd == nil {
+		return nil
+	}
 	if cmd.Process == nil {
 		return nil
 	}
@@ -153,6 +154,9 @@ func Stop(cmd *exec.Cmd) error {
 }
 
 func MustStop(ctx context.Context, cmd *exec.Cmd) error {
+	if cmd == nil {
+		return nil
+	}
 	if cmd.Process == nil {
 		return nil
 	}

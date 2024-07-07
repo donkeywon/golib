@@ -47,7 +47,7 @@ func (c *CmdRW) Init() error {
 func (c *CmdRW) Start() error {
 	c.cmdCtx, c.cancel = context.WithCancel(c.Ctx())
 
-	result, err := cmd.RunRaw(c.cmdCtx, c.Cfg, func(cmd *exec.Cmd) {
+	result, err := cmd.RunRaw(c.cmdCtx, c.Cfg, func(cmd *exec.Cmd) error {
 		if c.Writer() != nil {
 			cmd.Stdout = c.Writer()
 		}
@@ -55,6 +55,7 @@ func (c *CmdRW) Start() error {
 		if c.Reader() != nil {
 			cmd.Stdin = c.Reader()
 		}
+		return nil
 	})
 	c.Info("cmd exit", "result", result)
 

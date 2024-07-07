@@ -7,25 +7,30 @@ import (
 	"github.com/donkeywon/golib/util"
 )
 
-func Create(cfg *Cfg) (*exec.Cmd, error) {
-	err := util.V.Struct(cfg)
-	if err != nil {
-		return nil, err
+func beforeRunFromCfg(cfg *Cfg) []func(cmd *exec.Cmd) error {
+	if cfg == nil {
+		return nil
 	}
-	cmd := exec.Command(cfg.Command[0], cfg.Command[1:]...)
+	var beforeRun []func(cmd *exec.Cmd) error
 	if len(cfg.Env) > 0 {
-		for k, v := range cfg.Env {
-			cmd.Env = append(cmd.Env, k+"="+v)
-		}
+		beforeRun = append(beforeRun, func(cmd *exec.Cmd) error {
+			for k, v := range cfg.Env {
+				cmd.Env = append(cmd.Env, k+"="+v)
+			}
+			return nil
+		})
 	}
 	if cfg.WorkingDir != "" {
-		if !util.DirExist(cfg.WorkingDir) {
-			return nil, errs.Errorf("working dir not exists: %s", cfg.WorkingDir)
-		}
-		cmd.Dir = cfg.WorkingDir
+		beforeRun = append(beforeRun, func(cmd *exec.Cmd) error {
+			if !util.DirExist(cfg.WorkingDir) {
+				return errs.Errorf("working dir not exists: %s", cfg.WorkingDir)
+			}
+			cmd.Dir = cfg.WorkingDir
+			return nil
+		})
 	}
 	if cfg.RunAsUser != "" {
 		// not support
 	}
-	return cmd, nil
+	return beforeRun
 }
