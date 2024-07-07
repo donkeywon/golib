@@ -5,7 +5,7 @@ go 1.18
 require (
 	github.com/avast/retry-go/v4 v4.6.0
 	github.com/bytedance/sonic v1.11.9
-	github.com/caarlos0/env/v6 v6.10.1
+	github.com/caarlos0/env/v11 v11.1.0
 	github.com/fsnotify/fsnotify v1.7.0
 	github.com/go-playground/validator/v10 v10.22.0
 	github.com/goccy/go-yaml v1.11.3
