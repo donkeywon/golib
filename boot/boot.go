@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"slices"
 	"time"
 
 	"github.com/caarlos0/env/v11"
@@ -80,7 +81,7 @@ var (
 
 // RegisterSvc register a Svc creator and its config creator.
 func RegisterSvc(typ SvcType, creator plugin.Creator, cfgCreator plugin.CfgCreator) {
-	if util.Contains(_svcs, typ) {
+	if slices.Contains(_svcs, typ) {
 		return
 	}
 	plugin.Register(typ, creator)
