@@ -21,6 +21,7 @@ type Runner interface {
 	SetName(string)
 	Ctx() context.Context
 	SetCtx(context.Context)
+	Cancel()
 
 	Started() <-chan struct{}
 	Stopping() <-chan struct{}
@@ -94,6 +95,7 @@ func Start(r Runner) {
 		<-r.StopDone()
 		r.Info("done")
 		r.markDone()
+		r.Cancel()
 		if r.Parent() != nil {
 			r.Parent().AppendError(r.Parent().OnChildDone(r))
 		}
@@ -153,20 +155,16 @@ func stop(r Runner) {
 		return
 	}
 
-	select {
-	case <-r.Stopping():
+	if !r.markStopping() {
 		r.Info("already stopping")
 		return
-	default:
 	}
 
-	if r.markStopping() {
-		r.Info("stopping")
-		safeStop(r)
-		r.Info("stop done")
-		r.markStopDone()
-		<-r.Done()
-	}
+	r.Info("stopping")
+	safeStop(r)
+	r.Info("stop done")
+	r.markStopDone()
+	<-r.Done()
 }
 
 func safeStop(r Runner) {
@@ -182,6 +180,7 @@ func safeStop(r Runner) {
 type baseRunner struct {
 	kvs
 	ctx          context.Context
+	cancel       context.CancelFunc
 	err          error
 	parent       Runner
 	started      chan struct{}
@@ -196,11 +195,12 @@ type baseRunner struct {
 	doneOnce     sync.Once
 	stopDoneOnce sync.Once
 	stoppingOnce sync.Once
+	cancelOnce   sync.Once
 	errMu        sync.Mutex
 }
 
 func NewBase(name string) Runner {
-	return &baseRunner{
+	br := &baseRunner{
 		Logger:      zap.NewNop(),
 		name:        name,
 		ctx:         context.Background(),
@@ -208,9 +208,10 @@ func NewBase(name string) Runner {
 		stopping:    make(chan struct{}),
 		stopDone:    make(chan struct{}),
 		done:        make(chan struct{}),
-		childrenMap: make(map[string]Runner, 0),
+		childrenMap: make(map[string]Runner),
 		kvs:         newSimpleInMemKvs(),
 	}
+	return br
 }
 
 func (br *baseRunner) SetName(n string) {
@@ -238,10 +239,16 @@ func (br *baseRunner) Init() error {
 		br.done = make(chan struct{})
 	}
 	if br.childrenMap == nil {
-		br.childrenMap = make(map[string]Runner, 0)
+		br.childrenMap = make(map[string]Runner)
 	}
 	if br.kvs == nil {
 		br.kvs = newSimpleInMemKvs()
+	}
+	if br.Ctx() == nil {
+		br.SetCtx(context.Background())
+	}
+	if br.cancel == nil {
+		br.ctx, br.cancel = context.WithCancel(br.Ctx())
 	}
 	return nil
 }
@@ -256,7 +263,13 @@ func (br *baseRunner) Stop() error {
 }
 
 func (br *baseRunner) SetCtx(ctx context.Context) {
-	br.ctx = ctx
+	br.ctx, br.cancel = context.WithCancel(ctx)
+}
+
+func (br *baseRunner) Cancel() {
+	br.cancelOnce.Do(func() {
+		br.cancel()
+	})
 }
 
 func (br *baseRunner) Ctx() context.Context {
