@@ -31,3 +31,20 @@ func ReflectSet(i interface{}, f interface{}) bool {
 	iValue.Elem().Field(idx).Set(reflect.ValueOf(f))
 	return true
 }
+
+func IsStructPointer(v interface{}) bool {
+	rv := reflect.ValueOf(v)
+	if rv.Kind() != reflect.Pointer {
+		return false
+	}
+
+	return rv.Elem().Kind() == reflect.Struct
+}
+
+func IsPointer(v interface{}) bool {
+	return reflect.ValueOf(v).Kind() == reflect.Pointer
+}
+
+func IsStruct(v interface{}) bool {
+	return reflect.ValueOf(v).Kind() == reflect.Struct
+}
