@@ -29,6 +29,7 @@ type Result struct {
 
 	stdoutBuf *bufferpool.Buffer
 	stderrBuf *bufferpool.Buffer
+	err       error
 }
 
 func Run(command ...string) (*Result, error) {
@@ -44,22 +45,23 @@ func RunRaw(ctx context.Context, cfg *Cfg, beforeRun ...func(cmd *exec.Cmd) erro
 }
 
 func RunCmd(ctx context.Context, cmd *exec.Cmd, cfg *Cfg, beforeRun ...func(cmd *exec.Cmd) error) (*Result, error) {
-	r, err := StartCmd(cmd, append(beforeRunFromCfg(cfg), beforeRun...)...)
-	return WaitCmd(ctx, cmd, r, err)
+	return WaitCmd(ctx, cmd, StartCmd(cmd, append(beforeRunFromCfg(cfg), beforeRun...)...))
 }
 
 // StartCmd start a command
 // if error is nil, you can get pid from Result.Pid.
 // Must call WaitCmd after StartCmd whether error is nil or not
-func StartCmd(cmd *exec.Cmd, beforeRun ...func(cmd *exec.Cmd) error) (*Result, error) {
+func StartCmd(cmd *exec.Cmd, beforeRun ...func(cmd *exec.Cmd) error) *Result {
+	r := &Result{}
 	if len(beforeRun) > 0 {
 		for _, f := range beforeRun {
 			err := f(cmd)
-			return nil, err
+			if err != nil {
+				r.err = err
+				return r
+			}
 		}
 	}
-
-	r := &Result{}
 
 	if cmd.Stdout == nil {
 		r.stdoutBuf = bufferpool.GetBuffer()
@@ -71,16 +73,17 @@ func StartCmd(cmd *exec.Cmd, beforeRun ...func(cmd *exec.Cmd) error) (*Result, e
 	}
 	r.StartTimeNano = time.Now().UnixNano()
 	err := cmd.Start()
+	r.err = err
 	if err == nil {
 		r.Pid = cmd.Process.Pid
 	}
 
-	return r, err
+	return r
 }
 
 // WaitCmd wait command exit
 // Must called after StartCmd
-func WaitCmd(ctx context.Context, cmd *exec.Cmd, startResult *Result, startErr error) (*Result, error) {
+func WaitCmd(ctx context.Context, cmd *exec.Cmd, startResult *Result) (*Result, error) {
 	if startResult.stdoutBuf != nil {
 		defer func() {
 			startResult.stdoutBuf.Free()
@@ -95,7 +98,7 @@ func WaitCmd(ctx context.Context, cmd *exec.Cmd, startResult *Result, startErr e
 	}
 
 	var waitErr error
-	if startErr == nil {
+	if startResult.err == nil {
 		cmdDone := make(chan struct{})
 		go func() {
 			select {
@@ -108,6 +111,8 @@ func WaitCmd(ctx context.Context, cmd *exec.Cmd, startResult *Result, startErr e
 		waitErr = cmd.Wait()
 		startResult.StopTimeNano = time.Now().UnixNano()
 		close(cmdDone)
+	} else {
+		waitErr = startResult.err
 	}
 
 	startResult.Signaled = IsSignaled(waitErr)

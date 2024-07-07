@@ -1,9 +1,6 @@
 package task
 
 import (
-	"context"
-	"os/exec"
-
 	"github.com/donkeywon/golib/consts"
 	"github.com/donkeywon/golib/errs"
 	"github.com/donkeywon/golib/plugin"
@@ -25,8 +22,6 @@ func NewCmdCfg() *cmd.Cfg {
 type Cmd struct {
 	Step
 	*cmd.Cfg
-
-	cmd *exec.Cmd
 }
 
 func NewCmdStep() *Cmd {
@@ -50,9 +45,7 @@ func (c *Cmd) Init() error {
 func (c *Cmd) Start() error {
 	var err error
 
-	c.cmd = exec.Command(c.Cfg.Command[0], c.Cfg.Command[1:]...)
-
-	result, err := cmd.RunCmd(c.Ctx(), c.cmd, c.Cfg)
+	result, err := cmd.RunRaw(c.Ctx(), c.Cfg)
 	c.Info("cmd exit", "result", result)
 
 	if result != nil {
@@ -81,7 +74,8 @@ func (c *Cmd) Start() error {
 }
 
 func (c *Cmd) Stop() error {
-	return cmd.MustStop(context.Background(), c.cmd)
+	c.Cancel()
+	return nil
 }
 
 func (c *Cmd) Type() interface{} {
