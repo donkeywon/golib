@@ -91,9 +91,6 @@ func RegisterSvc(typ SvcType, creator plugin.Creator, cfgCreator plugin.CfgCreat
 
 // RegisterCfg register additional config, cfg type must be pointer.
 func RegisterCfg(name string, cfg interface{}) {
-	if _, exists := _cfgMap[name]; exists {
-		return
-	}
 	_cfgMap[name] = cfg
 }
 
