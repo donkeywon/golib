@@ -25,7 +25,7 @@ type Promd struct {
 }
 
 var _p = &Promd{
-	Runner: runner.NewBase(string(SvcTypePromd)),
+	Runner: runner.Create(string(SvcTypePromd)),
 	reg:    prometheus.NewRegistry(),
 }
 

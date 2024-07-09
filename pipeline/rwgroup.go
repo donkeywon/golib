@@ -69,7 +69,7 @@ type RWGroup struct {
 
 func NewRWGroup() *RWGroup {
 	return &RWGroup{
-		Runner:     runner.NewBase("rwg"),
+		Runner:     runner.Create("rwg"),
 		RWGroupCfg: NewRWGroupCfg(),
 	}
 }
@@ -166,7 +166,7 @@ func (g *RWGroup) FirstReader() RW {
 
 func (g *RWGroup) createRW(rwCfg *RWCfg) RW {
 	rw := Create(rwCfg.Role, rwCfg.Type, rwCfg.Cfg, rwCfg.CommonCfg)
-	runner.Inherit(rw, g)
+	rw.Inherit(g)
 	return rw
 }
 

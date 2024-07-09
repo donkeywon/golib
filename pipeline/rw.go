@@ -163,7 +163,7 @@ type BaseRW struct {
 
 func NewBaseRW(name string) *BaseRW {
 	return &BaseRW{
-		Runner: runner.NewBase(name),
+		Runner: runner.Create(name),
 		closed: make(chan struct{}),
 	}
 }

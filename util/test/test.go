@@ -13,7 +13,7 @@ var (
 	debugRunner = &struct {
 		runner.Runner
 	}{
-		Runner: runner.NewBase(""),
+		Runner: runner.Create(""),
 	}
 )
 

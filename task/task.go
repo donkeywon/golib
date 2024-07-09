@@ -87,7 +87,7 @@ type Task struct {
 
 func New() *Task {
 	return &Task{
-		Runner: runner.NewBase("task"),
+		Runner: runner.Create("task"),
 		Cfg:    NewCfg(),
 	}
 }
@@ -101,7 +101,7 @@ func (t *Task) Init() error {
 	for i, cfg := range t.Cfg.Steps {
 		step := plugin.CreateWithCfg(cfg.Type, cfg.Cfg).(Step)
 		step.SetTask(t)
-		runner.Inherit(step, t)
+		step.Inherit(t)
 		step.WithLoggerFields("step", i, "step_type", step.Type())
 		t.steps = append(t.steps, step)
 	}
@@ -109,7 +109,7 @@ func (t *Task) Init() error {
 	for i, cfg := range t.Cfg.DeferSteps {
 		step := plugin.CreateWithCfg(cfg.Type, cfg.Cfg).(Step)
 		step.SetTask(t)
-		runner.Inherit(step, t)
+		step.Inherit(t)
 		step.WithLoggerFields("defer_step", i, "defer_step_type", step.Type())
 		t.deferSteps = append(t.deferSteps, step)
 	}

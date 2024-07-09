@@ -52,7 +52,7 @@ type Pipeline struct {
 
 func New() *Pipeline {
 	return &Pipeline{
-		Runner: runner.NewBase("pipeline"),
+		Runner: runner.Create("pipeline"),
 		Cfg:    NewCfg(),
 	}
 }
@@ -73,7 +73,7 @@ func (p *Pipeline) Init() error {
 	p.rwGroups = createRWGroups(rwCfgGroups)
 
 	for i, rwGroup := range p.rwGroups {
-		runner.Inherit(rwGroup, p)
+		rwGroup.Inherit(p)
 		err = runner.Init(rwGroup)
 		if err != nil {
 			return errs.Wrapf(err, "init rw group fail: %d", i)

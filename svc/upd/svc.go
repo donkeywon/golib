@@ -20,7 +20,7 @@ import (
 const SvcTypeUpd boot.SvcType = "upd"
 
 var _u = &Upd{
-	Runner: runner.NewBase(string(SvcTypeUpd)),
+	Runner: runner.Create(string(SvcTypeUpd)),
 }
 
 type Upd struct {
@@ -148,7 +148,7 @@ func downloadPackage(downloadDir string, filename string, ratelimitN int, storeC
 
 	p := pipeline.New()
 	p.Cfg = cfg
-	runner.Inherit(p, _u)
+	p.Inherit(_u)
 	err := runner.Init(p)
 	if err != nil {
 		return errs.Wrap(err, "init download pipeline fail")

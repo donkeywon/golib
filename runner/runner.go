@@ -10,6 +10,8 @@ import (
 	"go.uber.org/zap"
 )
 
+var Create = NewBase // allow to override
+
 type Runner interface {
 	kvs
 
@@ -22,6 +24,8 @@ type Runner interface {
 	Ctx() context.Context
 	SetCtx(context.Context)
 	Cancel()
+
+	Inherit(Runner)
 
 	Started() <-chan struct{}
 	Stopping() <-chan struct{}
@@ -54,11 +58,6 @@ type Runner interface {
 	Error(msg string, err error, kvs ...any)
 }
 
-func Inherit(to Runner, from Runner) {
-	to.WithLoggerFrom(from)
-	to.SetCtx(from.Ctx())
-}
-
 func Init(r Runner) error {
 	var err error
 	r.Info("init")
@@ -71,7 +70,7 @@ func Init(r Runner) error {
 	}
 	r.Info("init done")
 	for _, child := range r.Children() {
-		Inherit(child, r)
+		child.Inherit(r)
 		child.SetParent(r)
 		err = Init(child)
 		if err != nil {
@@ -268,6 +267,11 @@ func (br *baseRunner) Start() error {
 
 func (br *baseRunner) Stop() error {
 	return nil
+}
+
+func (br *baseRunner) Inherit(r Runner) {
+	br.WithLoggerFrom(r)
+	br.SetCtx(r.Ctx())
 }
 
 func (br *baseRunner) SetCtx(ctx context.Context) {
