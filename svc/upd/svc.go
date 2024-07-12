@@ -1,9 +1,9 @@
 package upd
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -27,7 +27,7 @@ type Upd struct {
 	runner.Runner
 	*Cfg
 
-	updating atomic.Bool
+	upgrading atomic.Bool
 }
 
 func New() *Upd {
@@ -42,12 +42,12 @@ func (u *Upd) GetCfg() interface{} {
 	return u.Cfg
 }
 
-func (u *Upd) markUpdating() bool {
-	return u.updating.CompareAndSwap(false, true)
+func (u *Upd) markUpgrading() bool {
+	return u.upgrading.CompareAndSwap(false, true)
 }
 
-func (u *Upd) unmarkUpdating() {
-	u.updating.Store(false)
+func (u *Upd) unmarkUpgrading() {
+	u.upgrading.Store(false)
 }
 
 func (u *Upd) Upgrade(vi *VerInfo) {
@@ -60,10 +60,10 @@ func (u *Upd) Upgrade(vi *VerInfo) {
 }
 
 func (u *Upd) upgrade(vi *VerInfo) error {
-	if !u.markUpdating() {
-		return errs.New("already updating")
+	if !u.markUpgrading() {
+		return errs.New("already upgrading")
 	}
-	defer u.unmarkUpdating()
+	defer u.unmarkUpgrading()
 
 	u.Info("start upgrade", "cur_ver", buildinfo.Version, "new_ver", vi.Ver)
 
@@ -83,12 +83,15 @@ func (u *Upd) upgrade(vi *VerInfo) error {
 	}
 	u.Info("download package done", "cfg", u.Cfg, "ver_info", vi)
 
-	tmpExtractDir := filepath.Join(u.DownloadDir, "upgrade-svc-tmp")
-	stdout, stderr, err := extractPackage(downloadPath, tmpExtractDir)
+	extractDir := strings.TrimSpace(u.Cfg.ExtractDir)
+	if !strings.HasPrefix(extractDir, "/") {
+		extractDir = filepath.Join(u.DownloadDir, extractDir)
+	}
+	stdout, stderr, err := extractPackage(downloadPath, extractDir)
 	if err != nil {
 		return errs.Wrapf(err, "extract package fail, stdout: %v, stderr: %v", stdout, stderr)
 	}
-	u.Info("extract package done", "extract_dir", tmpExtractDir, "stdout", stdout, "stderr", stderr)
+	u.Info("extract package done", "extract_dir", extractDir, "stdout", stdout, "stderr", stderr)
 
 	stopped := make(chan struct{})
 	go func() {
@@ -108,11 +111,35 @@ func (u *Upd) upgrade(vi *VerInfo) error {
 		u.Info("all svc closed")
 	}
 
-	res, err := cmd.Run("bash", fmt.Sprintf("%s/bin/upgrade.sh", tmpExtractDir))
-	u.Info("exec upgrade.sh", "result", res, "err", err)
+	upgradeDeployScriptPath := strings.TrimSpace(u.Cfg.UpgradeDeployScriptPath)
+	if !strings.HasPrefix(upgradeDeployScriptPath, "/") {
+		upgradeDeployScriptPath = filepath.Join(extractDir, upgradeDeployScriptPath)
+	}
+	if !util.FileExist(upgradeDeployScriptPath) {
+		return errs.Errorf("upgrade deploy script not exists: %s", upgradeDeployScriptPath)
+	}
+	res, err := cmd.Run("bash", upgradeDeployScriptPath)
+	u.Info("exec upgrade deploy script", "result", res, "err", err)
 	if res.ExitCode != 0 || err != nil {
 		os.Exit(1)
 	}
+
+	upgradeStartScriptPath := strings.TrimSpace(u.Cfg.UpgradeStartScriptPath)
+	if upgradeStartScriptPath != "" {
+		if !strings.HasPrefix(upgradeStartScriptPath, "/") {
+			upgradeStartScriptPath = filepath.Join(extractDir, upgradeStartScriptPath)
+		}
+		if !util.FileExist(upgradeStartScriptPath) {
+			return errs.Errorf("upgrade start script not exists: %s", upgradeStartScriptPath)
+		}
+
+		res, err = cmd.Run("bash", upgradeStartScriptPath)
+		u.Info("exec upgrade start script", "result", res, "err", err)
+		if res.ExitCode != 0 || err != nil {
+			os.Exit(1)
+		}
+	}
+
 	os.Exit(0)
 	return nil
 }
@@ -159,6 +186,9 @@ func downloadPackage(downloadDir string, filename string, ratelimitN int, storeC
 }
 
 func extractPackage(filepath string, dstDir string) ([]string, []string, error) {
+	if !util.DirExist(dstDir) {
+		return nil, nil, errs.Errorf("extract dst dir not exists: %s", dstDir)
+	}
 	res, err := cmd.Run("tar", "xf", filepath, "-C", dstDir)
 	if res != nil {
 		return res.Stdout, res.Stderr, err
