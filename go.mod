@@ -3,6 +3,7 @@ module github.com/donkeywon/golib
 go 1.22
 
 require (
+	github.com/alitto/pond v1.9.1
 	github.com/avast/retry-go/v4 v4.6.0
 	github.com/bytedance/sonic v1.11.9
 	github.com/caarlos0/env/v11 v11.1.0
