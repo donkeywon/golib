@@ -5,9 +5,15 @@ import (
 	"time"
 
 	"github.com/bytedance/sonic/encoder"
+	"github.com/donkeywon/golib/log/sink"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
+
+func init() {
+	// lumberjack:///var/log/xxx.log?{"maxsize":100,"maxage":30,"maxbackups":30,"compress":true,"localtime",false}
+	_ = zap.RegisterSink("lumberjack", sink.NewLumberJackSinkFromURL)
+}
 
 const (
 	JSONEncoding    = "json"
