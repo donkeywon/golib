@@ -1,9 +1,9 @@
 package sink
 
 import (
+	"encoding/json"
 	"net/url"
 
-	"github.com/bytedance/sonic"
 	"github.com/donkeywon/golib/errs"
 	"go.uber.org/zap"
 	"gopkg.in/natefinch/lumberjack.v2"
@@ -42,7 +42,7 @@ func pathToLogger(path string, cfg string) (*lumberjack.Logger, error) {
 		LocalTime:  true,
 		Compress:   DefaultCompress,
 	}
-	err := sonic.Unmarshal([]byte(cfg), l)
+	err := json.Unmarshal([]byte(cfg), l)
 	l.Filename = path
 	return l, err
 }

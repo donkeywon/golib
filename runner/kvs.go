@@ -5,8 +5,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/bytedance/sonic"
 	"github.com/donkeywon/golib/util"
+	"github.com/donkeywon/golib/util/json"
 )
 
 type kvs interface {
@@ -245,7 +245,7 @@ func (b *simpleInMemKvs) LoadTo(k string, to any) error {
 		return nil
 	}
 
-	return sonic.Unmarshal(util.String2Bytes(v), to)
+	return json.Unmarshal(util.String2Bytes(v), to)
 }
 
 func (b *simpleInMemKvs) Collect() map[string]any {
@@ -365,7 +365,7 @@ func convertToString(v any) string {
 	case *time.Duration:
 		vs = vv.String()
 	default:
-		vs, _ = sonic.MarshalString(vv)
+		vs, _ = json.MarshalString(vv)
 	}
 
 	return vs

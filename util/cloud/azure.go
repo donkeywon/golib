@@ -1,4 +1,4 @@
-package multicloud
+package cloud
 
 import "github.com/donkeywon/golib/util/httpc"
 

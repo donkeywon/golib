@@ -10,7 +10,7 @@ import (
 	"github.com/donkeywon/golib/plugin"
 	"github.com/donkeywon/golib/runner"
 	"github.com/donkeywon/golib/util"
-	"github.com/donkeywon/golib/util/multicloud"
+	"github.com/donkeywon/golib/util/cloud"
 	"golang.org/x/time/rate"
 )
 
@@ -80,13 +80,13 @@ func (h *HostRateLimiter) Init() error {
 			h.Error("get nic speed fail", err)
 			h.Info("try get nic speed on cloud")
 
-			cloudType := multicloud.CloudType()
-			if cloudType == multicloud.CloudTypeUnknown {
+			cloudType := cloud.CloudType()
+			if cloudType == cloud.CloudTypeUnknown {
 				return errs.Errorf("unknown cloud type")
 			}
 
 			h.Info("host on cloud", "type", cloudType)
-			h.nicSpeedMbps, err = multicloud.GetNicSpeed()
+			h.nicSpeedMbps, err = cloud.GetNicSpeed()
 			if err != nil {
 				return errs.Wrapf(err, "get cloud(%s) network nic speed fail", cloudType)
 			}
