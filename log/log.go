@@ -15,7 +15,7 @@ type Logger interface {
 
 	WithLoggerName(n string) Logger
 	WithLoggerFields(kvs ...any)
-	SetLoggerLevel(lvl string)
+	SetLogLevel(lvl string)
 }
 
 func NewNopLogger() Logger {

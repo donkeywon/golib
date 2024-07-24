@@ -1,12 +1,9 @@
 package runner
 
 import (
-	"context"
 	"strconv"
 	"testing"
 	"time"
-
-	"github.com/stretchr/testify/require"
 )
 
 type runA struct {
@@ -100,45 +97,11 @@ var rc = &runC{
 }
 
 func init() {
-	ra.SetLoggerLevel("debug")
+	ra.SetLogLevel("debug")
 }
 
 func TestSimpleRun(_ *testing.T) {
 	Start(ra)
-	<-ra.Done()
-}
-
-func TestSimpleRunBG(t *testing.T) {
-	ra.AppendRunner(rb)
-	ra.AppendRunner(rc)
-
-	require.NoError(t, Init(ra))
-
-	ra.Store("abc", true)
-
-	StartBG(ra)
-
-	time.Sleep(time.Second * 2)
-	Stop(ra)
-	<-ra.Done()
-}
-
-func TestRunBGWithChildrenCancel(t *testing.T) {
-	ra.AppendRunner(rb)
-	ra.AppendRunner(rc)
-
-	ctx, cancel := context.WithCancel(context.Background())
-	ra.SetCtx(ctx)
-
-	require.NoError(t, Init(ra))
-
-	StartBG(ra)
-
-	go func() {
-		time.Sleep(time.Second * 2)
-		cancel()
-	}()
-	<-ra.Done()
 }
 
 func TestStopBeforeStart(_ *testing.T) {

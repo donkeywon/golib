@@ -43,8 +43,8 @@ func TestCopy(t *testing.T) {
 	tests.Init(c)
 	require.NoError(t, runner.Init(c))
 
-	runner.Start(c)
-	if c.Err() != nil {
-		c.Error("copy failed", c.Err())
+	err := runner.Run(c)
+	if err != nil {
+		c.Error("copy failed", err)
 	}
 }

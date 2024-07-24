@@ -90,11 +90,11 @@ func TestPipelineWithCfg(t *testing.T) {
 	//	runner.Stop(ppl)
 	//}()
 	require.NoError(t, runner.Init(ppl))
-	runner.Start(ppl)
-	if ppl.Err() != nil {
-		ppl.Error("failed", ppl.Err())
+	err := runner.Run(ppl)
+	if err != nil {
+		ppl.Error("failed", err)
 	}
-	require.NoError(t, ppl.Err())
+	require.NoError(t, err)
 }
 
 func TestPipelineCmd(t *testing.T) {
@@ -105,9 +105,9 @@ func TestPipelineCmd(t *testing.T) {
 	ppl.SetCfg(c)
 	tests.DebugInit(ppl)
 	require.NoError(t, runner.Init(ppl))
-	runner.Start(ppl)
-	if ppl.Err() != nil {
-		ppl.Error("failed", ppl.Err())
+	err := runner.Run(ppl)
+	if err != nil {
+		ppl.Error("failed", err)
 	}
-	require.NoError(t, ppl.Err())
+	require.NoError(t, err)
 }

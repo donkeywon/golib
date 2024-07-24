@@ -188,7 +188,6 @@ func (t *Task) createStep(idx int, stepCfg *step.Cfg, isDefer bool) step.Step {
 
 	s := plugin.CreateWithCfg[step.Type, step.Step](stepCfg.Type, stepCfg.Cfg)
 	s.Inherit(t)
-	s.SetParent(t)
 	s.WithLoggerFields(stepOrDefer, idx, stepOrDefer+"_type", s.Name())
 	return s
 }
@@ -212,10 +211,10 @@ func (t *Task) runSteps() {
 		default:
 		}
 
-		step := t.Steps()[t.CurStepIdx]
-		step.Store(consts.FieldStartTimeNano, time.Now().UnixNano())
-		runner.Start(step)
-		step.Store(consts.FieldStopTimeNano, time.Now().UnixNano())
+		st := t.Steps()[t.CurStepIdx]
+		st.Store(consts.FieldStartTimeNano, time.Now().UnixNano())
+		err := runner.Run(st)
+		st.Store(consts.FieldStopTimeNano, time.Now().UnixNano())
 		select {
 		case <-t.Stopping():
 			return
@@ -228,15 +227,14 @@ func (t *Task) runSteps() {
 				defer func() {
 					err := recover()
 					if err != nil {
-						t.Error("hook step panic", errs.PanicToErr(err), "hook_idx", idx, "hook", reflects.GetFuncName(h), "step_idx", t.CurStepIdx, "step_type", step.Name())
+						t.Error("hook step panic", errs.PanicToErr(err), "hook_idx", idx, "hook", reflects.GetFuncName(h), "step_idx", t.CurStepIdx, "step_type", st.Name())
 					}
 				}()
-				h(t, t.CurStepIdx, step)
+				h(t, t.CurStepIdx, st)
 			}(i, hook)
 		}
-		err := step.Err()
 		if err != nil {
-			t.AppendError(errs.Wrapf(err, "run step(%d) %s failed", t.CurStepIdx, step.Name()))
+			t.AppendError(errs.Wrapf(err, "run step(%d) %s failed", t.CurStepIdx, st.Name()))
 			return
 		}
 	}
@@ -260,7 +258,7 @@ func (t *Task) runDeferSteps() {
 			}()
 
 			deferStep.Store(consts.FieldStartTimeNano, time.Now().Unix())
-			runner.Start(deferStep)
+			err := runner.Run(deferStep)
 			deferStep.Store(consts.FieldStopTimeNano, time.Now().Unix())
 			select {
 			case <-t.Stopping():
@@ -280,7 +278,6 @@ func (t *Task) runDeferSteps() {
 					h(t, t.CurDeferStepIdx, deferStep)
 				}(i, hook)
 			}
-			err := deferStep.Err()
 			if err != nil {
 				t.AppendError(errs.Wrapf(err, "run defer(%d) step %s failed", t.CurDeferStepIdx, deferStep.Name()))
 			}

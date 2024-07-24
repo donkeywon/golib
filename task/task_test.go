@@ -36,8 +36,8 @@ func TestTask(t *testing.T) {
 		runner.Stop(task)
 	}()
 
-	runner.Start(task)
-	require.NoError(t, task.Err())
+	err := runner.Run(task)
+	require.NoError(t, err)
 
 	task.Info("result", "result", task.Result())
 }

@@ -48,9 +48,9 @@ func (p *PipelineStep) Init() error {
 }
 
 func (p *PipelineStep) Start() error {
-	runner.Start(p.p)
+	err := runner.Run(p.p)
 	p.Store(consts.FieldResult, p.p.Result())
-	return p.p.Err()
+	return err
 }
 
 func (p *PipelineStep) Stop() error {

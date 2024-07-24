@@ -1,8 +1,10 @@
 package boot
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"golang.org/x/sync/errgroup"
 	"os"
 	"os/signal"
 	"runtime"
@@ -34,9 +36,9 @@ type Daemon interface {
 }
 
 var (
-	_daemons []DaemonType // dependencies in order
-	_cfgMap  = make(map[string]any)
-	_b       *Booter
+	_daemonTypes []DaemonType // dependencies in order
+	_cfgMap      = make(map[string]any)
+	_b           *Booter
 )
 
 func Boot(opt ...Option) {
@@ -51,27 +53,25 @@ func Boot(opt ...Option) {
 		_b.Error("boot validate failed", err)
 		os.Exit(1)
 	}
-	runner.StartBG(_b)
-	<-_b.Done()
-	err = _b.Err()
+	err = runner.Run(_b)
 	if err != nil {
 		_b.Error("error occurred", err)
 		os.Exit(1)
 	}
 }
 
-// SetLoggerLevel change log level dynamically after Boot.
-func SetLoggerLevel(lvl string) {
-	_b.SetLoggerLevel(lvl)
+// SetLogLevel change log level dynamically after Boot.
+func SetLogLevel(lvl string) {
+	_b.SetLogLevel(lvl)
 }
 
 // RegDaemon register a Daemon creator and its config creator.
 func RegDaemon(typ DaemonType, creator plugin.Creator[Daemon], cfgCreator plugin.CfgCreator[any]) {
-	if slices.Contains(_daemons, typ) {
+	if slices.Contains(_daemonTypes, typ) {
 		panic("duplicate register daemon: " + typ)
 	}
 	plugin.RegWithCfg(typ, creator, cfgCreator)
-	_daemons = append(_daemons, typ)
+	_daemonTypes = append(_daemonTypes, typ)
 }
 
 // RegCfg register additional config, cfg type must be pointer.
@@ -83,7 +83,7 @@ func RegCfg(name string, cfg any) {
 }
 
 func UnRegDaemon(typ ...DaemonType) {
-	_daemons = slices.DeleteFunc(_daemons, func(d DaemonType) bool { return slices.Contains(typ, d) })
+	_daemonTypes = slices.DeleteFunc(_daemonTypes, func(d DaemonType) bool { return slices.Contains(typ, d) })
 }
 
 type options struct {
@@ -99,6 +99,7 @@ type Booter struct {
 	cfgMap     map[string]any
 	logCfg     *log.Cfg
 	flagParser *flags.Parser
+	daemons    []Daemon
 }
 
 func New(opt ...Option) *Booter {
@@ -174,16 +175,41 @@ func (b *Booter) Init() error {
 		b.Debug("load config", "name", name, "cfg", cfg)
 	}
 
-	for _, daemonType := range _daemons {
-		daemon := plugin.CreateWithCfg[DaemonType, Daemon](daemonType, b.cfgMap[string(daemonType)])
-		b.AppendRunner(daemon)
-	}
-
 	return b.Runner.Init()
 }
 
 func (b *Booter) Start() error {
 	b.Info("starting", "version", buildinfo.Version, "build_time", buildinfo.BuildTime, "revision", buildinfo.Revision)
+
+	errg, ctx := errgroup.WithContext(b.Ctx())
+
+	err := b.initDaemons(ctx)
+	if err != nil {
+		return errs.Wrap(err, "init daemons failed")
+	}
+
+	for i := range b.daemons {
+		daemon := b.daemons[i]
+		errg.Go(func() error {
+			e := runner.Run(daemon)
+			select {
+			case <-b.Stopping():
+				return nil
+			case <-b.Ctx().Done():
+				return nil
+			default:
+				if e != nil {
+					b.Error("daemon failed", err, "daemon", daemon.Name())
+				} else {
+					b.Error("daemon done, should not happen", nil, "daemon", daemon.Name())
+					e = errs.Errorf("daemon %s done, should not happen", daemon.Name())
+				}
+				runner.Stop(b)
+				b.AppendError(e)
+				return e
+			}
+		})
+	}
 
 	termSigCh := make(chan os.Signal, 1)
 	signal.Notify(termSigCh, signals.TermSignals...)
@@ -204,23 +230,29 @@ func (b *Booter) Start() error {
 		b.Info("exit due to stopping")
 	}
 
+	errg.Wait()
 	return nil
 }
 
-func (b *Booter) OnChildDone(child runner.Runner) error {
-	select {
-	case <-b.Stopping():
-		return nil
-	case <-b.Ctx().Done():
-		return nil
-	default:
-		err := child.Err()
+func (b *Booter) Stop() error {
+	for _, daemon := range b.daemons {
+		runner.StopAndWait(daemon)
+	}
+	return nil
+}
+
+func (b *Booter) initDaemons(ctx context.Context) error {
+	var err error
+	b.daemons = make([]Daemon, len(_daemonTypes))
+	for i, daemonType := range _daemonTypes {
+		daemon := plugin.CreateWithCfg[DaemonType, Daemon](daemonType, b.cfgMap[string(daemonType)])
+		daemon.Inherit(b)
+		daemon.SetCtx(ctx)
+		err = runner.Init(daemon)
 		if err != nil {
-			b.Error("daemon exit abnormally", err, "daemon", child.Name())
-			runner.Stop(b)
-		} else {
-			b.Error("daemon exit, should not happen", nil, "daemon", child.Name())
+			return errs.Wrapf(err, "init daemon %s failed", daemonType)
 		}
+		b.daemons[i] = daemon
 	}
 	return nil
 }
@@ -337,7 +369,7 @@ func durationUnmarshaler(d *time.Duration, b []byte) error {
 
 func buildCfgMap() map[string]any {
 	cfgMap := make(map[string]any)
-	for _, daemonType := range _daemons {
+	for _, daemonType := range _daemonTypes {
 		cfg := plugin.CreateCfg(daemonType)
 		cfgMap[string(daemonType)] = cfg
 	}

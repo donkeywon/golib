@@ -268,7 +268,7 @@ func (z *zapLogger) WithLoggerFields(kvs ...any) {
 	z.Logger = z.Logger.With(HandleZapFields(false, kvs)...)
 }
 
-func (z *zapLogger) SetLoggerLevel(lvl string) {
+func (z *zapLogger) SetLogLevel(lvl string) {
 	z.lvl.UnmarshalText([]byte(lvl))
 }
 

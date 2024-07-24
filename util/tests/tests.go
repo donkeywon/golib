@@ -25,7 +25,7 @@ var (
 )
 
 func init() {
-	l.SetLoggerLevel("debug")
+	l.SetLogLevel("debug")
 
 	debugRunner.SetCtx(context.Background())
 	reflects.SetFirstMatchedField(debugRunner.Runner, l)

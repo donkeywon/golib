@@ -29,6 +29,7 @@ type Runner interface {
 	initCtx()
 
 	Inherit(Runner)
+	Parent() Runner
 
 	Started() <-chan struct{}
 	Stopping() <-chan struct{}
@@ -39,23 +40,13 @@ type Runner interface {
 	markStopDone() bool
 	markDone() bool
 
-	GetChild(string) Runner
-	Children() []Runner
-	AppendRunner(Runner) bool
-	WaitChildrenDone()
-	SetParent(Runner)
-	Parent() Runner
-	OnChildDone(Runner) error
-
 	AppendError(err ...error)
 	Err() error
-	SelfErr() error
-	ChildrenErr() error
 
 	WithLoggerFrom(r Runner, kvs ...any)
 }
 
-// Init a runner and init its children in order.
+// Init a runner.
 func Init(r Runner) (err error) {
 	defer func() {
 		p := recover()
@@ -71,20 +62,21 @@ func Init(r Runner) (err error) {
 		return
 	}
 	r.Info("init done")
-	for _, child := range r.Children() {
-		child.Inherit(r)
-		child.SetParent(r)
-		err = Init(child)
-		if err != nil {
-			r.Cancel()
-			return
-		}
-	}
 	return
 }
 
-// Start a runner and wait it done.
+// Run a runner and wait it done.
+func Run(r Runner) error {
+	run(r)
+	return r.Err()
+}
+
+// Start a runner in the background.
 func Start(r Runner) {
+	go run(r)
+}
+
+func run(r Runner) {
 	if !r.markStarted() {
 		r.Info("already started")
 		return
@@ -98,27 +90,15 @@ func Start(r Runner) {
 
 		if r.markStopping() {
 			// At this point
-			// 1. stopping or canceled before call runner.Start(r)
+			// 1. stopping or canceled before call runner.Run(r)
 			// 2. done before call runner.Stop(r)
 			// both need to markStopDone
 			r.markStopDone()
 		}
-		r.WaitChildrenDone()
 		<-r.StopDone()
 		r.Info("done")
 		r.markDone()
 		r.Cancel()
-		if r.Parent() != nil {
-			func() {
-				defer func() {
-					err = recover()
-					if err != nil {
-						r.Parent().AppendError(errs.PanicToErrWithMsg(err, fmt.Sprintf("panic on %s OnChildDone: %s", r.Parent().Name(), r.Name())))
-					}
-				}()
-				r.Parent().AppendError(r.Parent().OnChildDone(r))
-			}()
-		}
 	}()
 
 	select {
@@ -136,7 +116,7 @@ func Start(r Runner) {
 		case <-r.Stopping():
 			return
 		case <-r.Ctx().Done():
-			// 当r.Start()立即返回的情况下，上方的defer函数里的r.markStopping()和r.Cancel()可能会在此goroutine执行前就全部执行结束
+			// 当r.Run()立即返回的情况下，上方的defer函数里的r.markStopping()和r.Cancel()可能会在此goroutine执行前就全部执行结束
 			// 这种情况下r.Stopping()和r.Ctx().Done()这两个case会同时可进入，会随机进入一个，偶尔就会进入到r.Ctx().Done()这个case里
 			// 所以偶尔就会看到明明没有调r.Cancel()，但是却走到r.Ctx().Done()的case里
 			// 在这个case里再判断一次r.Stopping()
@@ -154,39 +134,14 @@ func Start(r Runner) {
 	r.AppendError(r.Start())
 }
 
-// StartBG start a runner and its children in the background.
-func StartBG(r Runner) {
-	go Start(r)
-	for _, c := range r.Children() {
-		go Start(c)
-	}
-}
-
-// Stop a runner, in most scenario, Stop is a notification action, used to notify the Runner to stop.
+// Stop runner, in most scenario, Stop is notification action, used to notify the Runner to stop.
 func Stop(r Runner) {
-	stopRunnerAndChildren(r, false)
-}
-
-// StopAndWait notify Runner to stop, and notify the Runner's children
-// in reverse order to stop and wait for the children to finish.
-func StopAndWait(r Runner) {
-	stopRunnerAndChildren(r, true)
-}
-
-func stopRunnerAndChildren(r Runner, wait bool) {
 	stop(r, false)
-	if len(r.Children()) > 0 {
-		for i := len(r.Children()) - 1; i >= 0; i-- {
-			stopRunnerAndChildren(r.Children()[i], wait)
-			if wait {
-				<-r.Children()[i].Done()
-			}
-		}
-	}
+}
 
-	if wait {
-		<-r.Done()
-	}
+// StopAndWait notify Runner to stop and wait it done.
+func StopAndWait(r Runner) {
+	stop(r, true)
 }
 
 func stop(r Runner, wait bool) {
@@ -238,12 +193,10 @@ type baseRunner struct {
 	err          error
 	parent       Runner
 	started      chan struct{}
-	childrenMap  map[string]Runner
 	done         chan struct{}
 	stopDone     chan struct{}
 	stopping     chan struct{}
 	name         string
-	children     []Runner
 	startedOnce  sync.Once
 	doneOnce     sync.Once
 	stopDoneOnce sync.Once
@@ -254,14 +207,13 @@ type baseRunner struct {
 
 func newBase(name string) Runner {
 	br := &baseRunner{
-		Logger:      log.NewNopLogger(),
-		name:        name,
-		started:     make(chan struct{}),
-		stopping:    make(chan struct{}),
-		stopDone:    make(chan struct{}),
-		done:        make(chan struct{}),
-		childrenMap: make(map[string]Runner),
-		NoErrKVS:    kvs.NewMapKVS(),
+		Logger:   log.NewNopLogger(),
+		name:     name,
+		started:  make(chan struct{}),
+		stopping: make(chan struct{}),
+		stopDone: make(chan struct{}),
+		done:     make(chan struct{}),
+		NoErrKVS: kvs.NewMapKVS(),
 	}
 	return br
 }
@@ -290,9 +242,6 @@ func (br *baseRunner) Init() error {
 	if br.done == nil {
 		br.done = make(chan struct{})
 	}
-	if br.childrenMap == nil {
-		br.childrenMap = make(map[string]Runner)
-	}
 	if br.NoErrKVS == nil {
 		br.NoErrKVS = kvs.NewMapKVS()
 	}
@@ -313,6 +262,11 @@ func (br *baseRunner) Inherit(r Runner) {
 	if br.ctx == nil {
 		br.SetCtx(r.Ctx())
 	}
+	br.parent = r
+}
+
+func (br *baseRunner) Parent() Runner {
+	return br.parent
 }
 
 func (br *baseRunner) SetCtx(ctx context.Context) {
@@ -399,50 +353,6 @@ func (br *baseRunner) markDone() bool {
 	return marked
 }
 
-func (br *baseRunner) GetChild(name string) Runner {
-	return br.childrenMap[name]
-}
-
-func (br *baseRunner) Children() []Runner {
-	return br.children
-}
-
-func (br *baseRunner) WaitChildrenDone() {
-	for _, child := range br.Children() {
-		select {
-		case <-child.Started():
-			<-child.Done()
-		default:
-			continue
-		}
-	}
-}
-
-func (br *baseRunner) SetParent(r Runner) {
-	br.parent = r
-}
-
-func (br *baseRunner) Parent() Runner {
-	return br.parent
-}
-
-func (br *baseRunner) OnChildDone(_ Runner) error {
-	return nil
-}
-
-func (br *baseRunner) AppendRunner(r Runner) bool {
-	if r == nil {
-		return false
-	}
-
-	if _, exists := br.childrenMap[r.Name()]; exists {
-		return false
-	}
-	br.childrenMap[r.Name()] = r
-	br.children = append(br.children, r)
-	return true
-}
-
 func (br *baseRunner) AppendError(err ...error) {
 	br.errMu.Lock()
 	defer br.errMu.Unlock()
@@ -460,24 +370,6 @@ func (br *baseRunner) AppendError(err ...error) {
 }
 
 func (br *baseRunner) Err() error {
-	if len(br.Children()) == 0 {
-		return br.SelfErr()
-	}
-	return errors.Join(br.SelfErr(), br.ChildrenErr())
-}
-
-func (br *baseRunner) ChildrenErr() error {
-	if len(br.Children()) == 0 {
-		return nil
-	}
-	var err error
-	for _, child := range br.Children() {
-		err = errors.Join(err, child.Err())
-	}
-	return err
-}
-
-func (br *baseRunner) SelfErr() error {
 	br.errMu.Lock()
 	defer br.errMu.Unlock()
 	return br.err
