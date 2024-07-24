@@ -12,7 +12,7 @@ func (f optionFunc) apply(b *Booter) {
 
 func CfgPath(cfgPath string) Option {
 	return optionFunc(func(b *Booter) {
-
+		b.cfgPath = cfgPath
 	})
 }
 
