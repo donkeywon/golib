@@ -7,6 +7,7 @@ require (
 	github.com/avast/retry-go/v4 v4.6.0
 	github.com/bytedance/sonic v1.11.9
 	github.com/caarlos0/env/v11 v11.1.0
+	github.com/donkeywon/go-flags v1.6.2
 	github.com/fsnotify/fsnotify v1.7.0
 	github.com/go-playground/validator/v10 v10.22.0
 	github.com/goccy/go-yaml v1.12.0
@@ -34,7 +35,6 @@ require (
 	github.com/cloudwego/base64x v0.1.4 // indirect
 	github.com/cloudwego/iasm v0.2.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
-	github.com/donkeywon/go-flags v1.6.2 // indirect
 	github.com/fatih/color v1.17.0 // indirect
 	github.com/felixge/fgprof v0.9.4 // indirect
 	github.com/gabriel-vasile/mimetype v1.4.4 // indirect
