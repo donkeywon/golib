@@ -2,7 +2,6 @@ package boot
 
 import (
 	"errors"
-	"flag"
 	"fmt"
 	"os"
 	"os/signal"
@@ -10,6 +9,7 @@ import (
 	"time"
 
 	"github.com/caarlos0/env/v11"
+	"github.com/donkeywon/go-flags"
 	"github.com/donkeywon/golib/buildinfo"
 	"github.com/donkeywon/golib/consts"
 	"github.com/donkeywon/golib/errs"
@@ -21,12 +21,7 @@ import (
 	"go.uber.org/zap"
 )
 
-const ENV_CFG_PATH = "CFG_PATH"
-
-var (
-	flagPrintVersion bool
-	flagCfgPath      string
-)
+const FlagTagPrefix = "flag-"
 
 type SvcType string
 
@@ -35,22 +30,8 @@ type Svc interface {
 	plugin.Plugin
 }
 
-func parseFlag() {
-	flag.BoolVar(&flagPrintVersion, "v", false, "print version info")
-	flag.StringVar(&flagCfgPath, "c", "", "config file path")
-	flag.Parse()
-}
-
-func Boot(opts ...Option) {
-	parseFlag()
-	if flagPrintVersion {
-		fmt.Println("version:" + buildinfo.Version)
-		fmt.Println("githash:" + buildinfo.GitHash)
-		fmt.Println("buildstamp:" + buildinfo.BuildStamp)
-		os.Exit(0)
-	}
-
-	b := New(opts...)
+func Boot(opt ...Option) {
+	b := New(opt...)
 	err := runner.Init(b)
 	if err != nil {
 		b.Error("boot init fail", err)
@@ -93,45 +74,69 @@ func RegisterCfg(name string, cfg interface{}) {
 	_cfgMap[name] = cfg
 }
 
-type Booter struct {
-	runner.Runner
-	cfgMap     map[SvcType]interface{}
-	cfgPath    string
-	envCfgPath string
-	envPrefix  string
-	logCfg     *log.Cfg
+type options struct {
+	CfgPath      string `env:"CFG_PATH" flag-description:"config file path"        flag-long:"config"     flag-short:"c"`
+	PrintVersion bool   `flag-description:"print version info"                     flag-long:"version"    flag-short:"v"`
+	EnvPrefix    string `flag-description:"define a prefix for each env field tag" flag-long:"env-prefix"`
 }
 
-func New(opts ...Option) *Booter {
+type Booter struct {
+	runner.Runner
+	*options
+	extraOpts  []Option
+	cfgMap     map[SvcType]interface{}
+	logCfg     *log.Cfg
+	flagParser *flags.Parser
+}
+
+func New(opt ...Option) *Booter {
 	b := &Booter{
-		Runner: runner.Create("boot"),
-		logCfg: log.NewCfg(),
+		Runner:    runner.Create("boot"),
+		logCfg:    log.NewCfg(),
+		extraOpts: opt,
+		options:   &options{},
 	}
 
-	cfgMap := make(map[SvcType]interface{})
-	for _, svcType := range _svcs {
-		cfgMap[svcType] = plugin.CreateCfg(svcType)
+	for _, o := range opt {
+		o.apply(b)
 	}
-	for k, cfg := range _cfgMap {
-		cfgMap[SvcType(k)] = cfg
-	}
-	cfgMap["log"] = b.logCfg
-
-	b.cfgMap = cfgMap
-	for _, opt := range opts {
-		opt.apply(b)
-	}
-
-	b.envCfgPath = os.Getenv(b.envPrefix + ENV_CFG_PATH)
 
 	return b
 }
 
 func (b *Booter) Init() error {
+	var err error
+
 	// use default logger as temp logger
 	util.ReflectSet(b.Runner, log.Default())
 
-	err := b.loadCfg()
+	b.cfgMap = buildCfgMap()
+	b.flagParser, err = buildFlagParser(b.options, b.cfgMap)
+	if err != nil {
+		return errs.Wrap(err, "build flag parser fail")
+	}
+
+	b.cfgMap["log"] = b.logCfg
+	_, err = b.flagParser.AddGroup("log options", "", b.logCfg)
+	if err != nil {
+		return err
+	}
+
+	err = b.loadOptions()
+	if err != nil {
+		if e, ok := err.(*flags.Error); ok && e.Type == flags.ErrHelp {
+			os.Exit(0)
+		}
+		return err
+	}
+	if b.options.PrintVersion {
+		fmt.Println("version:" + buildinfo.Version)
+		fmt.Println("githash:" + buildinfo.GitHash)
+		fmt.Println("buildstamp:" + buildinfo.BuildStamp)
+		os.Exit(0)
+	}
+
+	err = b.loadCfg()
 	if err != nil {
 		return err
 	}
@@ -194,13 +199,33 @@ func (b *Booter) OnChildDone(child runner.Runner) error {
 	return nil
 }
 
+func (b *Booter) loadOptions() error {
+	_, err := b.flagParser.Parse()
+	if err != nil {
+		return err
+	}
+
+	err = env.ParseWithOptions(b.options, env.Options{
+		Prefix: b.options.EnvPrefix,
+	})
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (b *Booter) loadCfgFromFlag() error {
+	_, err := b.flagParser.Parse()
+	return err
+}
+
 func (b *Booter) loadCfgFromEnv() error {
 	for _, cfg := range b.cfgMap {
 		if !util.IsStructPointer(cfg) {
 			continue
 		}
 		err := env.ParseWithOptions(cfg, env.Options{
-			Prefix: b.envPrefix,
+			Prefix: b.options.EnvPrefix,
 		})
 		if err != nil {
 			return err
@@ -210,13 +235,7 @@ func (b *Booter) loadCfgFromEnv() error {
 }
 
 func (b *Booter) loadCfgFromFile() error {
-	cfgPath := b.cfgPath
-	if flagCfgPath != "" {
-		cfgPath = flagCfgPath
-	}
-	if b.envCfgPath != "" {
-		cfgPath = b.envCfgPath
-	}
+	cfgPath := b.options.CfgPath
 	if cfgPath == "" {
 		cfgPath = consts.CfgPath
 		if !util.FileExist(cfgPath) {
@@ -255,7 +274,7 @@ func (b *Booter) loadCfgFromFile() error {
 }
 
 func (b *Booter) loadCfg() error {
-	return errors.Join(b.loadCfgFromFile(), b.loadCfgFromEnv())
+	return errors.Join(b.loadCfgFromFile(), b.loadCfgFromFlag(), b.loadCfgFromEnv())
 }
 
 func (b *Booter) validateCfg() error {
@@ -283,4 +302,31 @@ func durationUnmarshaler(d *time.Duration, b []byte) error {
 
 	*d = tmp
 	return nil
+}
+
+func buildCfgMap() map[SvcType]interface{} {
+	cfgMap := make(map[SvcType]interface{})
+	for _, svcType := range _svcs {
+		cfg := plugin.CreateCfg(svcType)
+		cfgMap[svcType] = cfg
+	}
+	for k, cfg := range _cfgMap {
+		cfgMap[SvcType(k)] = cfg
+	}
+	return cfgMap
+}
+
+func buildFlagParser(data interface{}, cfgMap map[SvcType]interface{}) (*flags.Parser, error) {
+	var err error
+	parser := flags.NewParser(data, flags.Default, flags.FlagTagPrefix(FlagTagPrefix))
+	for svcType, cfg := range cfgMap {
+		if !util.IsStructPointer(cfg) {
+			continue
+		}
+		_, err = parser.AddGroup(string(svcType)+" service options", "", cfg)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return parser, nil
 }

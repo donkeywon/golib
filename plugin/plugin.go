@@ -58,6 +58,10 @@ func CreateWithCfg(typ interface{}, cfg interface{}) interface{} {
 	// 即使plugin不是Runner类型，也应该有一个统一的类似Init的阶段用来做一些初始化工作
 
 	p := f()
+	if p == nil {
+		panic(fmt.Sprintf("plugin is nil: %+v", typ))
+	}
+
 	if sp, ok := p.(CfgSetter); ok {
 		sp.SetCfg(cfg)
 	} else {
@@ -68,12 +72,15 @@ func CreateWithCfg(typ interface{}, cfg interface{}) interface{} {
 }
 
 func CreateCfg(typ interface{}) interface{} {
-	f, ok := _pluginCfgs[typ]
-	if !ok {
+	f, exists := _pluginCfgs[typ]
+	if !exists {
 		panic(fmt.Sprintf("plugin(%+v) cfg not exists", typ))
 	}
 
 	cfg := f()
+	if cfg == nil {
+		panic(fmt.Sprintf("plugin cfg is nil: %+v", typ))
+	}
 
 	rt := reflect.TypeOf(cfg)
 	if rt.Kind() != reflect.Pointer {
