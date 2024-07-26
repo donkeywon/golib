@@ -28,6 +28,7 @@ type Promd struct {
 var _p = &Promd{
 	Runner: runner.Create(string(SvcTypePromd)),
 	reg:    prometheus.NewRegistry(),
+	m:      make(map[string]prometheus.Metric),
 }
 
 func New() *Promd {
