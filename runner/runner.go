@@ -84,7 +84,7 @@ func Start(r Runner) {
 	defer func() {
 		err := recover()
 		if err != nil {
-			r.AppendError(errs.Errorf("panic when running: %+v", err))
+			r.AppendError(errs.Errorf("panic when %s running: %+v", r.Name(), err))
 		}
 
 		if r.markStopping() {
@@ -100,7 +100,7 @@ func Start(r Runner) {
 				defer func() {
 					err = recover()
 					if err != nil {
-						r.Parent().AppendError(errs.Errorf("panic when OnChildDone: %+v", err))
+						r.Parent().AppendError(errs.Errorf("panic when %s OnChildDone: %+v", r.Parent().Name(), err))
 					}
 				}()
 				r.Parent().AppendError(r.Parent().OnChildDone(r))
