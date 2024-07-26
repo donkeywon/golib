@@ -2,6 +2,7 @@ package util
 
 import (
 	"reflect"
+	"runtime"
 )
 
 func ReflectSet(i interface{}, f interface{}) bool {
@@ -32,6 +33,10 @@ func ReflectSet(i interface{}, f interface{}) bool {
 	return true
 }
 
+func ReflectGetFuncName(v interface{}) string {
+	return runtime.FuncForPC(reflect.ValueOf(v).Pointer()).Name()
+}
+
 func IsStructPointer(v interface{}) bool {
 	rv := reflect.ValueOf(v)
 	if rv.Kind() != reflect.Pointer {
@@ -47,4 +52,8 @@ func IsPointer(v interface{}) bool {
 
 func IsStruct(v interface{}) bool {
 	return reflect.ValueOf(v).Kind() == reflect.Struct
+}
+
+func IsFunc(v interface{}) bool {
+	return reflect.ValueOf(v).Kind() == reflect.Func
 }

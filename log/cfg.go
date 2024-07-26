@@ -6,11 +6,11 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/donkeywon/golib/errs"
 	"github.com/donkeywon/golib/log/core"
 	"github.com/donkeywon/golib/util"
 
 	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
 	"gopkg.in/natefinch/lumberjack.v2"
 )
 
@@ -24,13 +24,13 @@ const (
 )
 
 type Cfg struct {
-	Filepath    string        `env:"LOG_PATH"          flag-long:"log-path"          yaml:"filepath"    flag-description:"log file path"`
-	Format      string        `env:"LOG_FORMAT"        flag-long:"log-format"        yaml:"format"      flag-description:"log line format, console or json"`
-	MaxFileSize int           `env:"LOG_MAX_FILE_SIZE" flag-long:"log-max-file-size" yaml:"maxFileSize" flag-description:"maximum size in megabytes of the log file before it gets rotated"`
-	MaxBackups  int           `env:"LOG_MAX_BACKUPS"   flag-long:"log-max-backups"   yaml:"maxBackups"  flag-description:"maximum number of old log files to retain"`
-	MaxAge      int           `env:"LOG_MAX_AGE"       flag-long:"log-max-age"       yaml:"maxAge"      flag-description:"maximum number of days to retain old log files based on the timestamp encoded in their filename"`
-	Level       zapcore.Level `env:"LOG_LEVEL"         flag-long:"log-level"         yaml:"level"       flag-description:"minimum enabled logging level"`
-	Compress    bool          `env:"LOG_COMPRESS"      flag-long:"log-compress"      yaml:"compress"    flag-description:"determines if the rotated log files should be compressed using gzip"`
+	Filepath    string `env:"LOG_PATH"          flag-long:"log-path"          yaml:"filepath"    flag-description:"log file path"`
+	Format      string `env:"LOG_FORMAT"        flag-long:"log-format"        yaml:"format"      flag-description:"log line format"`
+	MaxFileSize int    `env:"LOG_MAX_FILE_SIZE" flag-long:"log-max-file-size" yaml:"maxFileSize" flag-description:"maximum size in megabytes of the log file before it gets rotated"`
+	MaxBackups  int    `env:"LOG_MAX_BACKUPS"   flag-long:"log-max-backups"   yaml:"maxBackups"  flag-description:"maximum number of old log files to retain"`
+	MaxAge      int    `env:"LOG_MAX_AGE"       flag-long:"log-max-age"       yaml:"maxAge"      flag-description:"maximum number of days to retain old log files based on the timestamp encoded in their filename"`
+	Level       string `env:"LOG_LEVEL"         flag-long:"log-level"         yaml:"level"       flag-description:"minimum enabled logging level"`
+	Compress    bool   `env:"LOG_COMPRESS"      flag-long:"log-compress"      yaml:"compress"    flag-description:"determines if the rotated log files should be compressed using gzip"`
 }
 
 func NewCfg() *Cfg {
@@ -48,11 +48,14 @@ func NewCfg() *Cfg {
 func (c *Cfg) Build(opts ...zap.Option) (*zap.Logger, error) {
 	var err error
 	cfg := DefaultConfig()
-	cfg.Level = zap.NewAtomicLevelAt(c.Level)
+	cfg.Level, err = zap.ParseAtomicLevel(c.Level)
+	if err != nil {
+		return nil, errs.Wrap(err, "invalid log level")
+	}
 	cfg.Encoding = c.Format
 	cfg.OutputPaths, err = c.buildOutputs()
 	if err != nil {
-		return nil, err
+		return nil, errs.Wrap(err, "build log outputs fail")
 	}
 	return cfg.Build(append(opts, zap.WrapCore(core.NewStackExtractCore), zap.AddCaller(), zap.AddCallerSkip(1))...)
 }
@@ -97,7 +100,7 @@ func Default(option ...zap.Option) *zap.Logger {
 
 func Debug(option ...zap.Option) *zap.Logger {
 	lc := NewCfg()
-	lc.Level = zap.DebugLevel
+	lc.Level = "debug"
 	l, _ := lc.Build(append(option, zap.Development())...)
 	return l
 }

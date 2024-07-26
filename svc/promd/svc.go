@@ -34,10 +34,10 @@ func New() *Promd {
 }
 
 func (p *Promd) Init() error {
-	if p.EnableGoCollector {
+	if !p.DisableGoCollector {
 		p.reg.MustRegister(collectors.NewGoCollector())
 	}
-	if p.EnableProcCollector {
+	if !p.DisableProcCollector {
 		p.reg.MustRegister(collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
 	}
 

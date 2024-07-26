@@ -93,10 +93,19 @@ func (s *StoreRW) Init() error {
 	switch s.StoreCfg.Type {
 	case StoreTypeFtp:
 		err = s.initFtp()
+		if err != nil {
+			err = errs.Wrap(err, "init ftp store fail")
+		}
 	case StoreTypeOss:
 		err = s.initOSS()
+		if err != nil {
+			err = errs.Wrap(err, "init oss store fail")
+		}
 	case StoreTypeSSH:
 		err = s.initSSH()
+		if err != nil {
+			err = errs.Wrap(err, "init ssh store fail")
+		}
 	default:
 		return errs.Errorf("unknown store type: %+v", s.StoreCfg.Type)
 	}
@@ -140,7 +149,10 @@ func (s *StoreRW) Start() error {
 	if errors.Is(err, ErrStoppedManually) {
 		err = nil
 	}
-	return err
+	if err != nil {
+		return errs.Wrapf(err, "ssh session run fail, cmd: %s", s.sshCmd)
+	}
+	return nil
 }
 
 func (s *StoreRW) Close() error {
@@ -148,8 +160,12 @@ func (s *StoreRW) Close() error {
 		rwCloseErr := s.RW.Close()
 
 		closeErr := s.closeSSHSessionAndCli()
-		if errors.Is(closeErr, io.EOF) {
-			closeErr = nil
+		if closeErr == nil || errors.Is(closeErr, io.EOF) {
+			return rwCloseErr
+		}
+		closeErr = errs.Wrap(closeErr, "close ssh session and client fail")
+		if rwCloseErr == nil {
+			return closeErr
 		}
 		return errors.Join(rwCloseErr, closeErr)
 	}

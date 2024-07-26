@@ -49,7 +49,7 @@ func AzblobSign(req *http.Request, account string, key string) error {
 
 	stringToSign, err := azblobBuildStringToSign(req, account)
 	if err != nil {
-		return err
+		return errs.Wrap(err, "azblob build string to sign fail")
 	}
 
 	keyBs, err := base64.StdEncoding.DecodeString(key)
@@ -60,7 +60,7 @@ func AzblobSign(req *http.Request, account string, key string) error {
 	mac := hmac.New(sha256.New, keyBs)
 	_, err = mac.Write([]byte(stringToSign))
 	if err != nil {
-		return err
+		return errs.Wrap(err, "azblob hmac write fail")
 	}
 
 	sign := base64.StdEncoding.EncodeToString(mac.Sum(nil))

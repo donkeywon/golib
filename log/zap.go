@@ -42,7 +42,7 @@ const (
 
 	NameEncoderFull = "full"
 
-	DefaultLevel             = zap.InfoLevel
+	DefaultLevel             = "info"
 	DefaultIsDev             = false
 	DefaultDisableCaller     = false
 	DefaultDisableStacktrace = true // stack core will extract error stack, so zap's stack is useless
@@ -152,8 +152,9 @@ func DefaultEncoderConfig() zapcore.EncoderConfig {
 }
 
 func DefaultConfig() *zap.Config {
+	lvl, _ := zap.ParseAtomicLevel(DefaultLevel)
 	return &zap.Config{
-		Level:             zap.NewAtomicLevelAt(DefaultLevel),
+		Level:             lvl,
 		Development:       DefaultIsDev,
 		DisableCaller:     DefaultDisableCaller,
 		DisableStacktrace: DefaultDisableStacktrace,

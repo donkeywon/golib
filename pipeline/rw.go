@@ -18,6 +18,7 @@ import (
 	"github.com/donkeywon/golib/plugin"
 	"github.com/donkeywon/golib/ratelimit"
 	"github.com/donkeywon/golib/runner"
+	"github.com/donkeywon/golib/util"
 	"github.com/donkeywon/golib/util/bytespool"
 	"github.com/zeebo/xxh3"
 )
@@ -313,7 +314,7 @@ func (b *BaseRW) NestReader(r io.ReadCloser) error {
 	if rw, ok := r.(RW); ok && b.Reader() != nil {
 		err := rw.NestReader(b.Reader())
 		if err != nil {
-			return err
+			return errs.Wrapf(err, "rw(%s) nest reader fail", rw.Type())
 		}
 		b.r = rw
 	} else {
@@ -326,7 +327,7 @@ func (b *BaseRW) NestWriter(w io.WriteCloser) error {
 	if rw, ok := w.(RW); ok && b.Writer() != nil {
 		err := rw.NestWriter(b.Writer())
 		if err != nil {
-			return err
+			return errs.Wrapf(err, "rw(%s) nest writer fail", rw.Type())
 		}
 		b.w = rw
 	} else {
@@ -380,11 +381,21 @@ func (b *BaseRW) Role() RWRole {
 }
 
 func (b *BaseRW) RegisterReadHook(rh ...ReadHook) {
-	b.readHooks = append(b.readHooks, rh...)
+	for _, h := range rh {
+		if h == nil {
+			panic("read hook is nil")
+		}
+		b.readHooks = append(b.readHooks, h)
+	}
 }
 
 func (b *BaseRW) RegisterWriteHook(wh ...WriteHook) {
-	b.writeHooks = append(b.writeHooks, wh...)
+	for _, h := range wh {
+		if h == nil {
+			panic("write hook is nil")
+		}
+		b.writeHooks = append(b.writeHooks, h)
+	}
 }
 
 func (b *BaseRW) Read(p []byte) (int, error) {
@@ -552,9 +563,10 @@ func (b *BaseRW) read(p []byte) (nr int, err error) {
 	defer func() {
 		endTS := time.Now().UnixMilli()
 		for i := len(b.readHooks) - 1; i >= 0; i-- {
-			hookErr := b.readHooks[i](nr, p, err, endTS-startTS)
+			h := b.readHooks[i]
+			hookErr := h(nr, p, err, endTS-startTS)
 			if hookErr != nil {
-				err = errors.Join(err, hookErr)
+				err = errors.Join(err, errs.Wrapf(hookErr, "read hook(%d) %s fail", i, util.ReflectGetFuncName(h)))
 			}
 		}
 	}()
@@ -567,9 +579,10 @@ func (b *BaseRW) write(p []byte) (nw int, err error) {
 	defer func() {
 		endTS := time.Now().UnixMilli()
 		for i := len(b.writeHooks) - 1; i >= 0; i-- {
-			hookErr := b.writeHooks[i](nw, p, err, endTS-startTS)
+			h := b.writeHooks[i]
+			hookErr := h(nw, p, err, endTS-startTS)
 			if hookErr != nil {
-				err = errors.Join(err, hookErr)
+				err = errors.Join(err, errs.Wrapf(hookErr, "write hook(%d) %s fail", i, util.ReflectGetFuncName(h)))
 			}
 		}
 	}()
@@ -718,7 +731,10 @@ func (b *BaseRW) flushNoLock() error {
 	}
 
 	b.offset = 0
-	return err
+	if err != nil {
+		return errs.Wrap(err, "flush write fail")
+	}
+	return nil
 }
 
 func (b *BaseRW) deadlineFlush() {
@@ -885,11 +901,11 @@ func (b *BaseRW) closeWriter() error {
 			<-b.asyncDone
 		}
 	})
-	er := b.Writer().Close()
-	if er == nil {
+	closeErr := b.Writer().Close()
+	if closeErr == nil {
 		return err
 	}
-	return errors.Join(err, errs.Wrapf(er, "%s close nested writer fail", b.Name()))
+	return errors.Join(err, errs.Wrapf(closeErr, "%s close nested writer fail", b.Name()))
 }
 
 func (b *BaseRW) hookIncWritten(n int, _ []byte, _ error, _ int64, _ ...interface{}) error {
