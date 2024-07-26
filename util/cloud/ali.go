@@ -2,6 +2,7 @@ package cloud
 
 import (
 	"strconv"
+	"time"
 
 	"github.com/donkeywon/golib/util/httpc"
 )
@@ -15,7 +16,8 @@ func IsAliyun() bool {
 }
 
 func GetAliEcsMetadataToken() ([]byte, error) {
-	body, _, err := httpc.Pu(
+	body, _, err := httpc.PuTimeout(
+		time.Second,
 		"http://100.100.100.200/latest/api/token",
 		nil,
 		"X-aliyun-ecs-metadata-token-ttl-seconds",
@@ -54,7 +56,8 @@ func getAliEcsInstaneMetadata(typ string) ([]byte, error) {
 		return nil, err
 	}
 
-	body, _, err := httpc.G(
+	body, _, err := httpc.Gtimeout(
+		time.Second,
 		"http://100.100.100.200/latest/meta-data/instance/"+typ,
 		"X-aliyun-ecs-metadata-token",
 		string(token))

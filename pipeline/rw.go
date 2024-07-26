@@ -35,6 +35,13 @@ const (
 	defaultHashAlgo = "xxh3"
 )
 
+type RWCfg struct {
+	Type      RWType       `json:"rwType"    validate:"required" yaml:"rwType"`
+	Cfg       interface{}  `json:"cfg"       validate:"required" yaml:"cfg"`
+	CommonCfg *RWCommonCfg `json:"commonCfg" yaml:"commonCfg"`
+	Role      RWRole       `json:"role"      validate:"required" yaml:"role"`
+}
+
 type RWCommonCfg struct {
 	RateLimiterCfg     *ratelimit.RateLimiterCfg `json:"rateLimiterCfg"     yaml:"rateLimiterCfg"`
 	BufSize            int                       `json:"bufSize"            yaml:"bufSize"`

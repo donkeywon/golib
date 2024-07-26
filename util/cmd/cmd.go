@@ -132,7 +132,7 @@ func WaitCmd(ctx context.Context, cmd *exec.Cmd, startResult *Result) error {
 	return waitErr
 }
 
-// IsSignaled err is Cmd.Wait() or Cmd.Run() result error.
+// IsSignaled check if cmd exit signaled, err is Cmd.Wait() or Cmd.Run() result error.
 func IsSignaled(err error) bool {
 	if err == nil {
 		return false

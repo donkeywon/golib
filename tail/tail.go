@@ -11,7 +11,12 @@ import (
 	"github.com/fsnotify/fsnotify"
 )
 
-var errTailClosed = errors.New("tail closed")
+var (
+	errTailClosed = errors.New("tail closed")
+
+	ErrFileRemoved = errors.New("file removed")
+	ErrFileRenamed = errors.New("file renamed")
+)
 
 type Reader struct {
 	fi       os.FileInfo
@@ -126,8 +131,15 @@ func (r *Reader) wait() error {
 	select {
 	case <-r.closed:
 		return errTailClosed
-	case <-r.watcher.Events:
-		return nil
+	case e := <-r.watcher.Events:
+		switch e.Op {
+		case fsnotify.Remove:
+			return ErrFileRemoved
+		case fsnotify.Rename:
+			return ErrFileRenamed
+		default:
+			return nil
+		}
 	case err := <-r.watcher.Errors:
 		return err
 	}

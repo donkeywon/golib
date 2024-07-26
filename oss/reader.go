@@ -61,7 +61,6 @@ func (r *Reader) Read(p []byte) (int, error) {
 				return oss.Head(r.ctx, r.URL, r.Ak, r.Sk, r.Region)
 			},
 			retry.Attempts(uint(r.Retry)),
-			retry.Delay(time.Second),
 		)
 		if err != nil {
 			r.headErr = errs.Wrap(err, "oss head fail")
@@ -118,7 +117,6 @@ func (r *Reader) retryRead(start int, p []byte) (int, error) {
 		retry.RetryIf(func(err error) bool {
 			return err != nil && !errors.Is(err, io.EOF)
 		}),
-		retry.Delay(time.Second),
 	)
 
 	if err != nil {

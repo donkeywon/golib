@@ -3,7 +3,6 @@ package ftp
 import (
 	"errors"
 	"net"
-	"time"
 
 	"github.com/avast/retry-go/v4"
 	"github.com/donkeywon/golib/errs"
@@ -42,7 +41,6 @@ func (r *Reader) Init() error {
 			return nil
 		},
 		retry.Attempts(uint(r.Retry)),
-		retry.Delay(time.Second),
 	)
 	if err != nil {
 		return err

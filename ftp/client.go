@@ -65,7 +65,6 @@ func (c *Client) Init() error {
 			return nil
 		},
 		retry.Attempts(uint(c.Retry)),
-		retry.Delay(time.Second),
 	)
 	if err != nil {
 		return errs.Wrap(err, "connect to ftp server fail with max retry")
@@ -92,7 +91,6 @@ func (c *Client) Init() error {
 			return nil
 		},
 		retry.Attempts(uint(c.Retry)),
-		retry.Delay(time.Second),
 	)
 
 	go c.keepalive()
