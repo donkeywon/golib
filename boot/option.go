@@ -46,9 +46,9 @@ func DefaultLogMaxAge(maxAge int) Option {
 	})
 }
 
-func DefaultLogCompress(compress bool) Option {
+func DefaultLogDisableCompress(disableCompress bool) Option {
 	return optionFunc(func(b *Booter) {
-		b.logCfg.Compress = compress
+		b.logCfg.DisableCompress = disableCompress
 	})
 }
 
