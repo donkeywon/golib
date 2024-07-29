@@ -38,8 +38,7 @@ func RespRawFail(data []byte, w http.ResponseWriter, headersKV ...string) {
 }
 
 func RespRaw(statusCode int, data []byte, w http.ResponseWriter, headersKV ...string) {
-	w.WriteHeader(statusCode)
-	sendResponse(data, w, headersKV...)
+	sendResponse(statusCode, data, w, headersKV...)
 }
 
 func RespHTMLOk(data []byte, w http.ResponseWriter, headersKV ...string) {
@@ -74,8 +73,9 @@ func setHeaders(w http.ResponseWriter, headersKV ...string) {
 	}
 }
 
-func sendResponse(data []byte, w http.ResponseWriter, headersKV ...string) {
+func sendResponse(statusCode int, data []byte, w http.ResponseWriter, headersKV ...string) {
 	setHeaders(w, headersKV...)
+	w.WriteHeader(statusCode)
 	_, err := w.Write(data)
 	if err != nil {
 		panic(errs.Wrap(err, "http write data to response fail"))
