@@ -173,11 +173,8 @@ func DoTimeout(req *http.Request, timeout time.Duration) (*http.Response, error)
 }
 
 func setHeaders(req *http.Request, headersKV ...string) {
-	for i := 0; i < len(headersKV)-1; i += 2 {
-		if i+1 >= len(headersKV) {
-			break
-		}
-		req.Header.Set(headersKV[i], headersKV[i+1])
+	for i := 1; i < len(headersKV); i += 2 {
+		req.Header.Set(headersKV[i-1], headersKV[i])
 	}
 }
 
