@@ -4,7 +4,7 @@ go 1.22
 
 require (
 	github.com/avast/retry-go/v4 v4.6.0
-	github.com/bytedance/sonic v1.11.9
+	github.com/bytedance/sonic v1.12.0
 	github.com/caarlos0/env/v11 v11.1.0
 	github.com/donkeywon/go-flags v1.6.2
 	github.com/fsnotify/fsnotify v1.7.0

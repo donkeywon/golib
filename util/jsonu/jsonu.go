@@ -11,7 +11,7 @@ var (
 	Marshal         = sonic.Marshal
 	UnmarshalString = sonic.UnmarshalString
 	MarshalString   = sonic.MarshalString
-	MarshalIndent   = sonic.ConfigDefault.MarshalIndent
+	MarshalIndent   = sonic.MarshalIndent
 	NewEncoder      = encoder.NewStreamEncoder
 	NewDecoder      = decoder.NewStreamDecoder
 )
