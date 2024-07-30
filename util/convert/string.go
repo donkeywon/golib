@@ -4,7 +4,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/donkeywon/golib/util/json"
+	"github.com/donkeywon/golib/util/jsonu"
 )
 
 func AnyToString(v any) string {
@@ -90,7 +90,7 @@ func AnyToString(v any) string {
 	case *time.Duration:
 		vs = vv.String()
 	default:
-		vs, _ = json.MarshalString(vv)
+		vs, _ = jsonu.MarshalString(vv)
 	}
 
 	return vs
