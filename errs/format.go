@@ -139,3 +139,14 @@ func ErrToStack(err error, buf *bufferpool.Buffer, errsDepth int) {
 		buf.WriteString(terr.Error())
 	}
 }
+
+func PanicToErr(p interface{}) error {
+	var err error
+	switch pt := p.(type) {
+	case error:
+		err = pt
+	default:
+		err = Errorf("panic: %+v", p)
+	}
+	return err
+}
