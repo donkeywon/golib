@@ -4,7 +4,7 @@ import (
 	"strconv"
 	"sync"
 
-	"github.com/donkeywon/golib/util/convert"
+	"github.com/donkeywon/golib/util/conv"
 	"github.com/donkeywon/golib/util/jsonu"
 )
 
@@ -46,7 +46,7 @@ func (b *simpleInMemKvs) Store(k string, v any) {
 }
 
 func (b *simpleInMemKvs) StoreAsString(k string, v any) {
-	b.m.Store(k, convert.AnyToString(v))
+	b.m.Store(k, conv.AnyToString(v))
 }
 
 func (b *simpleInMemKvs) Load(k string) (any, bool) {
@@ -89,7 +89,7 @@ func (b *simpleInMemKvs) LoadAsString(k string) string {
 	if !exists {
 		return ""
 	}
-	return convert.AnyToString(v)
+	return conv.AnyToString(v)
 }
 
 func (b *simpleInMemKvs) LoadAsStringOr(k string, d string) string {
@@ -265,7 +265,7 @@ func (b *simpleInMemKvs) Range(f func(k string, v any) bool) {
 func (b *simpleInMemKvs) CollectAsString() map[string]string {
 	result := make(map[string]string)
 	b.Range(func(k string, v any) bool {
-		result[k] = convert.AnyToString(v)
+		result[k] = conv.AnyToString(v)
 		return true
 	})
 	return result
