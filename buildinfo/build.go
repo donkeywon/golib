@@ -1,7 +1,11 @@
 package buildinfo
 
+import "runtime"
+
 var (
-	Version    = ""
-	BuildStamp = ""
-	GitHash    = ""
+	Version   = ""
+	BuildTime = ""
+	GitCommit = ""
+	GoVersion = runtime.Version()
+	Arch      = runtime.GOARCH
 )

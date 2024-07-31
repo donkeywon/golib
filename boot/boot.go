@@ -123,9 +123,11 @@ func (b *Booter) Init() error {
 		return errs.Wrap(err, "load options fail")
 	}
 	if b.options.PrintVersion {
-		fmt.Println("version:" + buildinfo.Version)
-		fmt.Println("githash:" + buildinfo.GitHash)
-		fmt.Println("buildstamp:" + buildinfo.BuildStamp)
+		fmt.Fprintf(os.Stdout, "Version:"+buildinfo.Version+"\n"+
+			"GitCommit:"+buildinfo.GitCommit+"\n"+
+			"BuildTime:"+buildinfo.BuildTime+"\n"+
+			"GoVersion:"+buildinfo.GoVersion+"\n"+
+			"Arch:"+buildinfo.Arch+"\n")
 		os.Exit(0)
 	}
 
