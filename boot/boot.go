@@ -97,7 +97,7 @@ func New(opt ...Option) *Booter {
 	}
 
 	for _, o := range opt {
-		o.apply(b)
+		o(b)
 	}
 
 	return b
