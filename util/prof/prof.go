@@ -18,11 +18,11 @@ const (
 var (
 	profSwitch  uint32
 	profTimeout = 300
-	profCh      = make(chan struct{})
+	stopCh      = make(chan struct{})
 	p           interface{ Stop() }
 )
 
-func Start(mode string, dir string, timeoutSec int) (string, error) {
+func Start(mode string, dir string, timeoutSec int) (string, <-chan struct{}, error) {
 	opts := []func(*profile.Profile){}
 
 	filename := mode + ".pprof"
@@ -62,47 +62,44 @@ func Start(mode string, dir string, timeoutSec int) (string, error) {
 	}
 	opts = append(opts, profile.ProfilePath(dir))
 
-	return filepath.Join(dir, filename), start(timeoutSec, opts...)
+	done, err := start(timeoutSec, opts...)
+	return filepath.Join(dir, filename), done, err
 }
 
-func start(timeoutSec int, options ...func(*profile.Profile)) error {
+func start(timeoutSec int, options ...func(*profile.Profile)) (<-chan struct{}, error) {
 	if !atomic.CompareAndSwapUint32(&profSwitch, 0, 1) {
-		return errors.New("already profiling")
+		return nil, errors.New("already profiling")
 	}
 
 	opts := []func(*profile.Profile){profile.Quiet}
 
 	p = profile.Start(append(opts, options...)...)
 
-	if timeoutSec == 0 {
+	if timeoutSec <= 0 {
 		timeoutSec = profTimeout
 	}
 
+	done := make(chan struct{})
 	go func(timeoutSec int) {
 		select {
 		case <-time.After(time.Second * time.Duration(timeoutSec)):
-			stop()
-		case <-profCh:
+		case <-stopCh:
 		}
+		p.Stop()
+		p = nil
+		atomic.StoreUint32(&profSwitch, 0)
+		close(done)
 	}(timeoutSec)
 
-	return nil
+	return done, nil
 }
 
 func Stop() error {
-	if !atomic.CompareAndSwapUint32(&profSwitch, 1, 0) {
+	if atomic.LoadUint32(&profSwitch) != 1 {
 		return errors.New("not profiling")
 	}
-	stop()
-	profCh <- struct{}{}
+	stopCh <- struct{}{}
 	return nil
-}
-
-func stop() {
-	if p != nil {
-		p.Stop()
-	}
-	atomic.StoreUint32(&profSwitch, 0)
 }
 
 func genDir(dir string, mode string) string {
