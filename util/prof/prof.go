@@ -2,14 +2,17 @@ package prof
 
 import (
 	"errors"
+	"fmt"
+	"path/filepath"
 	"sync/atomic"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/pkg/profile"
 )
 
 const (
-	defaultPath = "/tmp"
+	defaultDir = "/tmp"
 )
 
 var (
@@ -19,9 +22,10 @@ var (
 	p           interface{ Stop() }
 )
 
-func Start(mode string, path string, timeoutSec int) error {
+func Start(mode string, dir string, timeoutSec int) (string, error) {
 	opts := []func(*profile.Profile){}
 
+	filename := mode + ".pprof"
 	if mode != "" {
 		switch mode {
 		case "cpu":
@@ -38,6 +42,7 @@ func Start(mode string, path string, timeoutSec int) error {
 			opts = append(opts, profile.BlockProfile)
 		case "trace":
 			opts = append(opts, profile.TraceProfile)
+			filename = "trace.out"
 		case "thread":
 			opts = append(opts, profile.ThreadcreationProfile)
 		case "goroutine":
@@ -46,14 +51,18 @@ func Start(mode string, path string, timeoutSec int) error {
 			opts = append(opts, profile.ClockProfile)
 		default:
 			opts = append(opts, profile.CPUProfile)
+			filename = "cpu.pprof"
 		}
 	}
 
-	if path != "" {
-		opts = append(opts, profile.ProfilePath(path))
+	if dir != "" {
+		dir = genDir(dir, mode)
+	} else {
+		dir = genDir(defaultDir, mode)
 	}
+	opts = append(opts, profile.ProfilePath(dir))
 
-	return start(timeoutSec, opts...)
+	return filepath.Join(dir, filename), start(timeoutSec, opts...)
 }
 
 func start(timeoutSec int, options ...func(*profile.Profile)) error {
@@ -61,7 +70,7 @@ func start(timeoutSec int, options ...func(*profile.Profile)) error {
 		return errors.New("already profiling")
 	}
 
-	opts := []func(*profile.Profile){profile.ProfilePath(defaultPath), profile.Quiet}
+	opts := []func(*profile.Profile){profile.Quiet}
 
 	p = profile.Start(append(opts, options...)...)
 
@@ -94,4 +103,8 @@ func stop() {
 		p.Stop()
 	}
 	atomic.StoreUint32(&profSwitch, 0)
+}
+
+func genDir(dir string, mode string) string {
+	return filepath.Join(dir, fmt.Sprintf("%s-%s-%s", time.Now().Format("20060102150405"), mode, uuid.NewString()))
 }
