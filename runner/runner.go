@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"github.com/donkeywon/golib/errs"
+	"github.com/donkeywon/golib/kvs"
 	"github.com/donkeywon/golib/log"
 	"go.uber.org/zap"
 )
@@ -14,7 +15,7 @@ import (
 var Create = newBase // allow to override
 
 type Runner interface {
-	kvs
+	kvs.KVS
 
 	Init() error
 	Start() error
@@ -25,6 +26,7 @@ type Runner interface {
 	Ctx() context.Context
 	SetCtx(context.Context)
 	Cancel()
+	SetKVS(kvs.KVS)
 
 	Inherit(Runner)
 
@@ -194,7 +196,7 @@ func safeStop(r Runner) {
 }
 
 type baseRunner struct {
-	kvs
+	kvs.KVS
 	ctx          context.Context
 	cancel       context.CancelFunc
 	err          error
@@ -225,7 +227,7 @@ func newBase(name string) Runner {
 		stopDone:    make(chan struct{}),
 		done:        make(chan struct{}),
 		childrenMap: make(map[string]Runner),
-		kvs:         newSimpleInMemKvs(),
+		KVS:         kvs.NewInMemKVS(),
 	}
 	return br
 }
@@ -257,8 +259,8 @@ func (br *baseRunner) Init() error {
 	if br.childrenMap == nil {
 		br.childrenMap = make(map[string]Runner)
 	}
-	if br.kvs == nil {
-		br.kvs = newSimpleInMemKvs()
+	if br.KVS == nil {
+		br.KVS = kvs.NewInMemKVS()
 	}
 	if br.Ctx() == nil {
 		br.SetCtx(context.Background())
@@ -285,6 +287,10 @@ func (br *baseRunner) Inherit(r Runner) {
 
 func (br *baseRunner) SetCtx(ctx context.Context) {
 	br.ctx, br.cancel = context.WithCancel(ctx)
+}
+
+func (br *baseRunner) SetKVS(k kvs.KVS) {
+	br.KVS = k
 }
 
 func (br *baseRunner) Cancel() {
