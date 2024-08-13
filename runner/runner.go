@@ -26,6 +26,7 @@ type Runner interface {
 	Ctx() context.Context
 	SetCtx(context.Context)
 	Cancel()
+	SetKVS(kvs.KVS)
 
 	Inherit(Runner)
 

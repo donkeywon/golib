@@ -28,5 +28,4 @@ type KVS interface {
 	Collect() map[string]any
 	CollectAsString() map[string]string
 	Range(func(k string, v any) bool)
-	Close() error
 }

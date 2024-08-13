@@ -31,7 +31,12 @@ func Resp(statusCode int, data interface{}, w http.ResponseWriter, headersKV ...
 		RespRaw(statusCode, nil, w, headersKV...)
 		return
 	}
-	s := conv.AnyToString(data)
+	s, err := conv.AnyToString(data)
+	if err != nil {
+		err = errs.Wrap(err, "convert response data to string fail")
+		RespRaw(http.StatusInternalServerError, conv.String2Bytes(errs.ErrToStackString(err)), w, headersKV...)
+		return
+	}
 	RespRaw(statusCode, conv.String2Bytes(s), w, headersKV...)
 }
 
