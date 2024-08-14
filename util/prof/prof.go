@@ -81,8 +81,10 @@ func start(timeoutSec int, options ...func(*profile.Profile)) (<-chan struct{}, 
 
 	done := make(chan struct{})
 	go func(timeoutSec int) {
+		t := time.NewTimer(time.Second * time.Duration(timeoutSec))
+		defer t.Stop()
 		select {
-		case <-time.After(time.Second * time.Duration(timeoutSec)):
+		case <-t.C:
 		case <-stopCh:
 		}
 		p.Stop()
