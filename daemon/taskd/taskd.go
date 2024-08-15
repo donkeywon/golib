@@ -21,18 +21,22 @@ var (
 )
 
 var _t = &Taskd{
-	Runner:      runner.Create(string(DaemonTypeTaskd)),
-	taskMap:     &sync.Map{},
-	taskMarkMap: &sync.Map{},
+	Runner:        runner.Create(string(DaemonTypeTaskd)),
+	taskMap:       make(map[string]*task.Task),
+	taskIDMarkMap: make(map[string]struct{}),
 }
 
 type Taskd struct {
 	runner.Runner
 	*Cfg
 
-	pool        *pond.WorkerPool
-	taskMarkMap *sync.Map
-	taskMap     *sync.Map
+	pool *pond.WorkerPool
+
+	mu               sync.Mutex
+	taskIDMarkMap    map[string]struct{}
+	taskIDRunningMap map[string]struct{}
+	taskIDPausingMap map[string]struct{}
+	taskMap          map[string]*task.Task
 
 	createHooks        []task.Hook
 	initHooks          []task.Hook
@@ -88,12 +92,7 @@ func (td *Taskd) TrySubmit(taskCfg *task.Cfg) (*task.Task, bool, error) {
 }
 
 func (td *Taskd) waitAllTaskDone() {
-	var allTask []*task.Task
-	td.taskMap.Range(func(_, value any) bool {
-		allTask = append(allTask, value.(*task.Task))
-		return true
-	})
-	for _, t := range allTask {
+	for _, t := range td.allTask() {
 		<-t.Done()
 	}
 }
@@ -189,20 +188,74 @@ func (td *Taskd) initTask(t *task.Task) (err error) {
 }
 
 func (td *Taskd) markTaskID(taskID string) bool {
-	_, loaded := td.taskMarkMap.LoadOrStore(taskID, struct{}{})
-	return !loaded
+	td.mu.Lock()
+	defer td.mu.Unlock()
+	_, exists := td.taskIDMarkMap[taskID]
+	if exists {
+		return false
+	}
+	td.taskIDMarkMap[taskID] = struct{}{}
+	return true
 }
 
 func (td *Taskd) unmarkTaskID(taskID string) {
-	td.taskMarkMap.Delete(taskID)
+	td.mu.Lock()
+	defer td.mu.Unlock()
+	delete(td.taskIDMarkMap, taskID)
 }
 
 func (td *Taskd) markTask(t *task.Task) {
-	td.taskMap.Store(t.Cfg.ID, t)
+	td.mu.Lock()
+	defer td.mu.Unlock()
+	td.taskMap[t.Cfg.ID] = t
 }
 
 func (td *Taskd) unmarkTask(t *task.Task) {
-	td.taskMap.Delete(t.Cfg.ID)
+	td.mu.Lock()
+	defer td.mu.Unlock()
+	delete(td.taskMap, t.Cfg.ID)
+}
+
+func (td *Taskd) markTaskRunning(taskID string) {
+	td.mu.Lock()
+	defer td.mu.Unlock()
+	td.taskIDRunningMap[taskID] = struct{}{}
+}
+
+func (td *Taskd) unmarkTaskRunning(taskID string) {
+	td.mu.Lock()
+	defer td.mu.Unlock()
+	delete(td.taskIDRunningMap, taskID)
+}
+
+func (td *Taskd) unmarkTaskRunningAndMarkTaskPausing(taskID string) {
+	td.mu.Lock()
+	defer td.mu.Unlock()
+	delete(td.taskIDRunningMap, taskID)
+	td.taskIDPausingMap[taskID] = struct{}{}
+}
+
+func (td *Taskd) unmarkTaskPausing(taskID string) {
+	td.mu.Lock()
+	defer td.mu.Unlock()
+	delete(td.taskIDPausingMap, taskID)
+}
+
+func (td *Taskd) unmarkTaskPausingAndMarkTaskRunning(taskID string) {
+	td.mu.Lock()
+	defer td.mu.Unlock()
+	delete(td.taskIDPausingMap, taskID)
+	td.taskIDRunningMap[taskID] = struct{}{}
+}
+
+func (td *Taskd) allTask() []*task.Task {
+	td.mu.Lock()
+	defer td.mu.Unlock()
+	tasks := make([]*task.Task, 0, len(td.taskMap))
+	for _, t := range td.taskMap {
+		tasks = append(tasks, t)
+	}
+	return tasks
 }
 
 func (td *Taskd) listenTask(t *task.Task) {
@@ -244,8 +297,10 @@ func (td *Taskd) hookDone(t *task.Task) {
 }
 
 func (td *Taskd) HasTask(taskID string) bool {
-	_, ok := td.taskMarkMap.Load(taskID)
-	return ok
+	td.mu.Lock()
+	defer td.mu.Unlock()
+	_, exists := td.taskIDMarkMap[taskID]
+	return exists
 }
 
 func Submit(cfg *task.Cfg) (*task.Task, error) {
