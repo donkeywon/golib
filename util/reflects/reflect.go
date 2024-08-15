@@ -1,11 +1,11 @@
-package util
+package reflects
 
 import (
 	"reflect"
 	"runtime"
 )
 
-func ReflectSet(i interface{}, f interface{}) bool {
+func Set(i interface{}, f interface{}) bool {
 	iValue := reflect.ValueOf(i)
 	if iValue.Kind() != reflect.Pointer {
 		return false
@@ -33,7 +33,7 @@ func ReflectSet(i interface{}, f interface{}) bool {
 	return true
 }
 
-func ReflectGetFuncName(v interface{}) string {
+func GetFuncName(v interface{}) string {
 	return runtime.FuncForPC(reflect.ValueOf(v).Pointer()).Name()
 }
 
