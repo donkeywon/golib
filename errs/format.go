@@ -78,6 +78,9 @@ func ErrToStackString(err error) string {
 }
 
 func ErrToStack(err error, w io.Writer, errsDepth int) {
+	if err == nil {
+		return
+	}
 	switch terr := err.(type) {
 	case wrappedErrs, anotherWrappedErrs:
 		var errs []error
