@@ -5,6 +5,8 @@ import (
 	"github.com/donkeywon/golib/runner"
 )
 
+var Create = newBase
+
 type StepType string
 
 type Step interface {
@@ -12,37 +14,36 @@ type Step interface {
 	plugin.Plugin
 	GetTask() *Task
 	SetTask(*Task)
-	CollectAsString() map[string]string
 }
 
-type BaseStep struct {
+type baseStep struct {
 	runner.Runner
 
 	t *Task
 }
 
-func NewBase(name string) Step {
-	return &BaseStep{
+func newBase(name string) Step {
+	return &baseStep{
 		Runner: runner.Create(name),
 	}
 }
 
-func (b *BaseStep) Store(k string, v any) {
+func (b *baseStep) Store(k string, v any) {
 	b.Runner.StoreAsString(k, v)
 }
 
-func (b *BaseStep) GetTask() *Task {
+func (b *baseStep) GetTask() *Task {
 	return b.t
 }
 
-func (b *BaseStep) SetTask(t *Task) {
+func (b *baseStep) SetTask(t *Task) {
 	b.t = t
 }
 
-func (b *BaseStep) Type() interface{} {
+func (b *baseStep) Type() interface{} {
 	panic("method Step.Type not implemented")
 }
 
-func (b *BaseStep) GetCfg() interface{} {
+func (b *baseStep) GetCfg() interface{} {
 	panic("method Step.GetCfg not implemented")
 }

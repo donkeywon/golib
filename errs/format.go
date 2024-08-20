@@ -71,6 +71,9 @@ func writeIndent(w io.Writer, indent []byte, indentCount int, skipFirst bool, s 
 }
 
 func ErrToStackString(err error) string {
+	if err == nil {
+		return ""
+	}
 	buf := bufferpool.GetBuffer()
 	defer buf.Free()
 	ErrToStack(err, buf, 0)
