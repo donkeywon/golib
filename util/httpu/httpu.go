@@ -1,21 +1,38 @@
 package httpu
 
 import (
+	"encoding/xml"
+	"errors"
+	"io"
 	"net/http"
 
 	"github.com/donkeywon/golib/errs"
 	"github.com/donkeywon/golib/util/conv"
 	"github.com/donkeywon/golib/util/jsonu"
+	"github.com/goccy/go-yaml"
+	"github.com/pelletier/go-toml/v2"
+	"google.golang.org/protobuf/proto"
 )
 
 const (
 	HeaderContentType   = "Content-Type"
 	HeaderContentLength = "Content-Length"
 
-	ContentTypeHTML     = "text/html"
-	ContentTypeHTMLUTF8 = "text/html; charset=utf-8"
-	ContentTypeJSON     = "application/json"
-	ContentTypeJSONUTF8 = "application/json; charset=utf-8"
+	MIMEHTML              = "text/html"
+	MIMEHTMLUTF8          = "text/html; charset=utf-8"
+	MIMEJSON              = "application/json"
+	MIMEJSONUTF8          = "application/json; charset=utf-8"
+	MIMEXML               = "application/xml"
+	MIMEXML2              = "text/xml"
+	MIMEPlain             = "text/plain"
+	MIMEPOSTForm          = "application/x-www-form-urlencoded"
+	MIMEMultipartPOSTForm = "multipart/form-data"
+	MIMEPROTOBUF          = "application/x-protobuf"
+	MIMEMSGPACK           = "application/x-msgpack"
+	MIMEMSGPACK2          = "application/msgpack"
+	MIMEYAML              = "application/x-yaml"
+	MIMEYAML2             = "application/yaml"
+	MIMETOML              = "application/toml"
 )
 
 func RespOk(data interface{}, w http.ResponseWriter, headersKV ...string) {
@@ -66,7 +83,7 @@ func RespHTMLFail(data []byte, w http.ResponseWriter, headersKV ...string) {
 }
 
 func RespHTML(statusCode int, data []byte, w http.ResponseWriter, headersKV ...string) {
-	setContentTypeHeader(w, ContentTypeHTML)
+	setContentTypeHeader(w, MIMEHTML)
 	RespRaw(statusCode, data, w, headersKV...)
 }
 
@@ -79,7 +96,7 @@ func RespJSONFail(data interface{}, w http.ResponseWriter, headersKV ...string) 
 }
 
 func RespJSON(statusCode int, data interface{}, w http.ResponseWriter, headersKV ...string) {
-	setContentTypeHeader(w, ContentTypeJSON)
+	setContentTypeHeader(w, MIMEJSON)
 	if data == nil {
 		RespRaw(statusCode, nil, w, headersKV...)
 		return
@@ -103,4 +120,34 @@ func setContentTypeHeader(w http.ResponseWriter, t string) {
 	if ct == "" {
 		w.Header().Set(HeaderContentType, t)
 	}
+}
+
+func ReqToJSON(r *http.Request, obj interface{}) error {
+	return jsonu.NewDecoder(r.Body).Decode(obj)
+}
+
+func ReqToXML(r *http.Request, obj interface{}) error {
+	return xml.NewDecoder(r.Body).Decode(obj)
+}
+
+func ReqToYAML(r *http.Request, obj interface{}) error {
+	return yaml.NewDecoder(r.Body).Decode(obj)
+}
+
+func ReqToTOML(r *http.Request, obj interface{}) error {
+	return toml.NewDecoder(r.Body).Decode(obj)
+}
+
+func ReqToPB(r *http.Request, obj interface{}) error {
+	msg, ok := obj.(proto.Message)
+	if !ok {
+		return errors.New("obj is not proto.Message type")
+	}
+
+	buf, err := io.ReadAll(r.Body)
+	if err != nil {
+		return err
+	}
+
+	return proto.Unmarshal(buf, msg)
 }

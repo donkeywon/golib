@@ -14,6 +14,7 @@ require (
 	github.com/icza/backscanner v0.0.0-20240328210400-b40c3a86dec5
 	github.com/klauspost/compress v1.17.9
 	github.com/klauspost/pgzip v1.2.6
+	github.com/pelletier/go-toml/v2 v2.2.2
 	github.com/pkg/profile v1.7.0
 	github.com/prometheus/procfs v0.15.1
 	github.com/shirou/gopsutil/v3 v3.24.5
@@ -23,6 +24,7 @@ require (
 	golang.org/x/crypto v0.26.0
 	golang.org/x/sys v0.24.0
 	golang.org/x/time v0.6.0
+	google.golang.org/protobuf v1.34.2
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 )
 
@@ -41,7 +43,7 @@ require (
 	github.com/klauspost/cpuid/v2 v2.2.8 // indirect
 	github.com/kr/pretty v0.3.1 // indirect
 	github.com/leodido/go-urn v1.4.0 // indirect
-	github.com/lufia/plan9stats v0.0.0-20240513124658-fba389f38bae // indirect
+	github.com/lufia/plan9stats v0.0.0-20240819163618-b1d8f4d146e7 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
