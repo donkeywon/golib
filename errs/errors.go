@@ -62,7 +62,8 @@ func (f *fundamental) Format(s fmt.State, verb rune) {
 	switch verb {
 	case 'v':
 		if s.Flag('+') {
-			ErrToStack(f, s, 0)
+			io.WriteString(s, f.msg)
+			f.stack.Format(s, verb)
 			return
 		}
 		fallthrough
