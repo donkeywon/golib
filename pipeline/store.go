@@ -11,6 +11,7 @@ import (
 	"github.com/donkeywon/golib/oss"
 	"github.com/donkeywon/golib/plugin"
 	"github.com/donkeywon/golib/util/bufferpool"
+	"github.com/donkeywon/golib/util/conv"
 	sshutil "github.com/donkeywon/golib/util/ssh"
 	"golang.org/x/crypto/ssh"
 )
@@ -133,7 +134,7 @@ func (s *StoreRW) Start() error {
 	defer func() {
 		err := recover()
 		if err != nil {
-			s.AppendError(errs.Errorf("store panic: %+v", err))
+			s.AppendError(errs.PanicToErrWithMsg(err, "store panic"))
 		}
 
 		closeErr := s.Close()
@@ -194,8 +195,11 @@ func (s *StoreRW) EnableCalcHash(hashAlgo string) {
 }
 
 func (s *StoreRW) initFtp() error {
-	var err error
-	cfg, _ := s.StoreCfg.Cfg.(*FtpCfg)
+	cfg := &FtpCfg{}
+	err := conv.ConvertOrMerge(cfg, s.StoreCfg.Cfg)
+	if err != nil {
+		return errs.Wrap(err, "invalid ftp cfg")
+	}
 	if s.IsReader() {
 		s.r, err = createFtpReader(s.StoreCfg, cfg)
 	} else {
@@ -205,8 +209,11 @@ func (s *StoreRW) initFtp() error {
 }
 
 func (s *StoreRW) initOSS() error {
-	var err error
-	cfg, _ := s.StoreCfg.Cfg.(*OssCfg)
+	cfg := &OssCfg{}
+	err := conv.ConvertOrMerge(cfg, s.StoreCfg.Cfg)
+	if err != nil {
+		return errs.Wrap(err, "invalid oss cfg")
+	}
 	if s.IsReader() {
 		s.r, err = createOssReader(s.StoreCfg, cfg)
 	} else {
@@ -220,8 +227,11 @@ func (s *StoreRW) initOSS() error {
 }
 
 func (s *StoreRW) initSSH() error {
-	var err error
-	cfg, _ := s.StoreCfg.Cfg.(*SSHCfg)
+	cfg := &SSHCfg{}
+	err := conv.ConvertOrMerge(cfg, s.StoreCfg.Cfg)
+	if err != nil {
+		return errs.Wrap(err, "invalid ssh cfg")
+	}
 	if !s.IsStarter() {
 		return errs.Errorf("ssh store must be Starter")
 	}

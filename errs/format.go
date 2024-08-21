@@ -151,7 +151,7 @@ func PanicToErrWithMsg(p interface{}, msg string) error {
 	var err error
 	switch pt := p.(type) {
 	case error:
-		err = pt
+		err = Wrap(pt, msg)
 	default:
 		if msg == "" {
 			err = Errorf("%+v", p)

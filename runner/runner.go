@@ -189,7 +189,7 @@ func safeStop(r Runner) {
 	defer func() {
 		err := recover()
 		if err != nil {
-			r.AppendError(errs.Errorf("panic when stopping: %+v", err))
+			r.AppendError(errs.PanicToErrWithMsg(err, "panic when stopping"))
 		}
 	}()
 	r.AppendError(r.Stop())

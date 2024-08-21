@@ -19,6 +19,7 @@ import (
 	"github.com/donkeywon/golib/ratelimit"
 	"github.com/donkeywon/golib/runner"
 	"github.com/donkeywon/golib/util/bytespool"
+	"github.com/donkeywon/golib/util/conv"
 	"github.com/donkeywon/golib/util/reflects"
 	"github.com/zeebo/xxh3"
 )
@@ -37,7 +38,7 @@ const (
 )
 
 type RWCfg struct {
-	Type      RWType       `json:"rwType"    validate:"required" yaml:"rwType"`
+	Type      RWType       `json:"type"    validate:"required" yaml:"type"`
 	Cfg       interface{}  `json:"cfg"       validate:"required" yaml:"cfg"`
 	CommonCfg *RWCommonCfg `json:"commonCfg" yaml:"commonCfg"`
 	Role      RWRole       `json:"role"      validate:"required" yaml:"role"`
@@ -59,14 +60,20 @@ type RWCommonCfg struct {
 type RWType string
 type RWRole string
 
-func Create(role RWRole, typ RWType, cfg interface{}, commonCfg *RWCommonCfg) RW {
-	rw := plugin.CreateWithCfg(typ, cfg).(RW)
+func Create(role RWRole, typ RWType, cfg interface{}, commonCfg *RWCommonCfg) (RW, error) {
+	rwCfg := plugin.CreateCfg(typ)
+	err := conv.ConvertOrMerge(rwCfg, cfg)
+	if err != nil {
+		return nil, errs.Wrapf(err, "invalid rw(%s) cfg", typ)
+	}
+
+	rw := plugin.CreateWithCfg(typ, rwCfg).(RW)
 	if commonCfg == nil {
 		commonCfg = &RWCommonCfg{}
 	}
 	rw.As(role)
 	ApplyCommonCfgToRW(rw, commonCfg)
-	return rw
+	return rw, nil
 }
 
 type onceError struct {

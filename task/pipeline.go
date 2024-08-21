@@ -1,6 +1,7 @@
 package task
 
 import (
+	"github.com/donkeywon/golib/consts"
 	"github.com/donkeywon/golib/errs"
 	"github.com/donkeywon/golib/pipeline"
 	"github.com/donkeywon/golib/plugin"
@@ -28,7 +29,7 @@ type Pipeline struct {
 
 func NewPipelineStep() *Pipeline {
 	return &Pipeline{
-		Step: newBase("step"),
+		Step: newBase(string(StepTypePipeline)),
 	}
 }
 
@@ -41,16 +42,17 @@ func (p *Pipeline) Init() error {
 	p.p = pipeline.New()
 	p.p.Cfg = p.Cfg
 
-	return p.Step.Init()
-}
-
-func (p *Pipeline) Start() error {
-	err := runner.Init(p.p)
+	err = runner.Init(p.p)
 	if err != nil {
 		return errs.Wrap(err, "init pipeline fail")
 	}
 
+	return p.Step.Init()
+}
+
+func (p *Pipeline) Start() error {
 	runner.Start(p.p)
+	p.Store(consts.FieldPipelineResult, p.p.Result())
 	return p.p.Err()
 }
 

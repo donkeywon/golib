@@ -36,6 +36,12 @@ func (c *Cfg) Add(role RWRole, typ RWType, cfg interface{}, commonCfg *RWCommonC
 	return c
 }
 
+type Result struct {
+	Cfg     *Cfg                     `json:"cfg"     yaml:"cfg"`
+	Data    map[string]interface{}   `json:"data"    yaml:"data"`
+	RWsData []map[string]interface{} `json:"rwsData" yaml:"rwsData"`
+}
+
 type Pipeline struct {
 	runner.Runner
 	*Cfg
@@ -109,8 +115,11 @@ func (p *Pipeline) Start() error {
 		go func(rwGroup *RWGroup) {
 			defer wg.Done()
 			runner.Start(rwGroup)
+			re := rwGroup.Err()
 			errMu.Lock()
-			err = errors.Join(err, rwGroup.Err())
+			if re != nil {
+				err = errors.Join(err, re)
+			}
 			errMu.Unlock()
 		}(rwGroup)
 	}
@@ -131,6 +140,28 @@ func (p *Pipeline) Type() interface{} {
 
 func (p *Pipeline) GetCfg() interface{} {
 	return p.Cfg
+}
+
+func (p *Pipeline) RWGroups() []*RWGroup {
+	return p.rwGroups
+}
+
+func (p *Pipeline) Result() *Result {
+	r := &Result{
+		Cfg:  p.Cfg,
+		Data: p.Collect(),
+	}
+
+	for _, rwg := range p.rwGroups {
+		for _, rw := range rwg.Readers() {
+			r.RWsData = append(r.RWsData, rw.Collect())
+		}
+		r.RWsData = append(r.RWsData, rwg.Starter().Collect())
+		for _, rw := range rwg.Writers() {
+			r.RWsData = append(r.RWsData, rw.Collect())
+		}
+	}
+	return r
 }
 
 func createRWGroups(rwCfgGroups [][]*RWCfg) []*RWGroup {

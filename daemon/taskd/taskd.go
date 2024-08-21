@@ -168,7 +168,7 @@ func (td *Taskd) createTask(cfg *task.Cfg) (t *task.Task, err error) {
 	defer func() {
 		e := recover()
 		if e != nil {
-			err = errs.Errorf("%v", e)
+			err = errs.PanicToErr(e)
 		}
 	}()
 	return plugin.CreateWithCfg(task.PluginTypeTask, cfg).(*task.Task), nil
@@ -178,7 +178,7 @@ func (td *Taskd) initTask(t *task.Task) (err error) {
 	defer func() {
 		e := recover()
 		if e != nil {
-			err = errs.Errorf("%v", e)
+			err = errs.PanicToErr(e)
 		}
 	}()
 
@@ -264,6 +264,11 @@ func (td *Taskd) listenTask(t *task.Task) {
 	td.Info("listen done by task done", "task_id", t.Cfg.ID)
 	td.unmarkTaskID(t.Cfg.ID)
 	td.unmarkTask(t)
+
+	err := t.Err()
+	if err != nil {
+		td.Error("task fail", err, "task_id", t.Cfg.ID, "task_type", t.Cfg.Type)
+	}
 }
 
 func (td *Taskd) hookCreate(t *task.Task, err error) {

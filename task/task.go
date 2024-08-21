@@ -1,6 +1,7 @@
 package task
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/donkeywon/golib/consts"
@@ -8,6 +9,7 @@ import (
 	"github.com/donkeywon/golib/plugin"
 	"github.com/donkeywon/golib/runner"
 	"github.com/donkeywon/golib/util"
+	"github.com/donkeywon/golib/util/conv"
 )
 
 func init() {
@@ -68,10 +70,11 @@ func (c *Cfg) Defer(typ StepType, cfg interface{}) *Cfg {
 	return c
 }
 
-type Snapshot struct {
-	Cfg              *Cfg                `json:"cfg"              yaml:"cfg"`
-	StepsResult      []map[string]string `json:"stepsResult"      yaml:"stepsResult"`
-	DeferStepsResult []map[string]string `json:"deferStepsResult" yaml:"deferStepsResult"`
+type Result struct {
+	Cfg            *Cfg                     `json:"cfg"            yaml:"cfg"`
+	Data           map[string]interface{}   `json:"data"           yaml:"data"`
+	StepsData      []map[string]interface{} `json:"stepsData"      yaml:"stepsData"`
+	DeferStepsData []map[string]interface{} `json:"deferStepsData" yaml:"deferStepsData"`
 }
 
 type Task struct {
@@ -102,18 +105,18 @@ func (t *Task) Init() error {
 	}
 
 	for i, cfg := range t.Cfg.Steps {
-		step := plugin.CreateWithCfg(cfg.Type, cfg.Cfg).(Step)
-		step.SetTask(t)
-		step.Inherit(t)
-		step.WithLoggerFields("step", i, "step_type", step.Type())
+		step, er := t.createStep(i, cfg, false)
+		if er != nil {
+			return errs.Wrapf(er, "create step(%d) %s fail", i, cfg.Type)
+		}
 		t.steps = append(t.steps, step)
 	}
 
 	for i, cfg := range t.Cfg.DeferSteps {
-		step := plugin.CreateWithCfg(cfg.Type, cfg.Cfg).(Step)
-		step.SetTask(t)
-		step.Inherit(t)
-		step.WithLoggerFields("defer_step", i, "defer_step_type", step.Type())
+		step, er := t.createStep(i, cfg, true)
+		if er != nil {
+			return errs.Wrapf(er, "create defer step(%d) %s fail", i, cfg.Type)
+		}
 		t.deferSteps = append(t.deferSteps, step)
 	}
 
@@ -164,20 +167,20 @@ func (t *Task) RegisterCollector(c Collector) {
 
 func (t *Task) Result() interface{} {
 	if t.collector == nil {
-		return t.Snapshot()
+		return t.result()
 	}
 	return t.collector(t)
 }
 
-func (t *Task) Snapshot() *Snapshot {
-	s := &Snapshot{
+func (t *Task) result() *Result {
+	s := &Result{
 		Cfg: t.Cfg,
 	}
 	for _, step := range t.Steps() {
-		s.StepsResult = append(s.StepsResult, step.CollectAsString())
+		s.StepsData = append(s.StepsData, step.Collect())
 	}
 	for _, deferStep := range t.DeferSteps() {
-		s.DeferStepsResult = append(s.DeferStepsResult, deferStep.CollectAsString())
+		s.DeferStepsData = append(s.DeferStepsData, deferStep.Collect())
 	}
 	return s
 }
@@ -210,10 +213,33 @@ func (t *Task) GetCfg() interface{} {
 	return t.Cfg
 }
 
+func (t *Task) createStep(idx int, cfg *StepCfg, isDefer bool) (Step, error) {
+	var (
+		err         error
+		stepOrDefer string
+	)
+	if isDefer {
+		stepOrDefer = "defer_step"
+	} else {
+		stepOrDefer = "step"
+	}
+	stepCfg := plugin.CreateCfg(cfg.Type)
+	err = conv.ConvertOrMerge(stepCfg, cfg.Cfg)
+	if err != nil {
+		return nil, errs.Wrapf(err, "invalid %s(%s) cfg", stepOrDefer, cfg.Type)
+	}
+
+	step := plugin.CreateWithCfg(cfg.Type, stepCfg).(Step)
+	step.SetTask(t)
+	step.Inherit(t)
+	step.WithLoggerFields(stepOrDefer, idx, stepOrDefer+"_type", step.Type())
+	return step, nil
+}
+
 func (t *Task) recoverStepPanic() {
 	err := recover()
 	if err != nil {
-		t.AppendError(errs.Wrapf(errs.Errorf("%+v", err), "step %d(%s) panic", t.CurStepIdx, t.CurStep().Type()))
+		t.AppendError(errs.PanicToErrWithMsg(err, fmt.Sprintf("step(%d) %s panic", t.CurStepIdx, t.CurStep().Type())))
 	}
 }
 
@@ -227,48 +253,50 @@ func (t *Task) runSteps() {
 		case <-t.Stopping():
 			return
 		default:
-			step := t.Steps()[t.CurStepIdx]
-			step.Store(consts.FieldStartTimeNano, time.Now().UnixNano())
-			runner.Start(step)
-			step.Store(consts.FieldStopTimeNano, time.Now().UnixNano())
-			for _, hook := range t.stepDoneHooks {
-				hook(t, t.CurStepIdx, step)
-			}
-			err := step.Err()
-			if err != nil {
-				t.AppendError(errs.Wrapf(err, "run step %s(%d) fail", step.Type(), t.CurStepIdx))
-				return
-			}
+		}
+
+		step := t.Steps()[t.CurStepIdx]
+		step.Store(consts.FieldStartTimeNano, time.Now().UnixNano())
+		runner.Start(step)
+		step.Store(consts.FieldStopTimeNano, time.Now().UnixNano())
+		for _, hook := range t.stepDoneHooks {
+			hook(t, t.CurStepIdx, step)
+		}
+		err := step.Err()
+		if err != nil {
+			t.AppendError(errs.Wrapf(err, "run step(%d) %s fail", t.CurStepIdx, step.Type()))
+			return
 		}
 	}
 }
 
 func (t *Task) runDeferSteps() {
 	for ; t.CurDeferStepIdx < len(t.DeferSteps()); t.CurDeferStepIdx++ {
-		deferStep := t.deferSteps[len(t.deferSteps)-1-t.CurDeferStepIdx]
 		select {
 		case <-t.Stopping():
 			return
 		default:
-			func() {
-				defer func() {
-					err := recover()
-					if err != nil {
-						t.AppendError(errs.Errorf("defer step(%d) panic: %+v", t.CurDeferStepIdx, err))
-					}
-				}()
+		}
 
-				deferStep.Store(consts.FieldStartTimeNano, time.Now().Unix())
-				runner.Start(deferStep)
-				deferStep.Store(consts.FieldStopTimeNano, time.Now().Unix())
-				for _, hook := range t.deferStepDoneHooks {
-					hook(t, t.CurDeferStepIdx, deferStep)
-				}
-				err := deferStep.Err()
+		deferStep := t.deferSteps[len(t.deferSteps)-1-t.CurDeferStepIdx]
+		func() {
+			defer func() {
+				err := recover()
 				if err != nil {
-					t.AppendError(errs.Wrapf(err, "run defer step %s(%d) fail", deferStep.Type(), t.CurDeferStepIdx))
+					t.AppendError(errs.PanicToErrWithMsg(err, fmt.Sprintf("defer step(%d) %s panic", t.CurDeferStepIdx, t.CurDeferStep().Type())))
 				}
 			}()
-		}
+
+			deferStep.Store(consts.FieldStartTimeNano, time.Now().Unix())
+			runner.Start(deferStep)
+			deferStep.Store(consts.FieldStopTimeNano, time.Now().Unix())
+			for _, hook := range t.deferStepDoneHooks {
+				hook(t, t.CurDeferStepIdx, deferStep)
+			}
+			err := deferStep.Err()
+			if err != nil {
+				t.AppendError(errs.Wrapf(err, "run defer(%d) step %s fail", t.CurDeferStepIdx, deferStep.Type()))
+			}
+		}()
 	}
 }
