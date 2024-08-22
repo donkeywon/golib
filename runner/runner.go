@@ -26,7 +26,6 @@ type Runner interface {
 	Ctx() context.Context
 	SetCtx(context.Context)
 	Cancel()
-	SetKVS(kvs.KVS)
 
 	Inherit(Runner)
 
@@ -287,10 +286,6 @@ func (br *baseRunner) Inherit(r Runner) {
 
 func (br *baseRunner) SetCtx(ctx context.Context) {
 	br.ctx, br.cancel = context.WithCancel(ctx)
-}
-
-func (br *baseRunner) SetKVS(k kvs.KVS) {
-	br.KVS = k
 }
 
 func (br *baseRunner) Cancel() {

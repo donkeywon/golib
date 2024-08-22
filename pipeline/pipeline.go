@@ -148,17 +148,20 @@ func (p *Pipeline) RWGroups() []*RWGroup {
 
 func (p *Pipeline) Result() *Result {
 	r := &Result{
-		Cfg:  p.Cfg,
-		Data: p.Collect(),
+		Cfg: p.Cfg,
 	}
+	r.Data, _ = p.Collect()
 
 	for _, rwg := range p.rwGroups {
 		for _, rw := range rwg.Readers() {
-			r.RWsData = append(r.RWsData, rw.Collect())
+			v, _ := rw.Collect()
+			r.RWsData = append(r.RWsData, v)
 		}
-		r.RWsData = append(r.RWsData, rwg.Starter().Collect())
+		v, _ := rwg.Starter().Collect()
+		r.RWsData = append(r.RWsData, v)
 		for _, rw := range rwg.Writers() {
-			r.RWsData = append(r.RWsData, rw.Collect())
+			v, _ := rw.Collect()
+			r.RWsData = append(r.RWsData, v)
 		}
 	}
 	return r

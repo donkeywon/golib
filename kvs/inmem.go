@@ -3,9 +3,9 @@ package kvs
 import (
 	"sync"
 
+	"github.com/donkeywon/golib/errs"
 	"github.com/donkeywon/golib/plugin"
 	"github.com/donkeywon/golib/util/conv"
-	"github.com/donkeywon/golib/util/jsonu"
 )
 
 func init() {
@@ -25,160 +25,126 @@ type InMemKVS struct {
 	m sync.Map
 }
 
-func NewInMemKVS() *InMemKVS {
+func NewInMemKVS() KVS {
 	return &InMemKVS{}
 }
 
-func (b *InMemKVS) Store(k string, v any) {
-	b.m.Store(k, v)
+func (i *InMemKVS) Open() error {
+	return nil
 }
 
-func (b *InMemKVS) StoreAsString(k string, v any) {
+func (i *InMemKVS) Close() error {
+	return nil
+}
+
+func (i *InMemKVS) Store(k string, v any) error {
+	i.m.Store(k, v)
+	return nil
+}
+
+func (i *InMemKVS) StoreAsString(k string, v any) error {
 	s, err := conv.AnyToString(v)
 	if err != nil {
-		panic(err)
+		return errs.Wrap(err, "convert value to string fail")
 	}
-	b.m.Store(k, s)
+	i.m.Store(k, s)
+	return nil
 }
 
-func (b *InMemKVS) Load(k string) (any, bool) {
-	return b.m.Load(k)
+func (i *InMemKVS) Load(k string) (any, bool, error) {
+	v, exists := i.m.Load(k)
+	return v, exists, nil
 }
 
-func (b *InMemKVS) LoadOrStore(k string, v any) (any, bool) {
-	return b.m.LoadOrStore(k, v)
+func (i *InMemKVS) LoadOrStore(k string, v any) (any, bool, error) {
+	v, loaded := i.m.LoadOrStore(k, v)
+	return v, loaded, nil
 }
 
-func (b *InMemKVS) LoadAndDelete(k string) (any, bool) {
-	return b.m.LoadAndDelete(k)
+func (i *InMemKVS) LoadAndDelete(k string) (any, bool, error) {
+	v, loaded := i.m.LoadAndDelete(k)
+	return v, loaded, nil
 }
 
-func (b *InMemKVS) Del(k string) {
-	b.m.Delete(k)
+func (i *InMemKVS) Del(k string) error {
+	i.m.Delete(k)
+	return nil
 }
 
-func (b *InMemKVS) LoadAsBool(k string) bool {
-	v, exists := b.Load(k)
-	if !exists {
-		return false
-	}
-	vv, err := conv.ToBool(v)
-	if err != nil {
-		panic(err)
-	}
-	return vv
+func (i *InMemKVS) LoadAsBool(k string) (bool, error) {
+	return LoadAsBool(i, k)
 }
 
-func (b *InMemKVS) LoadAsString(k string) string {
-	v, exists := b.Load(k)
-	if !exists {
-		return ""
-	}
-	vv, err := conv.AnyToString(v)
-	if err != nil {
-		panic(err)
-	}
-	return vv
+func (i *InMemKVS) LoadAsString(k string) (string, error) {
+	return LoadAsString(i, k)
 }
 
-func (b *InMemKVS) LoadAsStringOr(k string, d string) string {
-	v := b.LoadAsString(k)
-	if v == "" {
-		return d
-	}
-	return v
+func (i *InMemKVS) LoadAsStringOr(k string, d string) (string, error) {
+	return LoadAsStringOr(i, k, d)
 }
 
-func (b *InMemKVS) LoadAsInt(k string) int {
-	return b.LoadAsIntOr(k, 0)
+func (i *InMemKVS) LoadAsInt(k string) (int, error) {
+	return LoadAsInt(i, k)
 }
 
-func (b *InMemKVS) LoadAsIntOr(k string, d int) int {
-	v, exists := b.Load(k)
-	if !exists {
-		return d
-	}
-	if v == nil {
-		return d
-	}
-	vv, err := conv.ToInt(v)
-	if err != nil {
-		panic(err)
-	}
-	return vv
+func (i *InMemKVS) LoadAsIntOr(k string, d int) (int, error) {
+	return LoadAsIntOr(i, k, d)
 }
 
-func (b *InMemKVS) LoadAsUint(k string) uint {
-	return b.LoadAsUintOr(k, 0)
+func (i *InMemKVS) LoadAsUint(k string) (uint, error) {
+	return LoadAsUint(i, k)
 }
 
-func (b *InMemKVS) LoadAsUintOr(k string, d uint) uint {
-	v, exists := b.Load(k)
-	if !exists {
-		return d
-	}
-	if v == nil {
-		return d
-	}
-	vv, err := conv.ToUint(v)
-	if err != nil {
-		panic(err)
-	}
-	return vv
+func (i *InMemKVS) LoadAsUintOr(k string, d uint) (uint, error) {
+	return LoadAsUintOr(i, k, d)
 }
 
-func (b *InMemKVS) LoadAsFloat(k string) float64 {
-	return b.LoadAsFloatOr(k, 0.0)
+func (i *InMemKVS) LoadAsFloat(k string) (float64, error) {
+	return LoadAsFloat(i, k)
 }
 
-func (b *InMemKVS) LoadAsFloatOr(k string, d float64) float64 {
-	v, exists := b.Load(k)
-	if !exists {
-		return d
-	}
-	if v == nil {
-		return d
-	}
-	vv, err := conv.ToFloat(v)
-	if err != nil {
-		panic(err)
-	}
-	return vv
+func (i *InMemKVS) LoadAsFloatOr(k string, d float64) (float64, error) {
+	return LoadAsFloatOr(i, k, d)
 }
 
-func (b *InMemKVS) LoadTo(k string, to any) error {
-	v := b.LoadAsString(k)
-	if v == "" {
-		return nil
-	}
-
-	return jsonu.UnmarshalString(v, to)
+func (i *InMemKVS) LoadTo(k string, to any) error {
+	return LoadTo(i, k, to)
 }
 
-func (b *InMemKVS) Collect() map[string]any {
+func (i *InMemKVS) Collect() (map[string]any, error) {
 	c := make(map[string]any)
-	b.Range(func(k string, v any) bool {
+	i.Range(func(k string, v any) bool {
 		c[k] = v
 		return true
 	})
-	return c
+	return c, nil
 }
 
-func (b *InMemKVS) Range(f func(k string, v any) bool) {
-	b.m.Range(func(key, value any) bool {
+func (i *InMemKVS) Range(f func(k string, v any) bool) error {
+	i.m.Range(func(key, value any) bool {
 		return f(key.(string), value)
 	})
+	return nil
 }
 
-func (b *InMemKVS) CollectAsString() map[string]string {
+func (i *InMemKVS) CollectAsString() (map[string]string, error) {
 	var err error
 	result := make(map[string]string)
-	b.Range(func(k string, v any) bool {
+	i.Range(func(k string, v any) bool {
 		result[k], err = conv.AnyToString(v)
 		if err != nil {
-			panic(err)
+			err = errs.Wrap(err, "convert value to string fail")
+			return false
 		}
 		return true
 	})
-	return result
+	return result, err
+}
+
+func (i *InMemKVS) Type() interface{} {
+	return TypeInMem
+}
+
+func (i *InMemKVS) GetCfg() interface{} {
+	return i.InMemKVSCfg
 }
