@@ -22,7 +22,7 @@ type NopRW struct {
 
 func NewNopRW() *NopRW {
 	return &NopRW{
-		RW: NewBaseRW(string(RWTypeNop)),
+		RW: CreateBaseRW(string(RWTypeNop)),
 	}
 }
 

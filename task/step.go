@@ -5,7 +5,7 @@ import (
 	"github.com/donkeywon/golib/runner"
 )
 
-var Create = newBase
+var CreateBaseStep = newBase
 
 type StepType string
 

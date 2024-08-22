@@ -34,7 +34,7 @@ type FileRW struct {
 
 func NewFileRW() *FileRW {
 	return &FileRW{
-		RW: NewBaseRW(string(RWTypeFile)),
+		RW: CreateBaseRW(string(RWTypeFile)),
 	}
 }
 

@@ -27,6 +27,8 @@ import (
 var (
 	ErrStoppedManually  = errors.New("RW stopped manually")
 	ErrChecksumNotMatch = errors.New("checksum not match")
+
+	CreateBaseRW = newBaseRW
 )
 
 const (
@@ -38,7 +40,7 @@ const (
 )
 
 type RWCfg struct {
-	Type      RWType       `json:"type"    validate:"required" yaml:"type"`
+	Type      RWType       `json:"type"      validate:"required" yaml:"type"`
 	Cfg       interface{}  `json:"cfg"       validate:"required" yaml:"cfg"`
 	CommonCfg *RWCommonCfg `json:"commonCfg" yaml:"commonCfg"`
 	Role      RWRole       `json:"role"      validate:"required" yaml:"role"`
@@ -60,19 +62,19 @@ type RWCommonCfg struct {
 type RWType string
 type RWRole string
 
-func Create(role RWRole, typ RWType, cfg interface{}, commonCfg *RWCommonCfg) (RW, error) {
-	rwCfg := plugin.CreateCfg(typ)
-	err := conv.ConvertOrMerge(rwCfg, cfg)
+func CreateRW(rwCfg *RWCfg) (RW, error) {
+	cfg := plugin.CreateCfg(rwCfg.Type)
+	err := conv.ConvertOrMerge(cfg, rwCfg)
 	if err != nil {
-		return nil, errs.Wrapf(err, "invalid rw(%s) cfg", typ)
+		return nil, errs.Wrapf(err, "invalid rw(%s) cfg", rwCfg.Type)
 	}
 
-	rw := plugin.CreateWithCfg(typ, rwCfg).(RW)
-	if commonCfg == nil {
-		commonCfg = &RWCommonCfg{}
+	rw := plugin.CreateWithCfg(rwCfg.Type, cfg).(RW)
+	if rwCfg.CommonCfg == nil {
+		rwCfg.CommonCfg = &RWCommonCfg{}
 	}
-	rw.As(role)
-	ApplyCommonCfgToRW(rw, commonCfg)
+	rw.As(rwCfg.Role)
+	ApplyCommonCfgToRW(rw, rwCfg.CommonCfg)
 	return rw, nil
 }
 
@@ -142,10 +144,10 @@ type RW interface {
 	Role() RWRole
 }
 
-// BaseRW implement RW interface
+// baseRW implement RW interface
 // werr: async或deadline只要写失败就存werr，如果werr!=nil，之后的async写都skip掉
 // rerr: async或buf的err
-type BaseRW struct {
+type baseRW struct {
 	rl ratelimit.RxTxRateLimiter
 	runner.Runner
 	w                  io.WriteCloser
@@ -177,14 +179,14 @@ type BaseRW struct {
 	async              bool
 }
 
-func NewBaseRW(name string) *BaseRW {
-	return &BaseRW{
+func newBaseRW(name string) RW {
+	return &baseRW{
 		Runner: runner.Create(name),
 		closed: make(chan struct{}),
 	}
 }
 
-func (b *BaseRW) Init() (err error) {
+func (b *baseRW) Init() (err error) {
 	defer func() {
 		if err != nil {
 			b.Warn("close after RW init fail", "err", err, "close_err", b.Close())
@@ -266,7 +268,7 @@ func (b *BaseRW) Init() (err error) {
 }
 
 // Start 如果当前RW可以作为Starter，那么需要实现Start方法.
-func (b *BaseRW) Start() error {
+func (b *baseRW) Start() error {
 	// for example
 
 	// read from b and write to b.Writer()
@@ -295,7 +297,7 @@ func (b *BaseRW) Start() error {
 // b.Reader()是TailRW或者其他类似的ReadCloser，当执行Read方法的时候，会存在阻塞的情况
 // 如果不执行Close方法且一直没有新内容的话，那么Read会一直阻塞住
 // 所以对b.Reader()和b.Writer()也执行一次runner.Stop通知，由TailRW自己在Stop方法中做Close操作.
-func (b *BaseRW) Stop() error {
+func (b *baseRW) Stop() error {
 	if b.Reader() != nil {
 		if r, ok := b.Reader().(RW); ok {
 			runner.Stop(r)
@@ -309,15 +311,15 @@ func (b *BaseRW) Stop() error {
 	return b.Runner.Stop()
 }
 
-func (b *BaseRW) Type() interface{} {
+func (b *baseRW) Type() interface{} {
 	panic("method RW.Type not implemented")
 }
 
-func (b *BaseRW) GetCfg() interface{} {
+func (b *baseRW) GetCfg() interface{} {
 	panic("method RW.GetCfg not implemented")
 }
 
-func (b *BaseRW) NestReader(r io.ReadCloser) error {
+func (b *baseRW) NestReader(r io.ReadCloser) error {
 	if rw, ok := r.(RW); ok && b.Reader() != nil {
 		err := rw.NestReader(b.Reader())
 		if err != nil {
@@ -330,7 +332,7 @@ func (b *BaseRW) NestReader(r io.ReadCloser) error {
 	return nil
 }
 
-func (b *BaseRW) NestWriter(w io.WriteCloser) error {
+func (b *baseRW) NestWriter(w io.WriteCloser) error {
 	if rw, ok := w.(RW); ok && b.Writer() != nil {
 		err := rw.NestWriter(b.Writer())
 		if err != nil {
@@ -343,51 +345,51 @@ func (b *BaseRW) NestWriter(w io.WriteCloser) error {
 	return nil
 }
 
-func (b *BaseRW) Reader() io.ReadCloser {
+func (b *baseRW) Reader() io.ReadCloser {
 	return b.r
 }
 
-func (b *BaseRW) Writer() io.WriteCloser {
+func (b *baseRW) Writer() io.WriteCloser {
 	return b.w
 }
 
-func (b *BaseRW) AsStarter() {
+func (b *baseRW) AsStarter() {
 	b.role = RWRoleStarter
 }
 
-func (b *BaseRW) IsStarter() bool {
+func (b *baseRW) IsStarter() bool {
 	return b.role == RWRoleStarter
 }
 
-func (b *BaseRW) AsReader() {
+func (b *baseRW) AsReader() {
 	b.role = RWRoleReader
 }
 
-func (b *BaseRW) IsReader() bool {
+func (b *baseRW) IsReader() bool {
 	return b.role == RWRoleReader
 }
 
-func (b *BaseRW) AsWriter() {
+func (b *baseRW) AsWriter() {
 	b.role = RWRoleWriter
 }
 
-func (b *BaseRW) IsWriter() bool {
+func (b *baseRW) IsWriter() bool {
 	return b.role == RWRoleWriter
 }
 
-func (b *BaseRW) As(role RWRole) {
+func (b *baseRW) As(role RWRole) {
 	b.role = role
 }
 
-func (b *BaseRW) Is(role RWRole) bool {
+func (b *baseRW) Is(role RWRole) bool {
 	return b.role == role
 }
 
-func (b *BaseRW) Role() RWRole {
+func (b *baseRW) Role() RWRole {
 	return b.role
 }
 
-func (b *BaseRW) RegisterReadHook(rh ...ReadHook) {
+func (b *baseRW) RegisterReadHook(rh ...ReadHook) {
 	for _, h := range rh {
 		if h == nil {
 			panic("read hook is nil")
@@ -396,7 +398,7 @@ func (b *BaseRW) RegisterReadHook(rh ...ReadHook) {
 	}
 }
 
-func (b *BaseRW) RegisterWriteHook(wh ...WriteHook) {
+func (b *baseRW) RegisterWriteHook(wh ...WriteHook) {
 	for _, h := range wh {
 		if h == nil {
 			panic("write hook is nil")
@@ -405,7 +407,7 @@ func (b *BaseRW) RegisterWriteHook(wh ...WriteHook) {
 	}
 }
 
-func (b *BaseRW) Read(p []byte) (int, error) {
+func (b *baseRW) Read(p []byte) (int, error) {
 	if b.Reader() == nil {
 		return 0, errs.New("RW is not reader")
 	}
@@ -426,7 +428,7 @@ func (b *BaseRW) Read(p []byte) (int, error) {
 	return nr, err
 }
 
-func (b *BaseRW) Write(p []byte) (int, error) {
+func (b *baseRW) Write(p []byte) (int, error) {
 	if b.Writer() == nil {
 		return 0, errs.New("RW is not writer")
 	}
@@ -448,29 +450,29 @@ func (b *BaseRW) Write(p []byte) (int, error) {
 	return nw, err
 }
 
-func (b *BaseRW) Close() error {
+func (b *baseRW) Close() error {
 	return errors.Join(b.closeReader(), b.closeWriter())
 }
 
-func (b *BaseRW) IsAsyncOrDeadline() bool {
+func (b *baseRW) IsAsyncOrDeadline() bool {
 	return b.async || b.bufSize > 0 && b.wDeadline > 0
 }
 
-func (b *BaseRW) EnableMonitorSpeed() {
+func (b *baseRW) EnableMonitorSpeed() {
 	b.enableMonitorSpeed = true
 }
 
-func (b *BaseRW) EnableCalcHash(algo string) {
+func (b *baseRW) EnableCalcHash(algo string) {
 	b.enableCalcHash = true
 	b.hashAlgo = algo
 }
 
-func (b *BaseRW) EnableRateLimit(rl ratelimit.RxTxRateLimiter) {
+func (b *baseRW) EnableRateLimit(rl ratelimit.RxTxRateLimiter) {
 	b.rl = rl
 	b.enableRateLimit = true
 }
 
-func (b *BaseRW) EnableWriteBuf(bufSize int, deadline int, async bool, asyncChanBufSize int) {
+func (b *baseRW) EnableWriteBuf(bufSize int, deadline int, async bool, asyncChanBufSize int) {
 	b.bufSize = bufSize
 	b.async = async
 	if async {
@@ -479,7 +481,7 @@ func (b *BaseRW) EnableWriteBuf(bufSize int, deadline int, async bool, asyncChan
 	b.wDeadline = deadline
 }
 
-func (b *BaseRW) EnableReadBuf(bufSize int, async bool, asyncChanBufSize int) {
+func (b *baseRW) EnableReadBuf(bufSize int, async bool, asyncChanBufSize int) {
 	b.bufSize = bufSize
 	b.async = async
 	if async {
@@ -487,28 +489,28 @@ func (b *BaseRW) EnableReadBuf(bufSize int, async bool, asyncChanBufSize int) {
 	}
 }
 
-func (b *BaseRW) EnableChecksum(checksum string, algo string) {
+func (b *baseRW) EnableChecksum(checksum string, algo string) {
 	b.checksum = checksum
 	b.hashAlgo = algo
 }
 
-func (b *BaseRW) Nwrite() uint64 {
+func (b *baseRW) Nwrite() uint64 {
 	return atomic.LoadUint64(&b.nw)
 }
 
-func (b *BaseRW) Nread() uint64 {
+func (b *baseRW) Nread() uint64 {
 	return atomic.LoadUint64(&b.nr)
 }
 
-func (b *BaseRW) AsyncChanLen() int {
+func (b *baseRW) AsyncChanLen() int {
 	return len(b.asyncChan)
 }
 
-func (b *BaseRW) AsyncChanCap() int {
+func (b *baseRW) AsyncChanCap() int {
 	return cap(b.asyncChan)
 }
 
-func (b *BaseRW) Hash() string {
+func (b *baseRW) Hash() string {
 	if !b.enableCalcHash || b.hash == nil {
 		return ""
 	}
@@ -523,7 +525,7 @@ func (b *BaseRW) Hash() string {
 	return hex.EncodeToString(bs)
 }
 
-func (b *BaseRW) Flush() error {
+func (b *baseRW) Flush() error {
 	if b.bufSize <= 0 {
 		return nil
 	}
@@ -533,7 +535,7 @@ func (b *BaseRW) Flush() error {
 	return b.flushNoLock()
 }
 
-func (b *BaseRW) initHash() {
+func (b *baseRW) initHash() {
 	switch b.hashAlgo {
 	case "sha1":
 		b.hash = sha1.New()
@@ -548,7 +550,7 @@ func (b *BaseRW) initHash() {
 	}
 }
 
-func (b *BaseRW) hookManuallyStop(_ int, _ []byte, _ error, _ int64, _ ...interface{}) error {
+func (b *baseRW) hookManuallyStop(_ int, _ []byte, _ error, _ int64, _ ...interface{}) error {
 	select {
 	case <-b.Stopping():
 		return ErrStoppedManually
@@ -557,15 +559,15 @@ func (b *BaseRW) hookManuallyStop(_ int, _ []byte, _ error, _ int64, _ ...interf
 	}
 }
 
-func (b *BaseRW) getBuf() *bytespool.Bytes {
+func (b *baseRW) getBuf() *bytespool.Bytes {
 	return bytespool.GetBytesN(b.bufSize)
 }
 
-func (b *BaseRW) getBufN(n int) *bytespool.Bytes {
+func (b *baseRW) getBufN(n int) *bytespool.Bytes {
 	return bytespool.GetBytesN(n)
 }
 
-func (b *BaseRW) read(p []byte) (nr int, err error) {
+func (b *baseRW) read(p []byte) (nr int, err error) {
 	startTS := time.Now().UnixMilli()
 	defer func() {
 		endTS := time.Now().UnixMilli()
@@ -581,7 +583,7 @@ func (b *BaseRW) read(p []byte) (nr int, err error) {
 	return b.Reader().Read(p)
 }
 
-func (b *BaseRW) write(p []byte) (nw int, err error) {
+func (b *baseRW) write(p []byte) (nw int, err error) {
 	startTS := time.Now().UnixMilli()
 	defer func() {
 		endTS := time.Now().UnixMilli()
@@ -597,7 +599,7 @@ func (b *BaseRW) write(p []byte) (nw int, err error) {
 	return b.Writer().Write(p)
 }
 
-func (b *BaseRW) readBuf(p []byte) (int, error) {
+func (b *baseRW) readBuf(p []byte) (int, error) {
 	b.Debug("start read buf", "len", len(p))
 
 	b.mu.Lock()
@@ -622,7 +624,7 @@ func (b *BaseRW) readBuf(p []byte) (int, error) {
 	return nr, err
 }
 
-func (b *BaseRW) prepareReadBuf() error {
+func (b *baseRW) prepareReadBuf() error {
 	if b.buf != nil && b.offset < b.buf.Len() {
 		// 当前buf还有剩余没读
 		b.Debug("cur buf remains unread bytes", "buf_len", b.buf.Len(), "offset", b.offset)
@@ -670,7 +672,7 @@ func (b *BaseRW) prepareReadBuf() error {
 	return err
 }
 
-func (b *BaseRW) writeBuf(p []byte) (int, error) {
+func (b *baseRW) writeBuf(p []byte) (int, error) {
 	err := b.werr.Load()
 	if err != nil {
 		return 0, err
@@ -714,7 +716,7 @@ func (b *BaseRW) writeBuf(p []byte) (int, error) {
 	return nw, err
 }
 
-func (b *BaseRW) flushNoLock() error {
+func (b *baseRW) flushNoLock() error {
 	if b.buf == nil {
 		b.Debug("flush skipped caused by buf is nil")
 		return nil
@@ -744,7 +746,7 @@ func (b *BaseRW) flushNoLock() error {
 	return nil
 }
 
-func (b *BaseRW) deadlineFlush() {
+func (b *baseRW) deadlineFlush() {
 	t := time.NewTicker(time.Second * time.Duration(b.wDeadline))
 	defer t.Stop()
 	for {
@@ -778,7 +780,7 @@ func (b *BaseRW) deadlineFlush() {
 	}
 }
 
-func (b *BaseRW) asyncRead() {
+func (b *baseRW) asyncRead() {
 	b.Debug("start async read")
 	for {
 		select {
@@ -811,7 +813,7 @@ func (b *BaseRW) asyncRead() {
 	}
 }
 
-func (b *BaseRW) asyncWrite() {
+func (b *baseRW) asyncWrite() {
 	b.Debug("start async write")
 	for {
 		bs, ok := <-b.asyncChan
@@ -845,7 +847,7 @@ func (b *BaseRW) asyncWrite() {
 	}
 }
 
-func (b *BaseRW) closeReader() error {
+func (b *baseRW) closeReader() error {
 	if b.Reader() == nil {
 		return nil
 	}
@@ -879,7 +881,7 @@ func (b *BaseRW) closeReader() error {
 	return errs.Wrapf(err, "%s close nested reader fail", b.Name())
 }
 
-func (b *BaseRW) closeWriter() error {
+func (b *baseRW) closeWriter() error {
 	if b.Writer() == nil {
 		return nil
 	}
@@ -915,32 +917,32 @@ func (b *BaseRW) closeWriter() error {
 	return errors.Join(err, errs.Wrapf(closeErr, "%s close nested writer fail", b.Name()))
 }
 
-func (b *BaseRW) hookIncWritten(n int, _ []byte, _ error, _ int64, _ ...interface{}) error {
+func (b *baseRW) hookIncWritten(n int, _ []byte, _ error, _ int64, _ ...interface{}) error {
 	atomic.AddUint64(&b.nw, uint64(n))
 	return nil
 }
 
-func (b *BaseRW) hookIncReadn(n int, _ []byte, _ error, _ int64, _ ...interface{}) error {
+func (b *baseRW) hookIncReadn(n int, _ []byte, _ error, _ int64, _ ...interface{}) error {
 	atomic.AddUint64(&b.nr, uint64(n))
 	return nil
 }
 
-func (b *BaseRW) hookHash(n int, bs []byte, _ error, _ int64, _ ...interface{}) error {
+func (b *baseRW) hookHash(n int, bs []byte, _ error, _ int64, _ ...interface{}) error {
 	_, _ = b.hash.Write(bs[:n])
 	return nil
 }
 
-func (b *BaseRW) hookDebugLogRead(n int, _ []byte, err error, cost int64, misc ...interface{}) error {
+func (b *baseRW) hookDebugLogRead(n int, _ []byte, err error, cost int64, misc ...interface{}) error {
 	b.Debug("read hook log", "n", n, "err", err, "cost", fmt.Sprintf("%d ms", cost), "misc", misc)
 	return nil
 }
 
-func (b *BaseRW) hookDebugLogWrite(n int, _ []byte, err error, cost int64, misc ...interface{}) error {
+func (b *baseRW) hookDebugLogWrite(n int, _ []byte, err error, cost int64, misc ...interface{}) error {
 	b.Debug("write hook log", "n", n, "err", err, "cost", fmt.Sprintf("%d ms", cost), "misc", misc)
 	return nil
 }
 
-func (b *BaseRW) hookReadRateLimit(n int, _ []byte, _ error, _ int64, _ ...interface{}) error {
+func (b *baseRW) hookReadRateLimit(n int, _ []byte, _ error, _ int64, _ ...interface{}) error {
 	if n == 0 || b.rl == nil {
 		return nil
 	}
@@ -951,7 +953,7 @@ func (b *BaseRW) hookReadRateLimit(n int, _ []byte, _ error, _ int64, _ ...inter
 	return nil
 }
 
-func (b *BaseRW) hookWriteRateLimit(n int, _ []byte, _ error, _ int64, _ ...interface{}) error {
+func (b *baseRW) hookWriteRateLimit(n int, _ []byte, _ error, _ int64, _ ...interface{}) error {
 	if n == 0 || b.rl == nil {
 		return nil
 	}
@@ -962,7 +964,7 @@ func (b *BaseRW) hookWriteRateLimit(n int, _ []byte, _ error, _ int64, _ ...inte
 	return nil
 }
 
-func (b *BaseRW) hookChecksum(_ int, _ []byte, err error, _ int64, _ ...interface{}) error {
+func (b *baseRW) hookChecksum(_ int, _ []byte, err error, _ int64, _ ...interface{}) error {
 	if !errors.Is(err, io.EOF) {
 		return nil
 	}
@@ -975,7 +977,7 @@ func (b *BaseRW) hookChecksum(_ int, _ []byte, err error, _ int64, _ ...interfac
 	return nil
 }
 
-func (b *BaseRW) logSpeed(sub uint64, interval int64) {
+func (b *baseRW) logSpeed(sub uint64, interval int64) {
 	switch {
 	case sub < 1024:
 		b.Info("monitor", "speed", fmt.Sprintf("%.1fB/s", float64(sub)/float64(interval)))
@@ -986,7 +988,7 @@ func (b *BaseRW) logSpeed(sub uint64, interval int64) {
 	}
 }
 
-func (b *BaseRW) monitorSpeed() {
+func (b *baseRW) monitorSpeed() {
 	var last, now uint64
 	var interval int64 = 5
 	t := time.NewTicker(time.Second * time.Duration(interval))

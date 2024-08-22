@@ -31,7 +31,7 @@ type TailRW struct {
 
 func NewTailRW() *TailRW {
 	return &TailRW{
-		RW: NewBaseRW(string(RWTypeTail)),
+		RW: CreateBaseRW(string(RWTypeTail)),
 	}
 }
 

@@ -31,7 +31,7 @@ type CopyRW struct {
 
 func NewCopyRW() *CopyRW {
 	return &CopyRW{
-		RW: NewBaseRW("copy"),
+		RW: CreateBaseRW(string(RWTypeCopy)),
 	}
 }
 
