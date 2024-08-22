@@ -5,8 +5,9 @@ go 1.22.5
 require (
 	github.com/alitto/pond v1.9.1
 	github.com/arl/statsviz v0.6.0
-	github.com/donkeywon/golib v0.7.2
+	github.com/donkeywon/golib v0.7.4
 	github.com/google/gops v0.3.28
+	github.com/jmoiron/sqlx v1.4.0
 	github.com/prometheus/client_golang v1.19.1
 	github.com/stretchr/testify v1.9.0
 )
@@ -70,5 +71,3 @@ require (
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
-
-replace github.com/donkeywon/golib v0.7.2 => ../
