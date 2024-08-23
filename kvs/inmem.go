@@ -25,7 +25,7 @@ type InMemKVS struct {
 	m sync.Map
 }
 
-func NewInMemKVS() KVS {
+func NewInMemKVS() *InMemKVS {
 	return &InMemKVS{}
 }
 

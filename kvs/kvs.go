@@ -1,8 +1,6 @@
 package kvs
 
 import (
-	"time"
-
 	"github.com/donkeywon/golib/errs"
 	"github.com/donkeywon/golib/plugin"
 	"github.com/donkeywon/golib/util/conv"
@@ -10,10 +8,10 @@ import (
 )
 
 type DBModel struct {
-	RowID     int64     `db:"rowid"`
-	K         string    `db:"k"`
-	V         string    `db:"v"`
-	UpdatedAt time.Time `db:"updated_at"`
+	RowID     int64  `db:"rowid"`
+	K         string `db:"k"`
+	V         string `db:"v"`
+	UpdatedAt int64  `db:"updated_at"`
 }
 
 type Type string
