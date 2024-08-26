@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/donkeywon/golib/log/sink"
-	"github.com/donkeywon/golib/util/jsonu"
+	"github.com/donkeywon/golib/util/jsons"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
@@ -145,7 +145,7 @@ func DefaultEncoderConfig() zapcore.EncoderConfig {
 		EncodeCaller:        ce,
 		EncodeName:          ne,
 		ConsoleSeparator:    DefaultEncoderConsoleSeparator,
-		NewReflectedEncoder: func(w io.Writer) zapcore.ReflectedEncoder { return jsonu.NewEncoder(w) },
+		NewReflectedEncoder: func(w io.Writer) zapcore.ReflectedEncoder { return jsons.NewEncoder(w) },
 	}
 
 	return config

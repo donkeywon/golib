@@ -9,9 +9,9 @@ import (
 	"github.com/donkeywon/golib/errs"
 	"github.com/donkeywon/golib/plugin"
 	"github.com/donkeywon/golib/runner"
-	"github.com/donkeywon/golib/util"
 	"github.com/donkeywon/golib/util/cloud"
 	"github.com/donkeywon/golib/util/ethu"
+	"github.com/donkeywon/golib/util/vtil"
 	"golang.org/x/time/rate"
 )
 
@@ -63,7 +63,7 @@ func NewHostRateLimiter() *HostRateLimiter {
 }
 
 func (h *HostRateLimiter) Init() error {
-	err := util.V.Struct(h.HostRateLimiterCfg)
+	err := vtil.Struct(h.HostRateLimiterCfg)
 	if err != nil {
 		return err
 	}

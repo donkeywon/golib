@@ -1,4 +1,4 @@
-package jsonu
+package jsons
 
 import (
 	"github.com/bytedance/sonic"

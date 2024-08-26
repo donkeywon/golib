@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/donkeywon/golib/util/jsonu"
+	"github.com/donkeywon/golib/util/jsons"
 	"github.com/jinzhu/copier"
 )
 
@@ -96,7 +96,7 @@ func AnyToString(v any) (string, error) {
 	case *time.Duration:
 		vs = vv.String()
 	default:
-		vs, err = jsonu.MarshalString(vv)
+		vs, err = jsons.MarshalString(vv)
 	}
 
 	return vs, err
@@ -224,11 +224,11 @@ func ToFloat(v any) (float64, error) {
 }
 
 func MapTo(dst interface{}, m map[string]interface{}) error {
-	bs, err := jsonu.Marshal(m)
+	bs, err := jsons.Marshal(m)
 	if err != nil {
 		return err
 	}
-	return jsonu.Unmarshal(bs, dst)
+	return jsons.Unmarshal(bs, dst)
 }
 
 func ConvertOrMerge(dst interface{}, src interface{}) error {

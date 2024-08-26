@@ -1,8 +1,6 @@
-package util
+package paths
 
-import (
-	"os"
-)
+import "os"
 
 func FileExist(path string) bool {
 	return PathExist(path, false)

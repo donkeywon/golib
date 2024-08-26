@@ -4,15 +4,7 @@ import (
 	"github.com/donkeywon/golib/errs"
 	"github.com/donkeywon/golib/plugin"
 	"github.com/donkeywon/golib/util/conv"
-	"github.com/donkeywon/golib/util/jsonu"
 )
-
-type DBModel struct {
-	RowID     int64  `db:"rowid"`
-	K         string `db:"k"`
-	V         string `db:"v"`
-	UpdatedAt int64  `db:"updated_at"`
-}
 
 type Type string
 
@@ -42,7 +34,6 @@ type KVS interface {
 	LoadAsUintOr(k string, d uint) (uint, error)
 	LoadAsFloat(k string) (float64, error)
 	LoadAsFloatOr(k string, d float64) (float64, error)
-	LoadTo(k string, to any) error
 	Collect() (map[string]any, error)
 	CollectAsString() (map[string]string, error)
 	Range(func(k string, v any) bool) error
@@ -144,16 +135,4 @@ func LoadAsFloatOr(kvs KVS, k string, d float64) (float64, error) {
 		return 0, errs.Wrap(err, "convert value to float64 fail")
 	}
 	return vv, nil
-}
-
-func LoadTo(kvs KVS, k string, to any) error {
-	v, err := LoadAsString(kvs, k)
-	if err != nil {
-		return err
-	}
-	if v == "" {
-		return nil
-	}
-
-	return jsonu.UnmarshalString(v, to)
 }

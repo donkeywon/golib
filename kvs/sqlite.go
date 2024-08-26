@@ -52,6 +52,13 @@ const (
 	TypeSQLite Type = "sqlite"
 )
 
+type DBModel struct {
+	RowID     int64
+	K         string
+	V         string
+	UpdatedAt int64
+}
+
 type SQLiteKVSCfg struct {
 	Path     string `json:"path"     yaml:"path" validate:"required"`
 	Table    string `json:"table"    yaml:"table"`
@@ -253,10 +260,6 @@ func (s *SQLiteKVS) LoadAsFloat(k string) (float64, error) {
 
 func (s *SQLiteKVS) LoadAsFloatOr(k string, d float64) (float64, error) {
 	return LoadAsFloatOr(s, k, d)
-}
-
-func (s *SQLiteKVS) LoadTo(k string, to any) error {
-	return LoadTo(s, k, to)
 }
 
 func (s *SQLiteKVS) Collect() (map[string]any, error) {

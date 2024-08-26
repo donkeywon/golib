@@ -6,7 +6,7 @@ import (
 	"github.com/donkeywon/golib/pipeline"
 	"github.com/donkeywon/golib/plugin"
 	"github.com/donkeywon/golib/runner"
-	"github.com/donkeywon/golib/util"
+	"github.com/donkeywon/golib/util/vtil"
 )
 
 func init() {
@@ -34,7 +34,7 @@ func NewPipelineStep() *Pipeline {
 }
 
 func (p *Pipeline) Init() error {
-	err := util.V.Struct(p.Cfg)
+	err := vtil.Struct(p.Cfg)
 	if err != nil {
 		return err
 	}
