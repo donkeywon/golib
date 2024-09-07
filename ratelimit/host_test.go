@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/donkeywon/golib/util/test"
+	"github.com/donkeywon/golib/util/tests"
 	"github.com/stretchr/testify/require"
 )
 
@@ -19,7 +19,7 @@ func TestHost(t *testing.T) {
 	h := NewHostRateLimiter()
 	h.HostRateLimiterCfg = hc
 
-	test.DebugInherit(h)
+	tests.Init(h)
 
 	require.NoError(t, h.Init())
 

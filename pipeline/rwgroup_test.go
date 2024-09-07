@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/donkeywon/golib/runner"
-	"github.com/donkeywon/golib/util/test"
+	"github.com/donkeywon/golib/util/tests"
 	"github.com/stretchr/testify/require"
 )
 
@@ -19,7 +19,7 @@ func TestGroup(t *testing.T) {
 
 	g := NewRWGroup()
 	g.RWGroupCfg = cfg
-	test.DebugInherit(g)
+	tests.Init(g)
 
 	err := runner.Init(g)
 	require.NoError(t, err)
@@ -50,7 +50,7 @@ func TestStore(t *testing.T) {
 
 	g := NewRWGroup()
 	g.RWGroupCfg = cfg
-	test.DebugInherit(g)
+	tests.Init(g)
 
 	require.NoError(t, runner.Init(g))
 
@@ -80,7 +80,7 @@ func TestFtp(t *testing.T) {
 
 	g := NewRWGroup()
 	g.RWGroupCfg = cfg
-	test.DebugInherit(g)
+	tests.Init(g)
 
 	require.NoError(t, runner.Init(g))
 
@@ -109,7 +109,7 @@ func TestOSS(t *testing.T) {
 
 	g := NewRWGroup()
 	g.RWGroupCfg = cfg
-	test.DebugInherit(g)
+	tests.Init(g)
 
 	require.NoError(t, runner.Init(g))
 

@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/donkeywon/golib/runner"
-	"github.com/donkeywon/golib/util/test"
+	"github.com/donkeywon/golib/util/tests"
 	"github.com/stretchr/testify/require"
 )
 
@@ -75,7 +75,7 @@ func TestAsyncRead(t *testing.T) {
 
 	rw.AsReader()
 	rw.EnableReadBuf(6, true, 5)
-	test.DebugInherit(rw)
+	tests.Init(rw)
 
 	err = runner.Init(rw)
 	require.NoError(t, err)

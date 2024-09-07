@@ -9,6 +9,7 @@ import (
 	"github.com/donkeywon/golib/plugin"
 	"github.com/donkeywon/golib/runner"
 	"github.com/donkeywon/golib/util/conv"
+	"github.com/donkeywon/golib/util/reflects"
 	"github.com/donkeywon/golib/util/vtil"
 )
 
@@ -250,7 +251,7 @@ func (t *Task) final() {
 }
 
 func (t *Task) runSteps() {
-	for ; t.CurStepIdx < len(t.Steps()); t.CurStepIdx++ {
+	for t.CurStepIdx < len(t.Steps()) {
 		select {
 		case <-t.Stopping():
 			return
@@ -261,8 +262,23 @@ func (t *Task) runSteps() {
 		step.Store(consts.FieldStartTimeNano, time.Now().UnixNano())
 		runner.Start(step)
 		step.Store(consts.FieldStopTimeNano, time.Now().UnixNano())
-		for _, hook := range t.stepDoneHooks {
-			hook(t, t.CurStepIdx, step)
+		select {
+		case <-t.Stopping():
+			return
+		default:
+			t.CurStepIdx++
+		}
+
+		for i, hook := range t.stepDoneHooks {
+			func(idx int, h StepHook) {
+				defer func() {
+					err := recover()
+					if err != nil {
+						t.Error("hook step panic", errs.PanicToErr(err), "hook_idx", idx, "hook", reflects.GetFuncName(h), "step_idx", t.CurStepIdx, "step_type", step.Type())
+					}
+				}()
+				h(t, t.CurStepIdx, step)
+			}(i, hook)
 		}
 		err := step.Err()
 		if err != nil {
@@ -273,7 +289,7 @@ func (t *Task) runSteps() {
 }
 
 func (t *Task) runDeferSteps() {
-	for ; t.CurDeferStepIdx < len(t.DeferSteps()); t.CurDeferStepIdx++ {
+	for t.CurDeferStepIdx < len(t.DeferSteps()) {
 		select {
 		case <-t.Stopping():
 			return
@@ -292,8 +308,23 @@ func (t *Task) runDeferSteps() {
 			deferStep.Store(consts.FieldStartTimeNano, time.Now().Unix())
 			runner.Start(deferStep)
 			deferStep.Store(consts.FieldStopTimeNano, time.Now().Unix())
-			for _, hook := range t.deferStepDoneHooks {
-				hook(t, t.CurDeferStepIdx, deferStep)
+			select {
+			case <-t.Stopping():
+				return
+			default:
+				t.CurDeferStepIdx++
+			}
+
+			for i, hook := range t.deferStepDoneHooks {
+				func(idx int, h StepHook) {
+					defer func() {
+						err := recover()
+						if err != nil {
+							t.Error("hook defer step panic", errs.PanicToErr(err), "hook_idx", idx, "hook", reflects.GetFuncName(h), "step_idx", t.CurDeferStepIdx, "step_type", deferStep.Type())
+						}
+					}()
+					h(t, t.CurDeferStepIdx, deferStep)
+				}(i, hook)
 			}
 			err := deferStep.Err()
 			if err != nil {
