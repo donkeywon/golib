@@ -1,6 +1,6 @@
 module github.com/donkeywon/golib/loader/kvs/sqlitekvsloader
 
-go 1.23.1
+go 1.22.7
 
 require (
 	github.com/donkeywon/golib v0.0.0
