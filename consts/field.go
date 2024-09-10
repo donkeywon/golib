@@ -13,4 +13,7 @@ const (
 	FieldCmdSignaled = "signaled"
 
 	FieldPipelineResult = "pipelineResult"
+
+	FieldFtpCode = "ftpCode"
+	FieldFtpMsg  = "ftpMsg"
 )

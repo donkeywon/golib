@@ -178,11 +178,11 @@ func (t *Task) result() *Result {
 		Cfg: t.Cfg,
 	}
 	for _, step := range t.Steps() {
-		v, _ := step.Collect()
+		v := step.Collect()
 		s.StepsData = append(s.StepsData, v)
 	}
 	for _, deferStep := range t.DeferSteps() {
-		v, _ := deferStep.Collect()
+		v := deferStep.Collect()
 		s.DeferStepsData = append(s.DeferStepsData, v)
 	}
 	return s
@@ -204,8 +204,8 @@ func (t *Task) CurDeferStep() Step {
 	return t.DeferSteps()[t.CurDeferStepIdx]
 }
 
-func (t *Task) Store(k string, v any) error {
-	return t.Runner.StoreAsString(k, v)
+func (t *Task) Store(k string, v any) {
+	t.Runner.StoreAsString(k, v)
 }
 
 func (t *Task) Type() interface{} {

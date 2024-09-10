@@ -9,29 +9,28 @@ import (
 )
 
 func init() {
-	plugin.Register(StepTypeCmd, func() interface{} { return NewCmdStep() })
-	plugin.RegisterCfg(StepTypeCmd, func() interface{} { return NewCmdCfg() })
+	plugin.RegisterWithCfg(StepTypeCmd, func() interface{} { return NewCmdStep() }, func() interface{} { return NewCmdStepCfg() })
 }
 
 const StepTypeCmd StepType = "cmd"
 
-func NewCmdCfg() *cmd.Cfg {
+func NewCmdStepCfg() *cmd.Cfg {
 	return &cmd.Cfg{}
 }
 
-type Cmd struct {
+type CmdStep struct {
 	Step
 	*cmd.Cfg
 }
 
-func NewCmdStep() *Cmd {
-	return &Cmd{
+func NewCmdStep() *CmdStep {
+	return &CmdStep{
 		Step: newBase(string(StepTypeCmd)),
-		Cfg:  NewCmdCfg(),
+		Cfg:  NewCmdStepCfg(),
 	}
 }
 
-func (c *Cmd) Init() error {
+func (c *CmdStep) Init() error {
 	err := vtil.Struct(c.Cfg)
 	if err != nil {
 		return err
@@ -42,7 +41,7 @@ func (c *Cmd) Init() error {
 	return c.Step.Init()
 }
 
-func (c *Cmd) Start() error {
+func (c *CmdStep) Start() error {
 	var err error
 
 	result, err := cmd.RunRaw(c.Ctx(), c.Cfg)
@@ -73,15 +72,15 @@ func (c *Cmd) Start() error {
 	return nil
 }
 
-func (c *Cmd) Stop() error {
+func (c *CmdStep) Stop() error {
 	c.Cancel()
 	return nil
 }
 
-func (c *Cmd) Type() interface{} {
+func (c *CmdStep) Type() interface{} {
 	return StepTypeCmd
 }
 
-func (c *Cmd) GetCfg() interface{} {
+func (c *CmdStep) GetCfg() interface{} {
 	return c.Cfg
 }
