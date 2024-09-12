@@ -12,8 +12,7 @@ import (
 )
 
 func init() {
-	plugin.Register(RWTypeCompress, func() interface{} { return NewCompressRW() })
-	plugin.RegisterCfg(RWTypeCompress, func() interface{} { return NewCompressRWCfg() })
+	plugin.RegisterWithCfg(RWTypeCompress, func() interface{} { return NewCompressRW() }, func() interface{} { return NewCompressRWCfg() })
 }
 
 const (

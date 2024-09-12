@@ -114,8 +114,8 @@ type RW interface {
 
 	Flush() error
 
-	RegisterReadHook(...ReadHook)
-	RegisterWriteHook(...WriteHook)
+	HookRead(...ReadHook)
+	HookWrite(...WriteHook)
 
 	Nwrite() uint64
 	Nread() uint64
@@ -201,12 +201,12 @@ func (b *baseRW) Init() (err error) {
 		return errs.New("RW has no nested reader and writer")
 	}
 
-	b.RegisterWriteHook(b.hookIncWritten, b.hookDebugLogWrite)
-	b.RegisterReadHook(b.hookIncReadn, b.hookDebugLogRead)
+	b.HookWrite(b.hookIncWritten, b.hookDebugLogWrite)
+	b.HookRead(b.hookIncReadn, b.hookDebugLogRead)
 
 	if b.checksum != "" {
 		b.EnableCalcHash(b.hashAlgo)
-		b.RegisterReadHook(b.hookChecksum)
+		b.HookRead(b.hookChecksum)
 	}
 
 	if b.enableCalcHash {
@@ -214,8 +214,8 @@ func (b *baseRW) Init() (err error) {
 			b.hashAlgo = defaultHashAlgo
 		}
 		b.initHash()
-		b.RegisterWriteHook(b.hookHash)
-		b.RegisterReadHook(b.hookHash)
+		b.HookWrite(b.hookHash)
+		b.HookRead(b.hookHash)
 	}
 
 	if b.enableMonitorSpeed {
@@ -228,8 +228,8 @@ func (b *baseRW) Init() (err error) {
 		if err != nil {
 			return errs.Wrap(err, "init rate limiter fail")
 		}
-		b.RegisterWriteHook(b.hookWriteRateLimit)
-		b.RegisterReadHook(b.hookReadRateLimit)
+		b.HookWrite(b.hookWriteRateLimit)
+		b.HookRead(b.hookReadRateLimit)
 	}
 
 	if b.bufSize > 0 {
@@ -260,8 +260,8 @@ func (b *baseRW) Init() (err error) {
 	}
 
 	if b.IsStarter() {
-		b.RegisterReadHook(b.hookManuallyStop)
-		b.RegisterWriteHook(b.hookManuallyStop)
+		b.HookRead(b.hookManuallyStop)
+		b.HookWrite(b.hookManuallyStop)
 	}
 
 	return b.Runner.Init()
@@ -354,27 +354,27 @@ func (b *baseRW) Writer() io.WriteCloser {
 }
 
 func (b *baseRW) AsStarter() {
-	b.role = RWRoleStarter
+	b.As(RWRoleStarter)
 }
 
 func (b *baseRW) IsStarter() bool {
-	return b.role == RWRoleStarter
+	return b.Is(RWRoleStarter)
 }
 
 func (b *baseRW) AsReader() {
-	b.role = RWRoleReader
+	b.As(RWRoleReader)
 }
 
 func (b *baseRW) IsReader() bool {
-	return b.role == RWRoleReader
+	return b.Is(RWRoleReader)
 }
 
 func (b *baseRW) AsWriter() {
-	b.role = RWRoleWriter
+	b.As(RWRoleWriter)
 }
 
 func (b *baseRW) IsWriter() bool {
-	return b.role == RWRoleWriter
+	return b.Is(RWRoleWriter)
 }
 
 func (b *baseRW) As(role RWRole) {
@@ -389,7 +389,7 @@ func (b *baseRW) Role() RWRole {
 	return b.role
 }
 
-func (b *baseRW) RegisterReadHook(rh ...ReadHook) {
+func (b *baseRW) HookRead(rh ...ReadHook) {
 	for _, h := range rh {
 		if h == nil {
 			panic("read hook is nil")
@@ -398,7 +398,7 @@ func (b *baseRW) RegisterReadHook(rh ...ReadHook) {
 	}
 }
 
-func (b *baseRW) RegisterWriteHook(wh ...WriteHook) {
+func (b *baseRW) HookWrite(wh ...WriteHook) {
 	for _, h := range wh {
 		if h == nil {
 			panic("write hook is nil")

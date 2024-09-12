@@ -7,8 +7,7 @@ import (
 )
 
 func init() {
-	plugin.Register(RWTypeTail, func() interface{} { return NewTailRW() })
-	plugin.RegisterCfg(RWTypeTail, func() interface{} { return NewTailRWCfg() })
+	plugin.RegisterWithCfg(RWTypeTail, func() interface{} { return NewTailRW() }, func() interface{} { return NewTailRWCfg() })
 }
 
 const RWTypeTail RWType = "tail"

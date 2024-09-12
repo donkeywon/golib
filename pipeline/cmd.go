@@ -11,8 +11,7 @@ import (
 )
 
 func init() {
-	plugin.Register(RWTypeCmd, func() interface{} { return NewCmdRW() })
-	plugin.RegisterCfg(RWTypeCmd, func() interface{} { return NewCmdRWCfg() })
+	plugin.RegisterWithCfg(RWTypeCmd, func() interface{} { return NewCmdRW() }, func() interface{} { return NewCmdRWCfg() })
 }
 
 const RWTypeCmd RWType = "cmd"
@@ -34,7 +33,7 @@ func NewCmdRW() *CmdRW {
 
 func (c *CmdRW) Init() error {
 	if !c.IsStarter() {
-		return errs.New("cmdRW must be Starter")
+		return errs.New("cmd rw must be Starter")
 	}
 
 	return c.RW.Init()
@@ -43,15 +42,18 @@ func (c *CmdRW) Init() error {
 func (c *CmdRW) Start() error {
 	result, err := cmd.RunRaw(c.Ctx(), c.Cfg, func(cmd *exec.Cmd) error {
 		if c.Writer() != nil {
-			cmd.Stdout = c.Writer()
+			cmd.Stdout = c
 		}
 
 		if c.Reader() != nil {
-			cmd.Stdin = c.Reader()
+			cmd.Stdin = c
 		}
 		return nil
 	})
 	c.Info("cmd exit", "result", result)
+	if errors.Is(err, ErrStoppedManually) {
+		err = nil
+	}
 
 	if result != nil {
 		c.Store(consts.FieldCmdStderr, result.Stderr)
@@ -63,21 +65,11 @@ func (c *CmdRW) Start() error {
 	}
 
 	closeErr := c.Close()
-	if result != nil && result.Signaled {
-		select {
-		case <-c.Stopping():
-			c.Info("exit signaled", "error", err)
-			return closeErr
-		default:
-		}
+	if err == nil {
+		return closeErr
 	}
 
 	return errors.Join(errs.Wrapf(err, "cmd exit, result: %v", result), closeErr)
-}
-
-func (c *CmdRW) Stop() error {
-	c.Cancel()
-	return nil
 }
 
 func (c *CmdRW) Type() interface{} {

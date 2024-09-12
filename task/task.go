@@ -39,9 +39,9 @@ type StepCfg struct {
 }
 
 type Cfg struct {
-	ID              string     `json:"id"              validate:"required,min=1" yaml:"id"`
-	Type            Type       `json:"type"            validate:"required"       yaml:"type"`
-	Steps           []*StepCfg `json:"steps"           validate:"required,min=1" yaml:"steps"`
+	ID              string     `json:"id"              validate:"required" yaml:"id"`
+	Type            Type       `json:"type"            validate:"required" yaml:"type"`
+	Steps           []*StepCfg `json:"steps"           validate:"required" yaml:"steps"`
 	DeferSteps      []*StepCfg `json:"deferSteps"      yaml:"deferSteps"`
 	CurStepIdx      int        `json:"curStepIdx"      yaml:"curStepIdx"`
 	CurDeferStepIdx int        `json:"curDeferStepIdx" yaml:"curDeferStepIdx"`
@@ -72,7 +72,6 @@ func (c *Cfg) Defer(typ StepType, cfg interface{}) *Cfg {
 }
 
 type Result struct {
-	Cfg            *Cfg                     `json:"cfg"            yaml:"cfg"`
 	Data           map[string]interface{}   `json:"data"           yaml:"data"`
 	StepsData      []map[string]interface{} `json:"stepsData"      yaml:"stepsData"`
 	DeferStepsData []map[string]interface{} `json:"deferStepsData" yaml:"deferStepsData"`
@@ -174,18 +173,16 @@ func (t *Task) Result() interface{} {
 }
 
 func (t *Task) result() *Result {
-	s := &Result{
-		Cfg: t.Cfg,
-	}
+	r := &Result{}
 	for _, step := range t.Steps() {
 		v := step.Collect()
-		s.StepsData = append(s.StepsData, v)
+		r.StepsData = append(r.StepsData, v)
 	}
 	for _, deferStep := range t.DeferSteps() {
 		v := deferStep.Collect()
-		s.DeferStepsData = append(s.DeferStepsData, v)
+		r.DeferStepsData = append(r.DeferStepsData, v)
 	}
-	return s
+	return r
 }
 
 func (t *Task) Steps() []Step {
