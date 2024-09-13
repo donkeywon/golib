@@ -4,13 +4,12 @@ package proc
 
 import (
 	"context"
-	"os"
 	"syscall"
 	"time"
 )
 
 func Stop(pid int) error {
-	return syscall.Kill(-pid, syscall.SIGTERM)
+	return syscall.Kill(pid, syscall.SIGTERM)
 }
 
 func MustStop(ctx context.Context, pid int) error {
@@ -18,7 +17,7 @@ func MustStop(ctx context.Context, pid int) error {
 		return nil
 	}
 
-	err := Stop(pid)
+	err := syscall.Kill(pid, syscall.SIGINT)
 	if err != nil {
 		return err
 	}
@@ -27,7 +26,7 @@ func MustStop(ctx context.Context, pid int) error {
 		return nil
 	}
 
-	err = syscall.Kill(-pid, os.Interrupt.(syscall.Signal))
+	err = Stop(pid)
 	if err != nil {
 		return err
 	}
@@ -36,7 +35,7 @@ func MustStop(ctx context.Context, pid int) error {
 		return nil
 	}
 
-	err = syscall.Kill(-pid, syscall.SIGKILL)
+	err = syscall.Kill(pid, syscall.SIGKILL)
 	if err != nil {
 		return err
 	}

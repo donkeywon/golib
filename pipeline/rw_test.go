@@ -75,7 +75,7 @@ func TestAsyncRead(t *testing.T) {
 
 	rw.AsReader()
 	rw.EnableReadBuf(6, true, 5)
-	tests.Init(rw)
+	tests.DebugInit(rw)
 
 	err = runner.Init(rw)
 	require.NoError(t, err)
