@@ -11,7 +11,6 @@ import (
 	"github.com/donkeywon/golib/buildinfo"
 	"github.com/donkeywon/golib/errs"
 	"github.com/donkeywon/golib/pipeline"
-	"github.com/donkeywon/golib/ratelimit"
 	"github.com/donkeywon/golib/runner"
 	"github.com/donkeywon/golib/util/cmd"
 	"github.com/donkeywon/golib/util/paths"
@@ -98,7 +97,7 @@ func (u *Upd) upgrade(vi *VerInfo) error {
 		}
 	}
 
-	err = downloadPackage(u.DownloadDir, vi.Filename, u.DownloadRateLimit, vi.StoreCfg, u.Cfg.HashAlgo)
+	err = downloadPackage(u.DownloadDir, vi.Filename, u.DownloadRateLimit, vi.StoreCfg)
 	if err != nil {
 		return errs.Wrap(err, "download package fail")
 	}
@@ -164,24 +163,9 @@ func (u *Upd) upgrade(vi *VerInfo) error {
 	return nil
 }
 
-func downloadPackage(downloadDir string, filename string, ratelimitN int, storeCfg *pipeline.StoreCfg, hashAlgo string) error {
+func downloadPackage(downloadDir string, filename string, ratelimitN int, storeCfg *pipeline.RWCfg) error {
 	cfg := pipeline.NewCfg().
-		Add(
-			pipeline.RWRoleReader,
-			pipeline.RWTypeStore,
-			storeCfg,
-			&pipeline.RWCommonCfg{
-				EnableRateLimit: true,
-				RateLimiterCfg: &ratelimit.RateLimiterCfg{
-					Type: ratelimit.RateLimiterTypeFixed,
-					Cfg: &ratelimit.FixedRateLimiterCfg{
-						N: ratelimitN,
-					},
-				},
-				HashAlgo: hashAlgo,
-				Checksum: storeCfg.Checksum,
-			},
-		).
+		AddCfg(storeCfg).
 		Add(
 			pipeline.RWRoleStarter,
 			pipeline.RWTypeCopy,

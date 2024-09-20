@@ -35,6 +35,11 @@ func (c *Cfg) Add(role RWRole, typ RWType, cfg interface{}, commonCfg *RWCommonC
 	return c
 }
 
+func (c *Cfg) AddCfg(cfg *RWCfg) *Cfg {
+	c.RWs = append(c.RWs, cfg)
+	return c
+}
+
 type Result struct {
 	Cfg     *Cfg                     `json:"cfg"     yaml:"cfg"`
 	Data    map[string]interface{}   `json:"data"    yaml:"data"`
