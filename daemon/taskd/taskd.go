@@ -25,13 +25,7 @@ var (
 	ErrTaskNotPausing      = errors.New("task not pausing")
 )
 
-var _td = &Taskd{
-	Runner:           runner.Create(string(DaemonTypeTaskd)),
-	taskMap:          make(map[string]*task.Task),
-	taskIDMap:        make(map[string]struct{}),
-	taskIDRunningMap: make(map[string]struct{}),
-	taskPausingMap:   make(map[string]*task.Task),
-}
+var _td = New()
 
 type Taskd struct {
 	runner.Runner
@@ -54,8 +48,18 @@ type Taskd struct {
 	deferStepDoneHooks []task.StepHook
 }
 
-func New() *Taskd {
+func T() *Taskd {
 	return _td
+}
+
+func New() *Taskd {
+	return &Taskd{
+		Runner:           runner.Create(string(DaemonTypeTaskd)),
+		taskMap:          make(map[string]*task.Task),
+		taskIDMap:        make(map[string]struct{}),
+		taskIDRunningMap: make(map[string]struct{}),
+		taskPausingMap:   make(map[string]*task.Task),
+	}
 }
 
 func (td *Taskd) Init() error {

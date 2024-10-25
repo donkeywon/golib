@@ -18,10 +18,7 @@ import (
 
 const DaemonTypeUpd boot.DaemonType = "upd"
 
-var _u = &Upd{
-	Runner:             runner.Create(string(DaemonTypeUpd)),
-	upgradingBlockChan: make(chan struct{}),
-}
+var _u = New()
 
 type Upd struct {
 	runner.Runner
@@ -31,8 +28,15 @@ type Upd struct {
 	upgradingBlockChan chan struct{}
 }
 
-func New() *Upd {
+func U() *Upd {
 	return _u
+}
+
+func New() *Upd {
+	return &Upd{
+		Runner:             runner.Create(string(DaemonTypeUpd)),
+		upgradingBlockChan: make(chan struct{}),
+	}
 }
 
 func (u *Upd) Stop() error {

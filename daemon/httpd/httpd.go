@@ -22,10 +22,7 @@ func init() {
 	_h.RegisterMiddleware(logAndRecoverMiddleware)
 }
 
-var _h = &Httpd{
-	Runner: runner.Create(string(DaemonTypeHttpd)),
-	mux:    http.NewServeMux(),
-}
+var _h = New()
 
 type Httpd struct {
 	runner.Runner
@@ -47,8 +44,15 @@ func newHTTPServer(cfg *Cfg) *http.Server {
 	}
 }
 
-func New() *Httpd {
+func H() *Httpd {
 	return _h
+}
+
+func New() *Httpd {
+	return &Httpd{
+		Runner: runner.Create(string(DaemonTypeHttpd)),
+		mux:    http.NewServeMux(),
+	}
 }
 
 func (h *Httpd) Start() error {
