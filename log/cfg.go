@@ -58,7 +58,7 @@ func (c *Cfg) Build(opts ...zap.Option) (*zap.Logger, error) {
 	if err != nil {
 		return nil, errs.Wrap(err, "build log outputs fail")
 	}
-	return cfg.Build(append(opts, zap.WrapCore(core.NewStackExtractCore), zap.AddCaller(), zap.AddCallerSkip(1))...)
+	return cfg.Build(append(opts, zap.WrapCore(core.NewStackExtractCore), zap.WrapCore(core.NewAddGoidCore), zap.AddCaller(), zap.AddCallerSkip(1))...)
 }
 
 func (c *Cfg) buildOutputs() ([]string, error) {
