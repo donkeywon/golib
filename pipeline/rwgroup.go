@@ -34,17 +34,12 @@ func (c *RWGroupCfg) SetStarter(typ RWType, cfg interface{}, commonCfg *RWCommon
 }
 
 func (c *RWGroupCfg) FromReader(typ RWType, cfg interface{}, commonCfg *RWCommonCfg) *RWGroupCfg {
-	readers := make([]*RWCfg, len(c.Readers)+1)
-	readers[0] = &RWCfg{
+	c.Readers = append(c.Readers, &RWCfg{
 		Type:      typ,
 		Cfg:       cfg,
 		CommonCfg: commonCfg,
 		Role:      RWRoleReader,
-	}
-	for i, c := range c.Readers {
-		readers[i+1] = c
-	}
-	c.Readers = readers
+	})
 	return c
 }
 

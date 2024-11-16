@@ -8,7 +8,7 @@ require (
 	github.com/donkeywon/go-flags v1.6.2
 	github.com/fsnotify/fsnotify v1.8.0
 	github.com/go-playground/validator/v10 v10.22.1
-	github.com/goccy/go-yaml v1.13.9
+	github.com/goccy/go-yaml v1.14.3
 	github.com/google/uuid v1.6.0
 	github.com/icza/backscanner v0.0.0-20240328210400-b40c3a86dec5
 	github.com/jinzhu/copier v0.4.0
@@ -25,7 +25,7 @@ require (
 	golang.org/x/crypto v0.29.0
 	golang.org/x/sys v0.27.0
 	golang.org/x/time v0.8.0
-	google.golang.org/protobuf v1.35.1
+	google.golang.org/protobuf v1.35.2
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 )
 
