@@ -1,6 +1,8 @@
 package pipeline
 
 import (
+	"io"
+
 	"github.com/donkeywon/golib/errs"
 	"github.com/donkeywon/golib/plugin"
 )
@@ -16,7 +18,7 @@ func (n *null) Write(b []byte) (int, error) {
 }
 
 func (n *null) Read(_ []byte) (int, error) {
-	return 0, nil
+	return 0, io.EOF
 }
 
 func (n *null) Close() error {
