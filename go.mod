@@ -7,7 +7,7 @@ require (
 	github.com/caarlos0/env/v11 v11.2.2
 	github.com/donkeywon/go-flags v1.6.2
 	github.com/fsnotify/fsnotify v1.8.0
-	github.com/go-playground/validator/v10 v10.22.1
+	github.com/go-playground/validator/v10 v10.23.0
 	github.com/goccy/go-yaml v1.14.3
 	github.com/google/uuid v1.6.0
 	github.com/icza/backscanner v0.0.0-20240328210400-b40c3a86dec5
