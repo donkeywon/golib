@@ -6,6 +6,7 @@ import (
 
 	"github.com/donkeywon/golib/log/sink"
 	"github.com/donkeywon/golib/util/jsons"
+	"github.com/petermattis/goid"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
@@ -84,11 +85,12 @@ func buildTimeEncoder(enc string) zapcore.TimeEncoder {
 }
 
 func HandleZapFields(args []interface{}, additional ...zap.Field) []zap.Field {
+	goidField := zap.Int64("goid", goid.Get())
 	if len(args) == 0 {
-		return additional
+		return append(additional, goidField)
 	}
 
-	fields := make([]zap.Field, 0, len(args)/2+len(additional))
+	fields := make([]zap.Field, 0, len(args)/2+len(additional)+1)
 	for i := 0; i < len(args); i += 2 {
 		switch k := args[i].(type) {
 		case string:
@@ -110,8 +112,9 @@ func HandleZapFields(args []interface{}, additional ...zap.Field) []zap.Field {
 			i--
 		}
 	}
+	fields = append(fields, additional...)
 
-	return append(fields, additional...)
+	return append(fields, goidField)
 }
 
 func DefaultEncoderConfig() zapcore.EncoderConfig {
