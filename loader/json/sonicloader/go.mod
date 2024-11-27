@@ -3,7 +3,7 @@ module github.com/donkeywon/golib/loader/json/sonicloader
 go 1.22.7
 
 require (
-	github.com/bytedance/sonic v1.12.4
+	github.com/bytedance/sonic v1.12.5
 	github.com/donkeywon/golib v0.0.0
 )
 
