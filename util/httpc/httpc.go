@@ -12,7 +12,6 @@ import (
 var (
 	C = &http.Client{
 		Transport: http.DefaultTransport,
-		Timeout:   time.Second * 30,
 	} // allowed to reset
 	ErrRespStatusCodeNotExpected = errors.New("response status code not expected")
 )

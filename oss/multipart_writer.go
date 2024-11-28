@@ -203,9 +203,7 @@ func (w *MultiPartWriter) addAuth(req *http.Request) error {
 }
 
 func (w *MultiPartWriter) do(req *http.Request, ignoreCode ...int) ([]byte, *http.Response, error) {
-	ctx, cancel := context.WithTimeout(w.ctx, time.Second*120)
-	defer cancel()
-	body, resp, err := httpc.DoBodyCtx(ctx, req)
+	body, resp, err := httpc.DoBody(req)
 	if errors.Is(err, context.Canceled) {
 		return nil, nil, nil
 	}
@@ -301,7 +299,10 @@ func (w *MultiPartWriter) upload(partNo int, uploadID string, body []byte) (stri
 		url = fmt.Sprintf("%s?partNumber=%d&uploadId=%s", w.URL, partNo, uploadID)
 	}
 
-	req, err := http.NewRequestWithContext(w.ctx, http.MethodPut, url, bytes.NewReader(body))
+	ctx, cancel := context.WithTimeout(w.ctx, time.Second*time.Duration(w.Timeout))
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, url, bytes.NewReader(body))
 	if err != nil {
 		return "", errs.Wrap(err, "new upload request fail")
 	}

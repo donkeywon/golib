@@ -169,13 +169,17 @@ func (w *AppendWriter) doAppend(body []byte) ([]byte, *http.Response, error) {
 		req *http.Request
 		err error
 	)
+
+	ctx, cancel := context.WithTimeout(w.ctx, time.Second*time.Duration(w.Timeout))
+	defer cancel()
+
 	if oss.IsAzblob(w.URL) {
-		req, err = http.NewRequestWithContext(w.ctx, http.MethodPut, w.URL+"?comp=appendblock", bytes.NewReader(body))
+		req, err = http.NewRequestWithContext(ctx, http.MethodPut, w.URL+"?comp=appendblock", bytes.NewReader(body))
 		if req != nil {
 			req.Header.Set(oss.HeaderAzblobAppendPositionHeader, strconv.Itoa(w.Pos))
 		}
 	} else {
-		req, err = http.NewRequestWithContext(w.ctx, http.MethodPost,
+		req, err = http.NewRequestWithContext(ctx, http.MethodPost,
 			w.URL+appendURLSuffix+fmt.Sprintf("&position=%d", w.Pos), bytes.NewReader(body))
 	}
 
@@ -190,9 +194,7 @@ func (w *AppendWriter) doAppend(body []byte) ([]byte, *http.Response, error) {
 
 	req.ContentLength = int64(len(body))
 
-	ctx, cancel := context.WithTimeout(w.ctx, time.Second*120)
-	defer cancel()
-	body, resp, err := httpc.DoBodyCtx(ctx, req)
+	body, resp, err := httpc.DoBody(req)
 	if err != nil && !errors.Is(err, context.Canceled) {
 		return nil, nil, errs.Wrap(err, "do http request fail")
 	}
