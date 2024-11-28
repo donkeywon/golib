@@ -157,6 +157,10 @@ func DoBody(req *http.Request) ([]byte, *http.Response, error) {
 	return handleRespBody(Do(req))
 }
 
+func DoBodyCtx(ctx context.Context, req *http.Request) ([]byte, *http.Response, error) {
+	return handleRespBody(DoCtx(ctx, req))
+}
+
 func Do(req *http.Request) (*http.Response, error) {
 	return C.Do(req)
 }
