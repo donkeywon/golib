@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"runtime"
 	"slices"
 	"time"
 
@@ -21,7 +22,6 @@ import (
 	"github.com/donkeywon/golib/util/signals"
 	"github.com/donkeywon/golib/util/vtil"
 	"github.com/goccy/go-yaml"
-	"go.uber.org/zap"
 )
 
 const FlagTagPrefix = "flag-"
@@ -109,7 +109,7 @@ func (b *Booter) Init() error {
 	var err error
 
 	// use default logger as temp logger
-	reflects.Set(b.Runner, log.Default())
+	reflects.SetFirst(b.Runner, log.Default())
 
 	b.cfgMap = buildCfgMap()
 	b.cfgMap["log"] = b.logCfg
@@ -123,14 +123,15 @@ func (b *Booter) Init() error {
 		if e, ok := err.(*flags.Error); ok && e.Type == flags.ErrHelp {
 			os.Exit(0)
 		}
-		return errs.Wrap(err, "load options fail")
+
+		os.Exit(1)
 	}
 	if b.options.PrintVersion {
 		fmt.Fprintf(os.Stdout, "Version:"+buildinfo.Version+"\n"+
 			"GitCommit:"+buildinfo.GitCommit+"\n"+
 			"BuildTime:"+buildinfo.BuildTime+"\n"+
-			"GoVersion:"+buildinfo.GoVersion+"\n"+
-			"Arch:"+buildinfo.Arch+"\n")
+			"GoVersion:"+runtime.Version()+"\n"+
+			"Arch:"+runtime.GOARCH+"\n")
 		os.Exit(0)
 	}
 
@@ -148,9 +149,9 @@ func (b *Booter) Init() error {
 	if err != nil {
 		return errs.Wrap(err, "build logger fail")
 	}
-	ok := reflects.Set(b.Runner, l.Named(b.Name()))
+	ok := reflects.SetFirst(b.Runner, l.WithLoggerName(b.Name()))
 	if !ok {
-		return errs.Errorf("boot set logger fail")
+		panic("boot set logger fail")
 	}
 
 	for name, cfg := range b.cfgMap {
@@ -288,7 +289,7 @@ func (b *Booter) validateCfg() error {
 	return nil
 }
 
-func (b *Booter) buildLogger() (*zap.Logger, error) {
+func (b *Booter) buildLogger() (log.Logger, error) {
 	return b.logCfg.Build()
 }
 

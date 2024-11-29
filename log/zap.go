@@ -1,14 +1,23 @@
 package log
 
 import (
+	"encoding/json"
+	"errors"
 	"io"
+	"path/filepath"
+	"strings"
 	"time"
 
+	"github.com/donkeywon/golib/errs"
+	"github.com/donkeywon/golib/log/core"
 	"github.com/donkeywon/golib/log/sink"
+	"github.com/donkeywon/golib/util"
 	"github.com/donkeywon/golib/util/jsons"
+	"github.com/donkeywon/golib/util/paths"
 	"github.com/petermattis/goid"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
+	"gopkg.in/natefinch/lumberjack.v2"
 )
 
 func init() {
@@ -84,13 +93,21 @@ func buildTimeEncoder(enc string) zapcore.TimeEncoder {
 	return te
 }
 
-func HandleZapFields(args []interface{}, additional ...zap.Field) []zap.Field {
-	goidField := zap.Int64("goid", goid.Get())
+func HandleZapFields(withGoid bool, args []interface{}, additional ...zap.Field) []zap.Field {
 	if len(args) == 0 {
-		return append(additional, goidField)
+		if !withGoid {
+			return additional
+		}
+		return append(additional, zap.Int64("goid", goid.Get()))
 	}
 
-	fields := make([]zap.Field, 0, len(args)/2+len(additional)+1)
+	var fields []zap.Field
+	if withGoid {
+		fields = make([]zap.Field, 0, len(args)/2+len(additional)+1)
+	} else {
+		fields = make([]zap.Field, 0, len(args)/2+len(additional))
+	}
+
 	for i := 0; i < len(args); i += 2 {
 		switch k := args[i].(type) {
 		case string:
@@ -112,9 +129,13 @@ func HandleZapFields(args []interface{}, additional ...zap.Field) []zap.Field {
 			i--
 		}
 	}
-	fields = append(fields, additional...)
 
-	return append(fields, goidField)
+	if withGoid {
+		fields = append(fields, additional...)
+		return append(fields, zap.Int64("goid", goid.Get()))
+	}
+
+	return append(fields, additional...)
 }
 
 func DefaultEncoderConfig() zapcore.EncoderConfig {
@@ -168,4 +189,88 @@ func DefaultConfig() *zap.Config {
 		ErrorOutputPaths:  DefaultErrorOutputPath,
 		InitialFields:     nil,
 	}
+}
+
+type zapLogger struct {
+	*zap.Logger
+}
+
+func NewZapLogger(c *Cfg) (Logger, error) {
+	var err error
+	cfg := DefaultConfig()
+	cfg.Level, err = zap.ParseAtomicLevel(c.Level)
+	if err != nil {
+		return nil, errs.Wrap(err, "invalid log level")
+	}
+	cfg.Encoding = c.Format
+	cfg.OutputPaths, err = buildOutputs(c)
+	if err != nil {
+		return nil, errs.Wrap(err, "build log outputs fail")
+	}
+	zl, err := cfg.Build(zap.WrapCore(core.NewStackExtractCore), zap.AddCaller(), zap.AddCallerSkip(1))
+	if err != nil {
+		return nil, errs.Wrap(err, "build logger fail")
+	}
+	return &zapLogger{
+		Logger: zl,
+	}, nil
+}
+
+func buildOutputs(c *Cfg) ([]string, error) {
+	fps := util.Unique(strings.Split(c.Filepath, FilepathSplitter))
+	var outputs []string
+	for _, fp := range fps {
+		fp = strings.TrimSpace(fp)
+		fpl := strings.ToLower(fp)
+		switch fpl {
+		case "stdout":
+			outputs = append(outputs, "stdout")
+		case "stderr":
+			outputs = append(outputs, "stderr")
+		default:
+			if !paths.DirExist(filepath.Dir(fp)) {
+				return nil, errors.New("log dir not exists: " + fp)
+			}
+			lj := &lumberjack.Logger{
+				Filename:   fp,
+				MaxSize:    c.MaxFileSize,
+				MaxBackups: c.MaxBackups,
+				MaxAge:     c.MaxAge,
+				Compress:   !c.DisableCompress,
+				LocalTime:  true,
+			}
+			bs, err := json.Marshal(lj)
+			if err != nil {
+				return nil, errors.New("lumberjack config invalid")
+			}
+			outputs = append(outputs, "lumberjack://"+fp+"?"+string(bs))
+		}
+	}
+	return outputs, nil
+}
+
+func (z *zapLogger) WithLoggerName(n string) Logger {
+	return &zapLogger{
+		Logger: z.Logger.Named(n),
+	}
+}
+
+func (z *zapLogger) WithLoggerFields(kvs ...any) {
+	z.Logger = z.Logger.With(HandleZapFields(false, kvs)...)
+}
+
+func (z *zapLogger) Debug(msg string, kvs ...any) {
+	z.Logger.Debug(msg, HandleZapFields(true, kvs)...)
+}
+
+func (z *zapLogger) Info(msg string, kvs ...any) {
+	z.Logger.Info(msg, HandleZapFields(true, kvs)...)
+}
+
+func (z *zapLogger) Warn(msg string, kvs ...any) {
+	z.Logger.Warn(msg, HandleZapFields(true, kvs)...)
+}
+
+func (z *zapLogger) Error(msg string, err error, kvs ...any) {
+	z.Logger.Error(msg, HandleZapFields(true, kvs, zap.Error(err))...)
 }

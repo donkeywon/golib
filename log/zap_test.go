@@ -6,7 +6,6 @@ import (
 
 	"github.com/donkeywon/golib/errs"
 	"github.com/stretchr/testify/require"
-	"go.uber.org/zap"
 )
 
 func errA() error {
@@ -49,5 +48,5 @@ func TestLogErr(t *testing.T) {
 	l, err := lc.Build()
 	require.NoError(t, err)
 
-	l.Error("error occurred", zap.Error(errF()))
+	l.Error("error occurred", errF())
 }
