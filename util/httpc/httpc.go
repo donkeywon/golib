@@ -10,9 +10,6 @@ import (
 )
 
 var (
-	C = &http.Client{
-		Transport: http.DefaultTransport,
-	} // allowed to reset
 	ErrRespStatusCodeNotExpected = errors.New("response status code not expected")
 )
 
@@ -161,7 +158,7 @@ func DoBodyCtx(ctx context.Context, req *http.Request) ([]byte, *http.Response, 
 }
 
 func Do(req *http.Request) (*http.Response, error) {
-	return C.Do(req)
+	return http.DefaultClient.Do(req)
 }
 
 func DoCtx(ctx context.Context, req *http.Request) (*http.Response, error) {
