@@ -127,11 +127,13 @@ func (b *Booter) Init() error {
 		os.Exit(1)
 	}
 	if b.options.PrintVersion {
-		fmt.Fprintf(os.Stdout, "Version:"+buildinfo.Version+"\n"+
-			"GitCommit:"+buildinfo.GitCommit+"\n"+
-			"BuildTime:"+buildinfo.BuildTime+"\n"+
-			"GoVersion:"+runtime.Version()+"\n"+
-			"Arch:"+runtime.GOARCH+"\n")
+		fmt.Fprint(os.Stdout,
+			"Version:"+buildinfo.Version+"\n"+
+				"BuildTime:"+buildinfo.BuildTime+"\n"+
+				"CommitTime:"+buildinfo.CommitTime+"\n"+
+				"Revision:"+buildinfo.Revision+"\n"+
+				"GoVersion:"+runtime.Version()+"\n"+
+				"Arch:"+runtime.GOARCH+"\n")
 		os.Exit(0)
 	}
 
