@@ -8,7 +8,11 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-var ExitSignals = []os.Signal{
-	unix.SIGTERM,
-	unix.SIGINT,
-}
+var (
+	TermSignals = []os.Signal{
+		unix.SIGTERM,
+	}
+	IntSignals = []os.Signal{
+		unix.SIGINT,
+	}
+)
