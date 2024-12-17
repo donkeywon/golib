@@ -88,17 +88,17 @@ func (td *Taskd) GetCfg() interface{} {
 	return td.Cfg
 }
 
-func (td *Taskd) Submit(taskCfg *task.Cfg) (*task.Task, error) {
+func (td *Taskd) SubmitTask(taskCfg *task.Cfg) (*task.Task, error) {
 	t, _, err := td.createInitSubmit(taskCfg, false, true, nil)
 	return t, err
 }
 
-func (td *Taskd) SubmitAndWait(taskCfg *task.Cfg) (*task.Task, error) {
+func (td *Taskd) SubmitTaskAndWait(taskCfg *task.Cfg) (*task.Task, error) {
 	t, _, err := td.createInitSubmit(taskCfg, true, true, nil)
 	return t, err
 }
 
-func (td *Taskd) TrySubmit(taskCfg *task.Cfg) (*task.Task, bool, error) {
+func (td *Taskd) TrySubmitTask(taskCfg *task.Cfg) (*task.Task, bool, error) {
 	t, submitted, err := td.createInitSubmit(taskCfg, false, false, nil)
 	return t, submitted, err
 }
@@ -127,12 +127,13 @@ func (td *Taskd) StopTask(taskID string) error {
 	default:
 	}
 
-	runner.Stop(t)
+	go runner.Stop(t)
+	<-t.Done()
 	td.Info("task stopped", "task_id", taskID)
 	return nil
 }
 
-func (td *Taskd) Pause(taskID string) error {
+func (td *Taskd) PauseTask(taskID string) error {
 	select {
 	case <-td.Stopping():
 		return ErrStopping
@@ -157,14 +158,14 @@ func (td *Taskd) Pause(taskID string) error {
 	}
 
 	td.Info("pausing task", "task_id", taskID)
-	runner.Stop(t)
+	go runner.Stop(t)
 	<-t.Done()
 	td.Info("task paused", "task_id", taskID)
 	td.markTaskPausing(t)
 	return nil
 }
 
-func (td *Taskd) Resume(taskID string) (*task.Task, error) {
+func (td *Taskd) ResumeTask(taskID string) (*task.Task, error) {
 	select {
 	case <-td.Stopping():
 		return nil, ErrStopping
@@ -217,7 +218,7 @@ func (td *Taskd) createInit(taskCfg *task.Cfg) (*task.Task, error) {
 	}
 
 	t, err := td.createTask(taskCfg)
-	td.hookCreate(t, err)
+	td.hookTask(t, err, td.createHooks, "create", nil)
 	if err != nil {
 		td.Error("create task fail", err, "cfg", taskCfg)
 		return t, errs.Wrap(err, "create task fail")
@@ -227,7 +228,7 @@ func (td *Taskd) createInit(taskCfg *task.Cfg) (*task.Task, error) {
 	t.RegisterDeferStepDoneHook(td.deferStepDoneHooks...)
 
 	err = td.initTask(t)
-	td.hookInit(t, err)
+	td.hookTask(t, err, td.initHooks, "init", nil)
 	if err != nil {
 		td.Error("init task fail", err, "cfg", taskCfg)
 		return t, errs.Wrap(err, "init task fail")
@@ -241,11 +242,11 @@ func (td *Taskd) submit(t *task.Task, wait bool, must bool) bool {
 
 	f := func() {
 		td.markTaskRunning(t.Cfg.ID)
-		td.hookStart(t)
+		td.hookTask(t, nil, td.startHooks, "start", nil)
 
 		td.Info("task starting", "task_id", t.Cfg.ID)
 		runner.Start(t)
-		td.hookDone(t)
+		td.hookTask(t, nil, td.doneHooks, "done", nil)
 		td.unmarkTaskAndTaskID(t.Cfg.ID)
 
 		err := t.Err()
@@ -277,7 +278,7 @@ func (td *Taskd) submit(t *task.Task, wait bool, must bool) bool {
 		}
 		submitted = true
 	}
-	td.hookSubmit(t, submitted, wait)
+	td.hookTask(t, nil, td.submitHooks, "submit", &task.HookExtraData{Submitted: submitted, SubmitWait: wait})
 
 	return submitted
 }
@@ -418,72 +419,16 @@ func (td *Taskd) allTask() []*task.Task {
 	return tasks
 }
 
-func (td *Taskd) hookCreate(t *task.Task, err error) {
-	for i, h := range td.createHooks {
+func (td *Taskd) hookTask(t *task.Task, err error, hooks []task.Hook, hookType string, extra *task.HookExtraData) {
+	for i, h := range hooks {
 		func(idx int, h task.Hook) {
 			defer func() {
 				err := recover()
 				if err != nil {
-					td.Error("hook create panic", errs.PanicToErr(err), "idx", idx, "hook", reflects.GetFuncName(h))
+					td.Error("hook task panic", errs.PanicToErr(err), "idx", idx, "hook", reflects.GetFuncName(h), "hook_type", hookType)
 				}
 			}()
-			h(t, err, nil)
-		}(i, h)
-	}
-}
-
-func (td *Taskd) hookInit(t *task.Task, err error) {
-	for i, h := range td.initHooks {
-		func(idx int, h task.Hook) {
-			defer func() {
-				err := recover()
-				if err != nil {
-					td.Error("hook init panic", errs.PanicToErr(err), "idx", idx, "hook", reflects.GetFuncName(h))
-				}
-			}()
-			h(t, err, nil)
-		}(i, h)
-	}
-}
-
-func (td *Taskd) hookSubmit(t *task.Task, submitted bool, wait bool) {
-	for i, h := range td.submitHooks {
-		func(idx int, h task.Hook) {
-			defer func() {
-				err := recover()
-				if err != nil {
-					td.Error("hook submit panic", errs.PanicToErr(err), "idx", idx, "hook", reflects.GetFuncName(h))
-				}
-			}()
-			h(t, nil, &task.HookExtraData{Submitted: submitted, SubmitWait: wait})
-		}(i, h)
-	}
-}
-
-func (td *Taskd) hookStart(t *task.Task) {
-	for i, h := range td.startHooks {
-		func(idx int, h task.Hook) {
-			defer func() {
-				err := recover()
-				if err != nil {
-					td.Error("hook start panic", errs.PanicToErr(err), "idx", idx, "hook", reflects.GetFuncName(h))
-				}
-			}()
-			h(t, nil, nil)
-		}(i, h)
-	}
-}
-
-func (td *Taskd) hookDone(t *task.Task) {
-	for i, h := range td.doneHooks {
-		func(idx int, h task.Hook) {
-			defer func() {
-				err := recover()
-				if err != nil {
-					td.Error("hook done panic", errs.PanicToErr(err), "idx", idx, "hook", reflects.GetFuncName(h))
-				}
-			}()
-			h(t, t.Err(), nil)
+			h(t, err, extra)
 		}(i, h)
 	}
 }
@@ -494,7 +439,7 @@ func (td *Taskd) getTask(taskID string) *task.Task {
 	return td.taskMap[taskID]
 }
 
-func (td *Taskd) HasTask(taskID string) bool {
+func (td *Taskd) IsTaskExists(taskID string) bool {
 	td.mu.Lock()
 	defer td.mu.Unlock()
 	_, exists := td.taskIDMap[taskID]
@@ -593,19 +538,19 @@ func (td *Taskd) GetTaskResult(taskID string) (interface{}, error) {
 }
 
 func Submit(cfg *task.Cfg) (*task.Task, error) {
-	return _td.Submit(cfg)
+	return _td.SubmitTask(cfg)
 }
 
 func SubmitAndWait(cfg *task.Cfg) (*task.Task, error) {
-	return _td.SubmitAndWait(cfg)
+	return _td.SubmitTaskAndWait(cfg)
 }
 
 func TrySubmit(cfg *task.Cfg) (*task.Task, bool, error) {
-	return _td.TrySubmit(cfg)
+	return _td.TrySubmitTask(cfg)
 }
 
-func HasTask(taskID string) bool {
-	return _td.HasTask(taskID)
+func IsTaskExists(taskID string) bool {
+	return _td.IsTaskExists(taskID)
 }
 
 func IsTaskWaiting(taskID string) bool {
@@ -640,12 +585,12 @@ func GetTaskResult(taskID string) (interface{}, error) {
 	return _td.GetTaskResult(taskID)
 }
 
-func Pause(taskID string) error {
-	return _td.Pause(taskID)
+func PauseTask(taskID string) error {
+	return _td.PauseTask(taskID)
 }
 
-func Resume(taskID string) (*task.Task, error) {
-	return _td.Resume(taskID)
+func ResumeTask(taskID string) (*task.Task, error) {
+	return _td.ResumeTask(taskID)
 }
 
 func OnTaskCreate(hooks ...task.Hook) {
