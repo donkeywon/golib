@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"golang.org/x/sync/errgroup"
 	"os"
 	"os/signal"
 	"runtime"
@@ -26,6 +25,7 @@ import (
 	"github.com/goccy/go-yaml"
 	"github.com/goccy/go-yaml/ast"
 	"github.com/goccy/go-yaml/parser"
+	"golang.org/x/sync/errgroup"
 )
 
 type DaemonType string
