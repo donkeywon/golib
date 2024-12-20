@@ -14,7 +14,7 @@ func CfgPath(cfgPath string) Option {
 
 func EnvPrefix(envPrefix string) Option {
 	return func(b *Booter) {
-		b.options.EnvPrefix = envPrefix
+		b.options.envPrefix = envPrefix
 	}
 }
 

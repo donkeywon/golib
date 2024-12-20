@@ -8,10 +8,9 @@ import (
 	"os/signal"
 	"runtime"
 	"slices"
+	"strings"
 	"time"
 
-	"github.com/caarlos0/env/v11"
-	"github.com/donkeywon/go-flags"
 	"github.com/donkeywon/golib/buildinfo"
 	"github.com/donkeywon/golib/consts"
 	"github.com/donkeywon/golib/errs"
@@ -25,7 +24,10 @@ import (
 	"github.com/goccy/go-yaml"
 	"github.com/goccy/go-yaml/ast"
 	"github.com/goccy/go-yaml/parser"
+	"github.com/jessevdk/go-flags"
 	"golang.org/x/sync/errgroup"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 )
 
 type DaemonType string
@@ -36,9 +38,10 @@ type Daemon interface {
 }
 
 var (
-	_daemonTypes []DaemonType // dependencies in order
-	_cfgMap      = make(map[string]any)
-	_b           *Booter
+	_daemonTypes       []DaemonType // dependencies in order
+	_additionalCfgKeys []string
+	_additionalCfgMap  = make(map[string]any)
+	_b                 *Booter
 )
 
 func Boot(opt ...Option) {
@@ -77,10 +80,11 @@ func RegDaemon(typ DaemonType, creator plugin.Creator[Daemon], cfgCreator plugin
 
 // RegCfg register additional config, cfg type must be pointer.
 func RegCfg(name string, cfg any) {
-	if _, exists := _cfgMap[name]; exists {
+	if _, exists := _additionalCfgMap[name]; exists {
 		panic("duplicate register cfg: " + name)
 	}
-	_cfgMap[name] = cfg
+	_additionalCfgKeys = append(_additionalCfgKeys, name)
+	_additionalCfgMap[name] = cfg
 }
 
 func UnRegDaemon(typ ...DaemonType) {
@@ -88,9 +92,9 @@ func UnRegDaemon(typ ...DaemonType) {
 }
 
 type options struct {
-	CfgPath        string `env:"CFG_PATH" flag-description:"config file path"        flag-long:"config"     flag-short:"c"`
-	PrintVersion   bool   `flag-description:"print version info"                     flag-long:"version"    flag-short:"v"`
-	EnvPrefix      string `flag-description:"define a prefix for each env field tag" flag-long:"env-prefix"`
+	CfgPath        string `env:"CFG_PATH" description:"config file path"        long:"config"     short:"c"`
+	PrintVersion   bool   `description:"print version info"                     long:"version"    short:"v"`
+	envPrefix      string
 	onConfigLoaded OnConfigLoadedFunc
 }
 
@@ -123,9 +127,9 @@ func (b *Booter) Init() error {
 	// use default logger as temp logger
 	reflects.SetFirstMatchedField(b.Runner, log.Default())
 
-	b.cfgMap = buildCfgMap()
-	b.cfgMap["log"] = b.logCfg
-	b.flagParser, err = buildFlagParser(b.options, b.cfgMap)
+	var cfgKeys []string
+	b.cfgMap, cfgKeys = b.buildCfgMap()
+	b.flagParser, err = buildFlagParser(b.options, b.cfgMap, cfgKeys)
 	if err != nil {
 		return errs.Wrap(err, "build flag parser failed")
 	}
@@ -260,37 +264,7 @@ func (b *Booter) initDaemons(ctx context.Context) error {
 
 func (b *Booter) loadOptions() error {
 	_, err := b.flagParser.Parse()
-	if err != nil {
-		return err
-	}
-
-	err = env.ParseWithOptions(b.options, env.Options{
-		Prefix: b.options.EnvPrefix,
-	})
-	if err != nil {
-		return errs.Wrap(err, "parse env to boot options failed")
-	}
-	return nil
-}
-
-func (b *Booter) loadCfgFromFlag() error {
-	_, err := b.flagParser.Parse()
 	return err
-}
-
-func (b *Booter) loadCfgFromEnv() error {
-	for path, cfg := range b.cfgMap {
-		if !reflects.IsStructPointer(cfg) {
-			continue
-		}
-		err := env.ParseWithOptions(cfg, env.Options{
-			Prefix: b.options.EnvPrefix,
-		})
-		if err != nil {
-			return errs.Wrapf(err, "parse env tocfg failed: %s", path)
-		}
-	}
-	return nil
 }
 
 func (b *Booter) loadCfgFromFile() error {
@@ -338,7 +312,7 @@ func (b *Booter) loadCfgFromFile() error {
 }
 
 func (b *Booter) loadCfg() error {
-	return errors.Join(b.loadCfgFromFile(), b.loadCfgFromFlag(), b.loadCfgFromEnv())
+	return errors.Join(b.loadCfgFromFile(), b.loadOptions())
 }
 
 func (b *Booter) validateCfg() error {
@@ -358,6 +332,24 @@ func (b *Booter) buildLogger() (log.Logger, error) {
 	return b.logCfg.Build()
 }
 
+func (b *Booter) buildCfgMap() (map[string]any, []string) {
+	cfgKeys := make([]string, 0, len(_daemonTypes)+len(_additionalCfgKeys)+1)
+	cfgKeys = append(cfgKeys, "log")
+
+	cfgMap := make(map[string]any)
+	for _, daemonType := range _daemonTypes {
+		cfg := plugin.CreateCfg(daemonType)
+		cfgMap[string(daemonType)] = cfg
+		cfgKeys = append(cfgKeys, string(daemonType))
+	}
+	for name, cfg := range _additionalCfgMap {
+		cfgMap[name] = cfg
+		cfgKeys = append(cfgKeys, name)
+	}
+	cfgMap["log"] = b.logCfg
+	return cfgMap, cfgKeys
+}
+
 func durationUnmarshaler(d *time.Duration, b []byte) error {
 	tmp, err := time.ParseDuration(string(b))
 	if err != nil {
@@ -368,29 +360,31 @@ func durationUnmarshaler(d *time.Duration, b []byte) error {
 	return nil
 }
 
-func buildCfgMap() map[string]any {
-	cfgMap := make(map[string]any)
-	for _, daemonType := range _daemonTypes {
-		cfg := plugin.CreateCfg(daemonType)
-		cfgMap[string(daemonType)] = cfg
-	}
-	for name, cfg := range _cfgMap {
-		cfgMap[name] = cfg
-	}
-	return cfgMap
-}
-
-func buildFlagParser(options any, additional map[string]any) (*flags.Parser, error) {
+func buildFlagParser(base *options, cfgMap map[string]any, cfgKeys []string) (*flags.Parser, error) {
 	var err error
-	parser := flags.NewParser(options, flags.Default, flags.FlagTagPrefix(consts.FlagTagPrefix))
-	for name, cfg := range additional {
-		if !reflects.IsStructPointer(cfg) {
+	parser := flags.NewParser(nil, flags.Default)
+	parser.NamespaceDelimiter = "-"
+	parser.EnvNamespaceDelimiter = "_"
+
+	var g *flags.Group
+	g, err = parser.AddGroup("Application Options", "", base)
+	if err != nil {
+		return nil, errs.Wrapf(err, "add base flags failed")
+	}
+	g.EnvNamespace = strings.ToUpper(base.envPrefix)
+
+	for _, name := range cfgKeys {
+		if !reflects.IsStructPointer(cfgMap[name]) {
 			continue
 		}
-		_, err = parser.AddGroup(string(name)+" options", "", cfg)
+
+		g, err = parser.AddGroup(cases.Title(language.English).String(name)+" Options", "", cfgMap[name])
 		if err != nil {
-			return nil, errs.Wrapf(err, "add flags fail: %s", name)
+			return nil, errs.Wrapf(err, "add flags failed: %s", name)
 		}
+		g.Namespace = name
+		g.EnvNamespace = strings.ToUpper(base.envPrefix + parser.EnvNamespaceDelimiter + name)
 	}
+
 	return parser, nil
 }

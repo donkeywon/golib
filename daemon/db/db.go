@@ -51,7 +51,7 @@ func New() DB {
 }
 
 func (d *db) Init() error {
-	for _, dbCfg := range d.Cfg.DB {
+	for _, dbCfg := range d.Cfg.Pools {
 		db, err := sql.Open(dbCfg.Type, dbCfg.DSN)
 		if err != nil {
 			return errs.Wrapf(err, "open datasource fail, name: %s, type: %s, dsn: %s", dbCfg.Name, dbCfg.Type, dbCfg.DSN)
@@ -70,7 +70,7 @@ func (d *db) Init() error {
 }
 
 func (d *db) Stop() error {
-	for _, dbCfg := range d.Cfg.DB {
+	for _, dbCfg := range d.Cfg.Pools {
 		db := d.dbs[dbCfg.Name]
 		err := db.Close()
 		if err != nil {
@@ -93,7 +93,7 @@ func (d *db) Describe(ch chan<- *prometheus.Desc) {
 }
 
 func (d *db) Collect(ch chan<- prometheus.Metric) {
-	for _, dbCfg := range d.Cfg.DB {
+	for _, dbCfg := range d.Cfg.Pools {
 		db := d.dbs[dbCfg.Name]
 		stats := db.Stats()
 
