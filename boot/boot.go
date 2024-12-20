@@ -43,6 +43,7 @@ var (
 
 func Boot(opt ...Option) {
 	_b = New(opt...)
+	_b.SetCtx(context.Background())
 	err := runner.Init(_b)
 	if err != nil {
 		_b.Error("boot init failed", err)
