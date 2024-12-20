@@ -1,8 +1,14 @@
 package plugin
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
+)
+
+var (
+	ErrInvalidPluginCreator    = errors.New("invalid plugin creator")
+	ErrInvalidPluginCfgCreator = errors.New("invalid plugin cfg creator")
 )
 
 type Creator func() interface{}
@@ -64,7 +70,7 @@ func CreateWithCfg(typ interface{}, cfg interface{}) interface{} {
 
 	p := f()
 	if p == nil {
-		panic(fmt.Sprintf("plugin is nil: %+v", typ))
+		panic(fmt.Sprintf("plugin created is nil: %+v", typ))
 	}
 
 	if sp, ok := p.(CfgSetter); ok {
@@ -79,12 +85,12 @@ func CreateWithCfg(typ interface{}, cfg interface{}) interface{} {
 func CreateCfg(typ interface{}) interface{} {
 	f, exists := _pluginCfgs[typ]
 	if !exists {
-		panic(fmt.Sprintf("plugin(%+v) cfg not exists", typ))
+		panic(fmt.Sprintf("plugin cfg not exists: %+v", typ))
 	}
 
 	cfg := f()
 	if cfg == nil {
-		panic(fmt.Sprintf("plugin cfg is nil: %+v", typ))
+		panic(fmt.Sprintf("plugin cfg created is nil: %+v", typ))
 	}
 
 	rt := reflect.TypeOf(cfg)

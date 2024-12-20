@@ -8,7 +8,7 @@ import (
 	"github.com/donkeywon/golib/errs"
 	"github.com/donkeywon/golib/plugin"
 	"github.com/donkeywon/golib/runner"
-	"github.com/donkeywon/golib/util/vtil"
+	"github.com/donkeywon/golib/util/v"
 )
 
 func init() {
@@ -61,7 +61,7 @@ func New() *Pipeline {
 }
 
 func (p *Pipeline) Init() error {
-	err := vtil.Struct(p.Cfg)
+	err := v.Struct(p.Cfg)
 	if err != nil {
 		return errs.Wrap(err, "validate fail")
 	}

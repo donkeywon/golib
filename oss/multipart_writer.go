@@ -67,7 +67,7 @@ func NewMultiPartWriter() *MultiPartWriter {
 func (w *MultiPartWriter) Write(p []byte) (int, error) {
 	select {
 	case <-w.closed:
-		return 0, errs.ErrWriteToClosedWriter
+		return 0, ErrAlreadyClosed
 	default:
 	}
 
@@ -248,7 +248,7 @@ func (w *MultiPartWriter) initMultiPart() (string, error) {
 	res := &InitiateMultipartUploadResult{}
 	err = xml.Unmarshal(body, res)
 	if err != nil {
-		return "", errs.Wrapf(err, "unmarshal multipart response xml fail")
+		return "", errs.Wrapf(err, "unmarshal multipart response xml fail, resp: %+v, resp body: %s", resp, string(body))
 	}
 
 	return res.UploadID, nil

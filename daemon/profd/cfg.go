@@ -15,7 +15,7 @@ type Cfg struct {
 	EnableStartupProfiling bool   `yaml:"enableStartupProfiling"   env:"PROF_ENABLE_STARTUP_PROFILING"   flag-long:"prof-enable-startup-profiling" flag-description:"profiling at startup"`
 	StartupProfilingSec    int    `yaml:"startupProfilingSec"      env:"PROF_STARTUP_PROFILING_SEC"      flag-long:"prof-startup-profiling-sec"    flag-description:"startup profiling duration in seconds, only works when prof-enable-startup-profiling is enabled"`
 	StartupProfilingMode   string `yaml:"startupProfilingMode"     env:"PROF_STARTUP_PROFILING_MODE"     flag-long:"prof-startup-profiling-mode"   flag-description:"startup profiling mode, only works when prof-enable-startup-profiling is enabled"`
-	ProfilingOutputDir     string `yaml:"profilingOutputDir"       env:"PROF_OUTPUT_DIR"                 flag-long:"prof-output-dir"               flag-description:"dir path of pprof file save to"`
+	ProfOutputDir          string `yaml:"profOutputDir"            env:"PROF_OUTPUT_DIR"                 flag-long:"prof-output-dir"               flag-description:"dir path of pprof file save to"`
 
 	EnableHTTPPprof bool `yaml:"enableHTTPPprof" env:"PROF_ENABLE_HTTP_PPROF" flag-long:"prof-enable-http-pprof" flag-description:"enable pprof over http, need httpd"`
 
@@ -30,7 +30,7 @@ func NewCfg() *Cfg {
 		EnableStartupProfiling: DefaultEnableStartupProfiling,
 		StartupProfilingSec:    DefaultStartupProfilingSec,
 		StartupProfilingMode:   DefaultStartupProfilingMode,
-		ProfilingOutputDir:     DefaultProfilingOutputDir,
+		ProfOutputDir:          DefaultProfilingOutputDir,
 		EnableGoPs:             DefaultEnableGoPs,
 		GoPsAddr:               DefaultGoPsAddr,
 		EnableHTTPPprof:        DefaultEnableHTTPPprof,

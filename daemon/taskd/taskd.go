@@ -11,7 +11,7 @@ import (
 	"github.com/donkeywon/golib/runner"
 	"github.com/donkeywon/golib/task"
 	"github.com/donkeywon/golib/util/reflects"
-	"github.com/donkeywon/golib/util/vtil"
+	"github.com/donkeywon/golib/util/v"
 )
 
 const DaemonTypeTaskd boot.DaemonType = "taskd"
@@ -212,7 +212,7 @@ func (td *Taskd) waitAllTaskDone() {
 }
 
 func (td *Taskd) createInit(taskCfg *task.Cfg) (*task.Task, error) {
-	err := vtil.Struct(taskCfg)
+	err := v.Struct(taskCfg)
 	if err != nil {
 		return nil, errs.Wrap(err, "invalid task cfg")
 	}

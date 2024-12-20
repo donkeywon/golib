@@ -29,7 +29,7 @@ func New() *Profd {
 
 func (p *Profd) Init() error {
 	if p.Cfg.EnableStartupProfiling {
-		filepath, done, err := prof.Start(p.Cfg.StartupProfilingMode, p.Cfg.ProfilingOutputDir, p.Cfg.StartupProfilingSec)
+		filepath, done, err := prof.Start(p.Cfg.StartupProfilingMode, p.Cfg.ProfOutputDir, p.Cfg.StartupProfilingSec)
 		if err != nil {
 			p.Error("startup profiling fail", err,
 				"mode", p.Cfg.StartupProfilingMode,
@@ -88,9 +88,11 @@ func (p *Profd) Init() error {
 }
 
 func (p *Profd) Stop() error {
-	err := prof.Stop()
-	if err != nil {
-		p.Warn("prof stop fail when stopping", "err", err)
+	if p.Cfg.EnableStartupProfiling && prof.IsRunning() {
+		err := prof.Stop()
+		if err != nil {
+			p.Warn("prof stop fail when stopping", "err", err)
+		}
 	}
 	return nil
 }
@@ -106,7 +108,7 @@ func (p *Profd) GetCfg() interface{} {
 func (p *Profd) startProf(w http.ResponseWriter, r *http.Request) []byte {
 	paramDir := r.URL.Query().Get("dir")
 	if paramDir == "" {
-		paramDir = p.Cfg.ProfilingOutputDir
+		paramDir = p.Cfg.ProfOutputDir
 	}
 	paramTimeout := r.URL.Query().Get("timeout")
 	timeout, _ := strconv.Atoi(paramTimeout)

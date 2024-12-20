@@ -9,7 +9,7 @@ import (
 	"github.com/donkeywon/golib/plugin"
 	"github.com/donkeywon/golib/util/bufferpool"
 	"github.com/donkeywon/golib/util/sshs"
-	"github.com/donkeywon/golib/util/vtil"
+	"github.com/donkeywon/golib/util/v"
 	"golang.org/x/crypto/ssh"
 )
 
@@ -49,7 +49,7 @@ func NewSSHStep() *SSHStep {
 }
 
 func (s *SSHStep) Init() error {
-	err := vtil.Struct(s.SSHStepCfg)
+	err := v.Struct(s.SSHStepCfg)
 	if err != nil {
 		return err
 	}

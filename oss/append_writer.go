@@ -44,7 +44,7 @@ func NewAppendWriter() *AppendWriter {
 func (w *AppendWriter) Write(p []byte) (int, error) {
 	select {
 	case <-w.closed:
-		return 0, errs.ErrWriteToClosedWriter
+		return 0, ErrAlreadyClosed
 	default:
 	}
 

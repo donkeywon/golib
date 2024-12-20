@@ -8,7 +8,7 @@ import (
 	"github.com/donkeywon/golib/errs"
 	"github.com/donkeywon/golib/plugin"
 	"github.com/donkeywon/golib/util/cmd"
-	"github.com/donkeywon/golib/util/vtil"
+	"github.com/donkeywon/golib/util/v"
 )
 
 func init() {
@@ -36,7 +36,7 @@ func NewCmdStep() *CmdStep {
 }
 
 func (c *CmdStep) Init() error {
-	err := vtil.Struct(c.Cfg)
+	err := v.Struct(c.Cfg)
 	if err != nil {
 		return err
 	}
