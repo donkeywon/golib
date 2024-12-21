@@ -253,8 +253,8 @@ func (td *taskd) createInit(ctx context.Context, taskCfg *task.Cfg, extra *task.
 			t.Store(k, value)
 		}
 
-		t.Inherit(td)
 		t.SetCtx(ctx)
+		t.Inherit(td)
 		t.WithLoggerFields("task_id", t.Cfg.ID, "task_type", t.Cfg.Type)
 	}
 	td.hookTask(t, err, td.createHooks, "create", extra)
