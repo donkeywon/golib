@@ -346,7 +346,8 @@ func (w *MultiPartWriter) Close() error {
 
 		if w.cfg.Parallel > 1 {
 			parallelErr := w.parallelErrs.Load()
-			if parallelErr != nil || alreadyCancelled {
+			hasParallelErr := w.parallelErrs.Has()
+			if hasParallelErr || alreadyCancelled {
 				err = errors.Join(err, parallelErr, w.abort())
 			} else {
 				err = errors.Join(err, w.complete())
