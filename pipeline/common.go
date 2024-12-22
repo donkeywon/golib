@@ -81,6 +81,9 @@ type CommonOption struct {
 }
 
 func (ito *CommonOption) toOptions(write bool) []Option {
+	if ito == nil {
+		return nil
+	}
 	opts := make([]Option, 0, 2)
 	if ito.Async && ito.BufSize > 0 {
 		if write {
