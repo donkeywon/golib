@@ -1,10 +1,10 @@
 package pipeline
 
 import (
+	"errors"
 	"io"
 
 	"github.com/donkeywon/golib/plugin"
-	"github.com/donkeywon/golib/rwwrapper"
 	"github.com/klauspost/compress/gzip"
 	"github.com/klauspost/compress/s2"
 	"github.com/klauspost/compress/zstd"
@@ -46,6 +46,11 @@ func NewCompressRWCfg() *CompressRWCfg {
 type CompressRW struct {
 	RW
 	*CompressRWCfg
+
+	compressReader io.ReadCloser
+	compressWriter io.WriteCloser
+	reader         io.ReadCloser
+	writer         io.WriteCloser
 }
 
 func NewCompressRW() *CompressRW {
@@ -59,49 +64,51 @@ func (c *CompressRW) Init() error {
 	return c.RW.Init()
 }
 
+func (c *CompressRW) Close() error {
+	if c.CompressRWCfg.Type == CompressTypeNop {
+		return c.RW.Close()
+	}
+	if c.IsReader() {
+		return errors.Join(c.RW.Close(), c.reader.Close())
+	} else {
+		return errors.Join(c.RW.Close(), c.writer.Close())
+	}
+}
+
 func (c *CompressRW) NestReader(r io.ReadCloser) error {
+	c.reader = r
 	switch c.CompressRWCfg.Type {
 	case CompressTypeNop:
-		return c.RW.NestReader(r)
+		c.compressReader = r
 	case CompressTypeGzip:
-		return c.RW.NestReader(NewGzipReader(r, c.CompressRWCfg))
+		c.compressReader = NewGzipReader(r, c.CompressRWCfg)
 	case CompressTypeSnappy:
-		return c.RW.NestReader(NewSnappyReader(r, c.CompressRWCfg))
+		c.compressReader = NewSnappyReader(r, c.CompressRWCfg)
 	case CompressTypeZstd:
-		return c.RW.NestReader(NewZstdReader(r, c.CompressRWCfg))
+		c.compressReader = NewZstdReader(r, c.CompressRWCfg)
 	default:
-		return c.RW.NestReader(r)
+		c.compressReader = r
 	}
+
+	return c.RW.NestReader(c.compressReader)
 }
 
 func (c *CompressRW) NestWriter(w io.WriteCloser) error {
+	c.writer = w
 	switch c.CompressRWCfg.Type {
 	case CompressTypeNop:
-		return c.RW.NestWriter(w)
+		c.compressWriter = w
 	case CompressTypeGzip:
-		return c.RW.NestWriter(NewGzipWritter(w, c.CompressRWCfg))
+		c.compressWriter = NewGzipWritter(w, c.CompressRWCfg)
 	case CompressTypeSnappy:
-		return c.RW.NestWriter(NewSnappyWriter(w, c.CompressRWCfg))
+		c.compressWriter = NewSnappyWriter(w, c.CompressRWCfg)
 	case CompressTypeZstd:
-		return c.RW.NestWriter(NewZstdWriter(w, c.CompressRWCfg))
+		c.compressWriter = NewZstdWriter(w, c.CompressRWCfg)
 	default:
-		return c.RW.NestWriter(w)
-	}
-}
-
-func (c *CompressRW) Nwrite() uint64 {
-	if c.Writer() == nil {
-		return 0
+		c.compressWriter = w
 	}
 
-	type writer interface {
-		Nwrite() uint64
-	}
-
-	if w, ok := c.Writer().(writer); ok {
-		return w.Nwrite()
-	}
-	return c.RW.Nwrite()
+	return c.RW.NestWriter(c.compressWriter)
 }
 
 func (c *CompressRW) Type() interface{} {
@@ -112,10 +119,7 @@ func (c *CompressRW) GetCfg() interface{} {
 	return c.CompressRWCfg
 }
 
-func NewZstdWriter(w io.WriteCloser, cfg *CompressRWCfg) *rwwrapper.WriterWrapperr {
-	ww := rwwrapper.NewWriterWrapperr()
-	iw := rwwrapper.NewWriterWrapper(w)
-	var ze *zstd.Encoder
+func NewZstdWriter(w io.WriteCloser, cfg *CompressRWCfg) io.WriteCloser {
 	opts := make([]zstd.EOption, 0)
 	if cfg.Concurrency > 0 {
 		opts = append(opts, zstd.WithEncoderConcurrency(cfg.Concurrency))
@@ -130,15 +134,11 @@ func NewZstdWriter(w io.WriteCloser, cfg *CompressRWCfg) *rwwrapper.WriterWrappe
 	default:
 		opts = append(opts, zstd.WithEncoderLevel(zstd.SpeedDefault))
 	}
-	ze, _ = zstd.NewWriter(iw, opts...)
-	ww.Set(ze, iw)
-	return ww
+	ze, _ := zstd.NewWriter(w, opts...)
+	return ze
 }
 
-func NewSnappyWriter(w io.WriteCloser, cfg *CompressRWCfg) *rwwrapper.WriterWrapperr {
-	ww := rwwrapper.NewWriterWrapperr()
-	iw := rwwrapper.NewWriterWrapper(w)
-	var sw *s2.Writer
+func NewSnappyWriter(w io.WriteCloser, cfg *CompressRWCfg) io.WriteCloser {
 	opts := make([]s2.WriterOption, 0)
 	opts = append(opts, s2.WriterSnappyCompat())
 	if cfg.Concurrency > 0 {
@@ -153,67 +153,68 @@ func NewSnappyWriter(w io.WriteCloser, cfg *CompressRWCfg) *rwwrapper.WriterWrap
 	default:
 		opts = append(opts, s2.WriterBetterCompression())
 	}
-	sw = s2.NewWriter(iw, opts...)
-	ww.Set(sw, iw)
-	return ww
+	sw := s2.NewWriter(w, opts...)
+	return sw
 }
 
-func NewGzipWritter(w io.WriteCloser, cfg *CompressRWCfg) *rwwrapper.WriterWrapperr {
-	ww := rwwrapper.NewWriterWrapperr()
-	iw := rwwrapper.NewWriterWrapper(w)
+func NewGzipWritter(w io.WriteCloser, cfg *CompressRWCfg) io.WriteCloser {
 	var gw *pgzip.Writer
 	switch cfg.Level {
 	case CompressLevelFast:
-		gw, _ = pgzip.NewWriterLevel(iw, gzip.BestSpeed)
+		gw, _ = pgzip.NewWriterLevel(w, gzip.BestSpeed)
 	case CompressLevelBetter:
-		gw, _ = pgzip.NewWriterLevel(iw, gzip.DefaultCompression)
+		gw, _ = pgzip.NewWriterLevel(w, gzip.DefaultCompression)
 	case CompressLevelBest:
-		gw, _ = pgzip.NewWriterLevel(iw, gzip.BestCompression)
+		gw, _ = pgzip.NewWriterLevel(w, gzip.BestCompression)
 	default:
-		gw, _ = pgzip.NewWriterLevel(iw, gzip.DefaultCompression)
+		gw, _ = pgzip.NewWriterLevel(w, gzip.DefaultCompression)
 	}
 	if cfg.Concurrency > 0 {
 		_ = gw.SetConcurrency(gzipDefaultBlockSize, cfg.Concurrency)
 	}
-	ww.Set(gw, iw)
-	return ww
+	return gw
 }
 
-func NewZstdReader(r io.ReadCloser, cfg *CompressRWCfg) *rwwrapper.ReaderWrapperr {
-	ir := rwwrapper.NewReaderWrapper(r)
+type zstdReader struct {
+	*zstd.Decoder
+}
+
+func (z *zstdReader) Close() error {
+	z.Decoder.Close()
+	return nil
+}
+
+func NewZstdReader(r io.ReadCloser, cfg *CompressRWCfg) io.ReadCloser {
 	var zr *zstd.Decoder
 	if cfg.Concurrency > 0 {
-		zr, _ = zstd.NewReader(ir, zstd.WithDecoderConcurrency(cfg.Concurrency))
+		zr, _ = zstd.NewReader(r, zstd.WithDecoderConcurrency(cfg.Concurrency))
 	} else {
-		zr, _ = zstd.NewReader(ir)
+		zr, _ = zstd.NewReader(r)
 	}
 
-	rw := rwwrapper.NewReaderWrapperr()
-	rw.Set(zr, ir)
-	return rw
+	return &zstdReader{Decoder: zr}
 }
 
-func NewSnappyReader(r io.ReadCloser, _ *CompressRWCfg) *rwwrapper.ReaderWrapperr {
-	ir := rwwrapper.NewReaderWrapper(r)
-	sr := s2.NewReader(ir)
-
-	rw := rwwrapper.NewReaderWrapperr()
-	rw.Set(sr, ir)
-	return rw
+type s2Reader struct {
+	*s2.Reader
 }
 
-func NewGzipReader(r io.ReadCloser, cfg *CompressRWCfg) *rwwrapper.ReaderWrapperr {
-	ir := rwwrapper.NewReaderWrapper(r)
+func (s *s2Reader) Close() error {
+	return nil
+}
+
+func NewSnappyReader(r io.ReadCloser, _ *CompressRWCfg) io.ReadCloser {
+	return &s2Reader{Reader: s2.NewReader(r)}
+}
+
+func NewGzipReader(r io.ReadCloser, cfg *CompressRWCfg) io.ReadCloser {
 	var gr *pgzip.Reader
 	if cfg.Concurrency > 0 {
-		gr, _ = pgzip.NewReaderN(ir, gzipDefaultBlockSize, cfg.Concurrency)
+		gr, _ = pgzip.NewReaderN(r, gzipDefaultBlockSize, cfg.Concurrency)
 	} else {
-		gr, _ = pgzip.NewReader(ir)
+		gr, _ = pgzip.NewReader(r)
 	}
-
-	rw := rwwrapper.NewReaderWrapperr()
-	rw.Set(gr, ir)
-	return rw
+	return gr
 }
 
 func FileExtFromCompressCfg(c *CompressRWCfg) string {

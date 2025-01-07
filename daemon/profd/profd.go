@@ -16,9 +16,15 @@ import (
 
 const DaemonTypeProfd boot.DaemonType = "profd"
 
+var _p = New()
+
 type Profd struct {
 	runner.Runner
 	*Cfg
+}
+
+func P() *Profd {
+	return _p
 }
 
 func New() *Profd {

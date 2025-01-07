@@ -1,6 +1,7 @@
 package pipeline
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -80,4 +81,23 @@ func TestMultiGroupPipeline(t *testing.T) {
 
 	runner.Start(p)
 	require.NoError(t, p.Err())
+}
+
+func TestCompress(t *testing.T) {
+	cfg := NewCfg().
+		Add(RWRoleReader, RWTypeFile, &FileRWCfg{Path: "/Users/wangkun106/test.file.zst"}, nil).
+		Add(RWRoleReader, RWTypeCompress, &CompressRWCfg{Type: CompressTypeZstd}, nil).
+		Add(RWRoleStarter, RWTypeCopy, &CopyRWCfg{BufSize: 32 * 1024}, nil).
+		Add(RWRoleWriter, RWTypeFile, &FileRWCfg{Path: "/Users/wangkun106/test.file"}, nil)
+
+	p := New()
+	p.Cfg = cfg
+	tests.Init(p)
+	err := runner.Init(p)
+	require.NoError(t, err)
+
+	runner.Start(p)
+	require.NoError(t, p.Err())
+
+	fmt.Println(p.RWGroups()[0].Readers()[1].Type())
 }

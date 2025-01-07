@@ -18,10 +18,6 @@ const DaemonTypeHttpd boot.DaemonType = "httpd"
 
 type MiddlewareFunc func(http.Handler) http.Handler
 
-func init() {
-	_h.RegisterMiddleware(logAndRecoverMiddleware)
-}
-
 var _h = New()
 
 type Httpd struct {
@@ -49,10 +45,13 @@ func H() *Httpd {
 }
 
 func New() *Httpd {
-	return &Httpd{
+	h := &Httpd{
 		Runner: runner.Create(string(DaemonTypeHttpd)),
 		mux:    http.NewServeMux(),
 	}
+	h.RegisterMiddleware(logAndRecoverMiddleware)
+
+	return h
 }
 
 func (h *Httpd) Start() error {
