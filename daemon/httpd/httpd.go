@@ -14,6 +14,10 @@ import (
 	"github.com/donkeywon/golib/util/httpu"
 )
 
+func init() {
+	_h.RegisterMiddleware(logAndRecoverMiddleware)
+}
+
 const DaemonTypeHttpd boot.DaemonType = "httpd"
 
 type MiddlewareFunc func(http.Handler) http.Handler
@@ -45,13 +49,10 @@ func H() *Httpd {
 }
 
 func New() *Httpd {
-	h := &Httpd{
+	return &Httpd{
 		Runner: runner.Create(string(DaemonTypeHttpd)),
 		mux:    http.NewServeMux(),
 	}
-	h.RegisterMiddleware(logAndRecoverMiddleware)
-
-	return h
 }
 
 func (h *Httpd) Start() error {
