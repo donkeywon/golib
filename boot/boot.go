@@ -24,8 +24,6 @@ import (
 	"github.com/goccy/go-yaml"
 )
 
-const FlagTagPrefix = "flag-"
-
 type DaemonType string
 
 type Daemon interface {
@@ -331,7 +329,7 @@ func buildCfgMap() map[DaemonType]interface{} {
 
 func buildFlagParser(data interface{}, cfgMap map[DaemonType]interface{}) (*flags.Parser, error) {
 	var err error
-	parser := flags.NewParser(data, flags.Default, flags.FlagTagPrefix(FlagTagPrefix))
+	parser := flags.NewParser(data, flags.Default, flags.FlagTagPrefix(consts.FlagTagPrefix))
 	for daemonType, cfg := range cfgMap {
 		if !reflects.IsStructPointer(cfg) {
 			continue

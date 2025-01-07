@@ -14,8 +14,7 @@ import (
 )
 
 func init() {
-	plugin.Register(PluginTypeTask, func() interface{} { return New() })
-	plugin.RegisterCfg(PluginTypeTask, func() interface{} { return NewCfg() })
+	plugin.RegisterWithCfg(PluginTypeTask, func() interface{} { return New() }, func() interface{} { return NewCfg() })
 }
 
 const PluginTypeTask plugin.Type = "task"
