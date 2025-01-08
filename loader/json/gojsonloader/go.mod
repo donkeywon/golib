@@ -1,6 +1,6 @@
 module github.com/donkeywon/golib/loader/json/gojsonloader
 
-go 1.22.7
+go 1.22.0
 
 require (
 	github.com/donkeywon/golib v0.0.0
