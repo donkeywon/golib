@@ -100,7 +100,7 @@ func (m *MapKVS) LoadAsFloatOr(k string, d float64) float64 {
 	return PLoadAsFloatOr(m, k, d)
 }
 
-func (m *MapKVS) Collect() map[string]any {
+func (m *MapKVS) LoadAll() map[string]any {
 	c := make(map[string]any)
 	m.Range(func(k string, v any) bool {
 		c[k] = v
@@ -109,7 +109,7 @@ func (m *MapKVS) Collect() map[string]any {
 	return c
 }
 
-func (m *MapKVS) CollectAsString() map[string]string {
+func (m *MapKVS) LoadAllAsString() map[string]string {
 	var err error
 	result := make(map[string]string)
 	m.Range(func(k string, v any) bool {

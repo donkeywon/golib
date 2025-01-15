@@ -174,11 +174,11 @@ func (t *Task) Result() interface{} {
 func (t *Task) result() *Result {
 	r := &Result{}
 	for _, step := range t.Steps() {
-		v := step.Collect()
+		v := step.LoadAll()
 		r.StepsData = append(r.StepsData, v)
 	}
 	for _, deferStep := range t.DeferSteps() {
-		v := deferStep.Collect()
+		v := deferStep.LoadAll()
 		r.DeferStepsData = append(r.DeferStepsData, v)
 	}
 	return r

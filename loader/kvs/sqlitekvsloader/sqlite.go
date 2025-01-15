@@ -267,7 +267,7 @@ func (s *SQLiteKVS) LoadAsFloatOr(k string, d float64) (float64, error) {
 	return kvs.LoadAsFloatOr(s, k, d)
 }
 
-func (s *SQLiteKVS) Collect() (map[string]any, error) {
+func (s *SQLiteKVS) LoadAll() (map[string]any, error) {
 	c := make(map[string]any)
 	err := s.Range(func(k string, v any) bool {
 		c[k] = v
@@ -321,7 +321,7 @@ func (s *SQLiteKVS) Range(f func(k string, v any) bool) error {
 	return nil
 }
 
-func (s *SQLiteKVS) CollectAsString() (map[string]string, error) {
+func (s *SQLiteKVS) LoadAllAsString() (map[string]string, error) {
 	var er error
 	result := make(map[string]string)
 	err := s.Range(func(k string, v any) bool {

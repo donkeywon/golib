@@ -27,7 +27,7 @@ type Promd struct {
 
 var _p = New()
 
-func P() *Promd {
+func D() *Promd {
 	return _p
 }
 
@@ -60,7 +60,7 @@ func (p *Promd) GetCfg() interface{} {
 }
 
 func (p *Promd) registerHTTPHandler() {
-	httpd.Handle(p.Cfg.HTTPEndpointPath, promhttp.HandlerFor(p.reg, promhttp.HandlerOpts{Registry: p.reg}))
+	httpd.D().Handle(p.Cfg.HTTPEndpointPath, promhttp.HandlerFor(p.reg, promhttp.HandlerOpts{Registry: p.reg}))
 }
 
 func (p *Promd) SetGauge(name string, v float64) {
@@ -139,38 +139,14 @@ func (p *Promd) opCounter(name string, op func(c prometheus.Counter)) {
 	p.Warn("metrics type not match", "name", name, "wanted", "Counter", "actual", reflect.TypeOf(c))
 }
 
-func RegisterMetric(m prometheus.Metric) error {
-	return RegisterCollector(m.(prometheus.Collector))
+func (p *Promd) Register(c prometheus.Collector) error {
+	return p.reg.Register(c)
 }
 
-func RegisterCollector(c prometheus.Collector) error {
-	return _p.reg.Register(c)
+func (p *Promd) MustRegister(c ...prometheus.Collector) {
+	p.reg.MustRegister(c...)
 }
 
-func SetGauge(name string, v float64) {
-	_p.SetGauge(name, v)
-}
-
-func AddGauge(name string, v float64) {
-	_p.AddGauge(name, v)
-}
-
-func SubGauge(name string, v float64) {
-	_p.SubGauge(name, v)
-}
-
-func IncGauge(name string) {
-	_p.IncGauge(name)
-}
-
-func DecGauge(name string) {
-	_p.DecGauge(name)
-}
-
-func IncCounter(name string) {
-	_p.IncCounter(name)
-}
-
-func AddCounter(name string, v float64) {
-	_p.AddCounter(name, v)
+func (p *Promd) RegisterMetric(m prometheus.Metric) error {
+	return p.Register(m.(prometheus.Collector))
 }

@@ -48,7 +48,7 @@ type Taskd struct {
 	deferStepDoneHooks []task.StepHook
 }
 
-func T() *Taskd {
+func D() *Taskd {
 	return _td
 }
 
@@ -181,13 +181,13 @@ func (td *Taskd) ResumeTask(taskID string) (*task.Task, error) {
 	newT, _, err := td.createInitSubmit(t.Cfg, false, true, []task.Hook{
 		func(newT *task.Task, err error, hed *task.HookExtraData) {
 			for i, newStep := range newT.Steps() {
-				data := t.Steps()[i].Collect()
+				data := t.Steps()[i].LoadAll()
 				for k, v := range data {
 					newStep.Store(k, v)
 				}
 			}
 			for i, newStep := range newT.DeferSteps() {
-				data := t.DeferSteps()[i].Collect()
+				data := t.DeferSteps()[i].LoadAll()
 				for k, v := range data {
 					newStep.Store(k, v)
 				}
@@ -537,86 +537,30 @@ func (td *Taskd) GetTaskResult(taskID string) (interface{}, error) {
 	return t.Result(), nil
 }
 
-func Submit(cfg *task.Cfg) (*task.Task, error) {
-	return _td.SubmitTask(cfg)
+func (td *Taskd) OnTaskCreate(hooks ...task.Hook) {
+	td.createHooks = append(td.createHooks, hooks...)
 }
 
-func SubmitAndWait(cfg *task.Cfg) (*task.Task, error) {
-	return _td.SubmitTaskAndWait(cfg)
+func (td *Taskd) OnTaskInit(hooks ...task.Hook) {
+	td.initHooks = append(td.initHooks, hooks...)
 }
 
-func TrySubmit(cfg *task.Cfg) (*task.Task, bool, error) {
-	return _td.TrySubmitTask(cfg)
+func (td *Taskd) OnTaskSubmit(hooks ...task.Hook) {
+	td.submitHooks = append(td.submitHooks, hooks...)
 }
 
-func IsTaskExists(taskID string) bool {
-	return _td.IsTaskExists(taskID)
+func (td *Taskd) OnTaskStart(hooks ...task.Hook) {
+	td.startHooks = append(td.startHooks, hooks...)
 }
 
-func IsTaskWaiting(taskID string) bool {
-	return _td.IsTaskWaiting(taskID)
+func (td *Taskd) OnTaskDone(hooks ...task.Hook) {
+	td.doneHooks = append(td.doneHooks, hooks...)
 }
 
-func IsTaskRunning(taskID string) bool {
-	return _td.IsTaskRunning(taskID)
+func (td *Taskd) OnTaskStepDone(hooks ...task.StepHook) {
+	td.stepDoneHooks = append(td.stepDoneHooks, hooks...)
 }
 
-func IsTaskPausing(taskID string) bool {
-	return _td.IsTaskPausing(taskID)
-}
-
-func ListTaskIDs() []string {
-	return _td.ListTaskIDs()
-}
-
-func ListWaitingTaskIDs() []string {
-	return _td.ListWaitingTaskIDs()
-}
-
-func ListRunningTaskIDs() []string {
-	return _td.ListRunningTaskIDs()
-}
-
-func ListPausingTaskIDs() []string {
-	return _td.ListPausingTaskIDs()
-}
-
-func GetTaskResult(taskID string) (interface{}, error) {
-	return _td.GetTaskResult(taskID)
-}
-
-func PauseTask(taskID string) error {
-	return _td.PauseTask(taskID)
-}
-
-func ResumeTask(taskID string) (*task.Task, error) {
-	return _td.ResumeTask(taskID)
-}
-
-func OnTaskCreate(hooks ...task.Hook) {
-	_td.createHooks = append(_td.createHooks, hooks...)
-}
-
-func OnTaskInit(hooks ...task.Hook) {
-	_td.initHooks = append(_td.initHooks, hooks...)
-}
-
-func OnTaskSubmit(hooks ...task.Hook) {
-	_td.submitHooks = append(_td.submitHooks, hooks...)
-}
-
-func OnTaskStart(hooks ...task.Hook) {
-	_td.startHooks = append(_td.startHooks, hooks...)
-}
-
-func OnTaskDone(hooks ...task.Hook) {
-	_td.doneHooks = append(_td.doneHooks, hooks...)
-}
-
-func OnTaskStepDone(hooks ...task.StepHook) {
-	_td.stepDoneHooks = append(_td.stepDoneHooks, hooks...)
-}
-
-func OnTaskDeferStepDone(hooks ...task.StepHook) {
-	_td.deferStepDoneHooks = append(_td.deferStepDoneHooks, hooks...)
+func (td *Taskd) OnTaskDeferStepDone(hooks ...task.StepHook) {
+	td.deferStepDoneHooks = append(td.deferStepDoneHooks, hooks...)
 }

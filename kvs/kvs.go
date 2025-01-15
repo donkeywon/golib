@@ -34,8 +34,8 @@ type KVS interface {
 	LoadAsUintOr(k string, d uint) (uint, error)
 	LoadAsFloat(k string) (float64, error)
 	LoadAsFloatOr(k string, d float64) (float64, error)
-	Collect() (map[string]any, error)
-	CollectAsString() (map[string]string, error)
+	LoadAll() (map[string]any, error)
+	LoadAllAsString() (map[string]string, error)
 	Range(func(k string, v any) bool) error
 }
 
