@@ -101,7 +101,7 @@ func (u *Upd) upgrade(vi *VerInfo) error {
 		}
 	}
 
-	err = downloadPackage(u.DownloadDir, vi.Filename, u.DownloadRateLimit, vi.StoreCfg)
+	err = downloadPackage(u.DownloadDir, vi.Filename, vi.StoreCfg)
 	if err != nil {
 		return errs.Wrap(err, "download package fail")
 	}
@@ -167,7 +167,7 @@ func (u *Upd) upgrade(vi *VerInfo) error {
 	return nil
 }
 
-func downloadPackage(downloadDir string, filename string, ratelimitN int, storeCfg *pipeline.RWCfg) error {
+func downloadPackage(downloadDir string, filename string, storeCfg *pipeline.RWCfg) error {
 	cfg := pipeline.NewCfg().
 		AddCfg(storeCfg).
 		Add(

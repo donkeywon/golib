@@ -20,7 +20,7 @@ type DSCfg struct {
 
 type Cfg struct {
 	DS                  []*DSCfg `yaml:"ds"`
-	EnableExportMetrics bool     `env:"DS_ENABLE_EXPORT_METRICS"   yaml:"enableExportMetrics"   flag-long:"ds-enable-export-metrics"   flag-description:"export metrics with prometheus protocol"`
+	EnableExportMetrics bool     `env:"DS_ENABLE_EXPORT_METRICS"   yaml:"enableExportMetrics"   flag-long:"ds-enable-export-metrics"   flag-description:"export datasource pool metrics with prometheus protocol"`
 }
 
 func NewCfg() *Cfg {
