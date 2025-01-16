@@ -54,6 +54,7 @@ type Runner interface {
 	WithLoggerFrom(r Runner, kvs ...any)
 }
 
+// Init a runner and init its children in order
 func Init(r Runner) (err error) {
 	defer func() {
 		p := recover()
@@ -81,6 +82,7 @@ func Init(r Runner) (err error) {
 	return
 }
 
+// Start a runner and wait it done
 func Start(r Runner) {
 	if !r.markStarted() {
 		r.Info("already started")
@@ -144,7 +146,7 @@ func Start(r Runner) {
 			default:
 			}
 			r.Info("received cancel, stopping")
-			stop(r)
+			stop(r, false)
 		}
 	}()
 
@@ -152,6 +154,7 @@ func Start(r Runner) {
 	r.AppendError(r.Start())
 }
 
+// StartBG start a runner and its children in the background
 func StartBG(r Runner) {
 	go Start(r)
 	for _, c := range r.Children() {
@@ -159,16 +162,29 @@ func StartBG(r Runner) {
 	}
 }
 
+// Stop a runner, in most scenario, Stop is a notification action, used to notify the Runner to stop
 func Stop(r Runner) {
-	stop(r)
+	stop(r, false)
 	if len(r.Children()) > 0 {
 		for i := len(r.Children()) - 1; i >= 0; i-- {
-			stop(r.Children()[i])
+			stop(r.Children()[i], false)
 		}
 	}
 }
 
-func stop(r Runner) {
+// StopAndWait notify Runner to stop, and notify the Runner's children
+// in reverse order to stop and wait for the children to finish.
+func StopAndWait(r Runner) {
+	stop(r, false)
+	if len(r.Children()) > 0 {
+		for i := len(r.Children()) - 1; i >= 0; i-- {
+			stop(r.Children()[i], true)
+		}
+	}
+	<-r.Done()
+}
+
+func stop(r Runner, wait bool) {
 	if !r.markStopping() {
 		r.Info("already stopping")
 		return
@@ -181,6 +197,9 @@ func stop(r Runner) {
 		safeStop(r)
 		r.Info("stop done")
 		r.markStopDone()
+		if wait {
+			<-r.Done()
+		}
 	default:
 		// 这里不直接return的原因是：
 		// 有些struct组合了Runner接口，但是并不需要Start，只是依赖Runner的一些公共方法

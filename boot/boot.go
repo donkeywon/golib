@@ -179,12 +179,10 @@ func (b *Booter) Start() error {
 	select {
 	case sig := <-termSigCh:
 		b.Info("received signal, exit", "signal", sig.String())
-		go runner.Stop(b)
-		<-b.StopDone()
+		go runner.StopAndWait(b)
 	case sig := <-intSigCh:
 		b.Info("received signal, exit", "signal", sig.String())
 		b.Cancel()
-		<-b.StopDone()
 	case <-b.Stopping():
 		b.Info("exit due to stopping")
 	}
