@@ -3,7 +3,6 @@ package upd
 import (
 	"github.com/donkeywon/golib/util/v"
 	"os"
-	"os/exec"
 	"sync/atomic"
 	"time"
 
@@ -102,6 +101,24 @@ func (u *Upd) upgrade(vi *VerInfo) bool {
 		return false
 	}
 
+	deployCmd := vi.DeployCmd
+	if len(deployCmd) == 0 {
+		deployCmd = u.Cfg.DeployCmd
+	}
+	if len(deployCmd) == 0 {
+		u.Error("deploy cmd is empty", nil)
+		return false
+	}
+
+	startCmd := vi.StartCmd
+	if len(startCmd) == 0 {
+		startCmd = u.Cfg.StartCmd
+	}
+	if len(startCmd) == 0 {
+		u.Error("start cmd is empty", nil)
+		return false
+	}
+
 	u.Info("start upgrade", "cur_ver", buildinfo.Version, "new_ver_info", vi)
 
 	if paths.DirExist(vi.DownloadDstPath) {
@@ -143,20 +160,20 @@ func (u *Upd) upgrade(vi *VerInfo) bool {
 
 	u.Info("start deploy new package")
 	var cmdResult *cmd.Result
-	cmdResult, err = cmd.RunCtx(u.Ctx(), vi.DeployCmd...)
+	cmdResult, err = cmd.Run(deployCmd...)
 	if err != nil {
 		u.Error("deploy new package fail", err, "cmd_result", cmdResult)
-		return false
+		os.Exit(1)
 	}
 	u.Info("deploy new package done")
 
-	u.Info("start new binary")
-	nc := exec.Command(os.Args[0], os.Args[1:]...)
-	cmdResult = cmd.Start(nc)
-	if cmdResult.Pid == 0 {
-		u.Error("start new binary fail", nil, "cmd_result", cmdResult)
+	u.Info("start new version")
+	cmdResult, err = cmd.RunCtx(u.Ctx(), startCmd...)
+	if err != nil {
+		u.Error("start new version fail", err, "cmd_result", cmdResult)
 		os.Exit(1)
 	}
+	u.Info("start new version done, exit now")
 	os.Exit(0)
 	return true
 }
