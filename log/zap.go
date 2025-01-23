@@ -193,15 +193,18 @@ func DefaultConfig() *zap.Config {
 
 type zapLogger struct {
 	*zap.Logger
+
+	lvl zap.AtomicLevel
 }
 
 func NewZapLogger(c *Cfg) (Logger, error) {
-	var err error
-	cfg := DefaultConfig()
-	cfg.Level, err = zap.ParseAtomicLevel(c.Level)
+	lvl, err := zap.ParseAtomicLevel(c.Level)
 	if err != nil {
 		return nil, errs.Wrap(err, "invalid log level")
 	}
+
+	cfg := DefaultConfig()
+	cfg.Level = lvl
 	cfg.Encoding = c.Format
 	cfg.OutputPaths, err = buildOutputs(c)
 	if err != nil {
@@ -213,6 +216,7 @@ func NewZapLogger(c *Cfg) (Logger, error) {
 	}
 	return &zapLogger{
 		Logger: zl,
+		lvl:    lvl,
 	}, nil
 }
 
@@ -257,6 +261,10 @@ func (z *zapLogger) WithLoggerName(n string) Logger {
 
 func (z *zapLogger) WithLoggerFields(kvs ...any) {
 	z.Logger = z.Logger.With(HandleZapFields(false, kvs)...)
+}
+
+func (z *zapLogger) SetLoggerLevel(lvl string) {
+	z.lvl.UnmarshalText([]byte(lvl))
 }
 
 func (z *zapLogger) Debug(msg string, kvs ...any) {

@@ -62,8 +62,7 @@ func RegisterDaemon(typ DaemonType, creator plugin.Creator, cfgCreator plugin.Cf
 	if slices.Contains(_daemons, typ) {
 		return
 	}
-	plugin.Register(typ, creator)
-	plugin.RegisterCfg(typ, cfgCreator)
+	plugin.RegisterWithCfg(typ, creator, cfgCreator)
 	_daemons = append(_daemons, typ)
 }
 
@@ -155,7 +154,7 @@ func (b *Booter) Init() error {
 	}
 
 	for name, cfg := range b.cfgMap {
-		b.Info("load config", "name", name, "cfg", cfg)
+		b.Debug("load config", "name", name, "cfg", cfg)
 	}
 
 	for _, daemonType := range _daemons {

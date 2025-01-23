@@ -114,7 +114,7 @@ func (s *SQLiteKVS) Close() error {
 }
 
 func (s *SQLiteKVS) insert(k string, v any, insertSQL string) (int64, error) {
-	str, err := conv.AnyToString(v)
+	str, err := conv.ToString(v)
 	if err != nil {
 		return 0, errs.Wrap(err, "convert value to string fail")
 	}
@@ -325,7 +325,7 @@ func (s *SQLiteKVS) LoadAllAsString() (map[string]string, error) {
 	var er error
 	result := make(map[string]string)
 	err := s.Range(func(k string, v any) bool {
-		result[k], er = conv.AnyToString(v)
+		result[k], er = conv.ToString(v)
 		return er == nil
 	})
 	if err == nil {

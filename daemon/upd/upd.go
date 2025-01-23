@@ -1,7 +1,6 @@
 package upd
 
 import (
-	"github.com/donkeywon/golib/util/v"
 	"os"
 	"sync/atomic"
 	"time"
@@ -13,6 +12,7 @@ import (
 	"github.com/donkeywon/golib/runner"
 	"github.com/donkeywon/golib/util/cmd"
 	"github.com/donkeywon/golib/util/paths"
+	"github.com/donkeywon/golib/util/v"
 )
 
 const DaemonTypeUpd boot.DaemonType = "upd"

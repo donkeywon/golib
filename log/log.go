@@ -1,7 +1,12 @@
 package log
 
-import "go.uber.org/zap"
+import (
+	"go.uber.org/zap"
+)
 
+// Logger is a log interface.
+// DO NOT CREATE GLOBAL LOGGER.
+// USE PROVIDED LOG METHOD, SUCH AS Runner.Info.
 type Logger interface {
 	Debug(msg string, kvs ...any)
 	Info(msg string, kvs ...any)
@@ -10,6 +15,7 @@ type Logger interface {
 
 	WithLoggerName(n string) Logger
 	WithLoggerFields(kvs ...any)
+	SetLoggerLevel(lvl string)
 }
 
 func NewNopLogger() Logger {

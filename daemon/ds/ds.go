@@ -1,4 +1,4 @@
-package dsd
+package ds
 
 import (
 	"database/sql"
@@ -14,8 +14,6 @@ const DaemonTypeDS boot.DaemonType = "ds"
 
 var (
 	_d = New()
-
-	_ prometheus.Collector = (*DSD)(nil)
 
 	fqNamespace    = string(DaemonTypeDS)
 	fqSubsystem    = "pool_stats"
@@ -33,7 +31,7 @@ var (
 	maxLifetimeClosedDesc = prometheus.NewDesc(prometheus.BuildFQName(fqNamespace, fqSubsystem, "max_life_time_closed"), "The total number of connections closed due to SetConnMaxLifeTime.", variableLabels, nil)
 )
 
-type DSD struct {
+type DS struct {
 	runner.Runner
 	plugin.Plugin
 	*Cfg
@@ -41,18 +39,18 @@ type DSD struct {
 	dbs map[string]*sql.DB
 }
 
-func D() *DSD {
+func D() *DS {
 	return _d
 }
 
-func New() *DSD {
-	return &DSD{
+func New() *DS {
+	return &DS{
 		Runner: runner.Create(string(DaemonTypeDS)),
 		dbs:    make(map[string]*sql.DB),
 	}
 }
 
-func (d *DSD) Init() error {
+func (d *DS) Init() error {
 	for _, ds := range d.Cfg.DS {
 		db, err := sql.Open(ds.Type, ds.DSN)
 		if err != nil {
@@ -71,7 +69,7 @@ func (d *DSD) Init() error {
 	return d.Runner.Init()
 }
 
-func (d *DSD) Stop() error {
+func (d *DS) Stop() error {
 	for _, ds := range d.Cfg.DS {
 		db := d.dbs[ds.Name]
 		err := db.Close()
@@ -82,15 +80,15 @@ func (d *DSD) Stop() error {
 	return nil
 }
 
-func (d *DSD) GetCfg() interface{} {
+func (d *DS) GetCfg() interface{} {
 	return d.Cfg
 }
 
-func (d *DSD) Type() interface{} {
+func (d *DS) Type() interface{} {
 	return DaemonTypeDS
 }
 
-func (d *DSD) Describe(ch chan<- *prometheus.Desc) {
+func (d *DS) Describe(ch chan<- *prometheus.Desc) {
 	ch <- maxOpenConnectionsDesc
 	ch <- openConnectionsDesc
 	ch <- inUseConnectionsDesc
@@ -102,7 +100,7 @@ func (d *DSD) Describe(ch chan<- *prometheus.Desc) {
 	ch <- maxLifetimeClosedDesc
 }
 
-func (d *DSD) Collect(ch chan<- prometheus.Metric) {
+func (d *DS) Collect(ch chan<- prometheus.Metric) {
 	for _, ds := range d.Cfg.DS {
 		db := d.dbs[ds.Name]
 		stats := db.Stats()
@@ -120,6 +118,6 @@ func (d *DSD) Collect(ch chan<- prometheus.Metric) {
 	}
 }
 
-func (d *DSD) Get(name string) *sql.DB {
+func (d *DS) Get(name string) *sql.DB {
 	return d.dbs[name]
 }

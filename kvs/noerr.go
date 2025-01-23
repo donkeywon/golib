@@ -46,7 +46,7 @@ func PLoadAsString(kvs NoErrKVS, k string) string {
 	if !exists || v == nil {
 		return ""
 	}
-	vv, err := conv.AnyToString(v)
+	vv, err := conv.ToString(v)
 	if err != nil {
 		panic(err)
 	}

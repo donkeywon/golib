@@ -9,6 +9,7 @@ const (
 	DefaultDisableCompress = false
 )
 
+// Cfg is logger cfg include level, rotate, etc.
 type Cfg struct {
 	Filepath        string `env:"LOG_PATH"             flag-long:"log-path"             yaml:"filepath"        flag-description:"log file path"`
 	Format          string `env:"LOG_FORMAT"           flag-long:"log-format"           yaml:"format"          flag-description:"log line format"`
@@ -31,6 +32,9 @@ func NewCfg() *Cfg {
 	}
 }
 
+// Build logger from cfg.
+// DO NOT CREATE GLOBAL LOGGER.
+// USE PROVIDED LOGGER, SUCH AS Runner.Info
 func (c *Cfg) Build() (Logger, error) {
 	return NewZapLogger(c)
 }

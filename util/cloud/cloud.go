@@ -5,31 +5,33 @@ import (
 	"github.com/donkeywon/golib/util/eth"
 )
 
+type Type string
+
 const (
-	CloudTypeUnknown = "unknown"
-	CloudTypeAws     = "aws"
-	CloudTypeAzure   = "azure"
-	CloudTypeAliyun  = "aliyun"
-	CloudTypeHuawei  = "huawei"
-	CloudTypeTencent = "tencent"
+	TypeUnknown Type = "unknown"
+	TypeAws     Type = "aws"
+	TypeAzure   Type = "azure"
+	TypeAliyun  Type = "aliyun"
+	TypeHuawei  Type = "huawei"
+	TypeTencent Type = "tencent"
 )
 
 func GetNicSpeed() (int, error) {
-	typ := CloudType()
+	typ := Which()
 	var (
 		speed int
 		err   error
 	)
 	switch typ {
-	case CloudTypeAws:
+	case TypeAws:
 		speed, err = GetAwsEc2NetSpeed()
-	case CloudTypeHuawei:
+	case TypeHuawei:
 		speed, err = GetHuaweiEcsNetworkSpeed()
-	case CloudTypeAliyun:
+	case TypeAliyun:
 		speed, err = GetAliEcsNetworkSpeed()
-	case CloudTypeTencent:
+	case TypeTencent:
 		speed, err = GetTencentCvmNetworkSpeed()
-	case CloudTypeAzure:
+	case TypeAzure:
 		speed, err = eth.GetNicSpeed("eth0")
 	default:
 		speed, err = 0, errs.Errorf("unknown cloud type: %s", typ)
@@ -37,17 +39,17 @@ func GetNicSpeed() (int, error) {
 	return speed, err
 }
 
-func CloudType() string {
+func Which() Type {
 	switch {
 	case IsHuawei():
-		return CloudTypeHuawei
+		return TypeHuawei
 	case IsAws():
-		return CloudTypeAws
+		return TypeAws
 	case IsAliyun():
-		return CloudTypeAliyun
+		return TypeAliyun
 	case IsAzure():
-		return CloudTypeAzure
+		return TypeAzure
 	default:
-		return CloudTypeUnknown
+		return TypeUnknown
 	}
 }

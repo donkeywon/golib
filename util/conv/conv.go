@@ -10,7 +10,7 @@ import (
 	"github.com/jinzhu/copier"
 )
 
-func AnyToString(v any) (string, error) {
+func ToString(v any) (string, error) {
 	var (
 		vs  string
 		err error
