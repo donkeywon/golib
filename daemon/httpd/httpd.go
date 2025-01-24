@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"plugin"
 	"time"
 
 	"github.com/donkeywon/golib/boot"
@@ -26,7 +25,6 @@ var _h = New()
 
 type Httpd struct {
 	runner.Runner
-	plugin.Plugin
 	*Cfg
 
 	s           *http.Server

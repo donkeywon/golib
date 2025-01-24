@@ -58,7 +58,7 @@ func (r *Reader) Read(p []byte) (int, error) {
 	r.headOnce.Do(func() {
 		resp, err := retry.DoWithData(
 			func() (*http.Response, error) {
-				return oss.Head(r.ctx, r.URL, r.Ak, r.Sk, r.Region)
+				return oss.Head(r.ctx, time.Second*time.Duration(r.Cfg.Timeout), r.URL, r.Ak, r.Sk, r.Region)
 			},
 			retry.Attempts(uint(r.Retry)),
 		)
@@ -126,41 +126,24 @@ func (r *Reader) retryRead(start int, p []byte) (int, error) {
 }
 
 func (r *Reader) readPart(start int, p []byte) (int, error) {
-	req, err := http.NewRequestWithContext(r.ctx, http.MethodGet, r.URL, nil)
-	if err != nil {
-		return 0, errs.Wrap(err, "new read request fail")
-	}
+	var nr int
 
 	end := len(p) + start - 1
 	if end >= r.total-1 {
 		end = r.total - 1
 	}
 	reqRange := fmt.Sprintf("bytes=%d-%d", start, end)
-	req.Header.Set("Range", reqRange)
 
-	err = r.addAuth(req)
-	if err != nil {
-		return 0, errs.Wrap(err, "sign oss req fail")
-	}
-
-	ctx, cancel := context.WithTimeout(r.ctx, time.Second*time.Duration(r.Timeout))
-	defer cancel()
-	resp, err := httpc.DoCtx(ctx, req)
-	if err != nil {
-		return 0, errs.Wrap(err, "do http request fail")
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusPartialContent {
-		return 0, errs.Errorf("http resp status is not ok and partial content: %d", resp.StatusCode)
-	}
-
-	nr, err := io.ReadFull(resp.Body, p)
-	if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
+	resp, err := httpc.Get(r.ctx, time.Second*time.Duration(r.Timeout), r.URL,
+		httpc.WithHeaders("Range", reqRange),
+		httpc.ReqOptionFunc(r.addAuth),
+		httpc.ToBytes(&nr, p),
+	)
+	if errors.Is(err, io.EOF) {
 		err = nil
 	}
 	if err != nil {
-		return 0, errs.Wrap(err, "read resp body fail")
+		return nr, errs.Wrap(err, "get oss object part fail")
 	}
 
 	contentRange := resp.Header.Get("Content-Range")

@@ -5,7 +5,6 @@ import (
 	"github.com/donkeywon/golib/boot"
 	"github.com/donkeywon/golib/daemon/promd"
 	"github.com/donkeywon/golib/errs"
-	"github.com/donkeywon/golib/plugin"
 	"github.com/donkeywon/golib/runner"
 	"github.com/prometheus/client_golang/prometheus"
 )
@@ -33,7 +32,6 @@ var (
 
 type DS struct {
 	runner.Runner
-	plugin.Plugin
 	*Cfg
 
 	dbs map[string]*sql.DB

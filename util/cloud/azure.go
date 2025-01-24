@@ -1,8 +1,7 @@
 package cloud
 
 import (
-	"time"
-
+	"bytes"
 	"github.com/donkeywon/golib/util/httpc"
 )
 
@@ -15,10 +14,9 @@ func IsAzure() bool {
 }
 
 func GetAzureVMInstanceMetadata() ([]byte, error) {
-	body, _, err := httpc.Gtimeout(
-		time.Second,
-		"http://169.254.169.254/metadata/instance?api-version=2021-02-01",
-		"Metadata",
-		"true")
-	return body, err
+	resp := bytes.NewBuffer(nil)
+	_, err := httpc.Get(nil, cloudMetadataReqTimeout, "http://169.254.169.254/metadata/instance?api-version=2021-02-01",
+		httpc.WithHeaders("Metadata", "true"), httpc.ToBytesBuffer(resp))
+
+	return resp.Bytes(), err
 }

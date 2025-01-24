@@ -31,34 +31,39 @@ type Daemon interface {
 	plugin.Plugin
 }
 
+var (
+	_daemons []DaemonType // dependencies in order
+	_cfgMap  = make(map[string]interface{})
+	_b       *Booter
+)
+
 func Boot(opt ...Option) {
-	b := New(opt...)
-	err := runner.Init(b)
+	_b = New(opt...)
+	err := runner.Init(_b)
 	if err != nil {
-		b.Error("boot init fail", err)
+		_b.Error("boot init fail", err)
 		os.Exit(1)
 	}
-	err = v.Struct(b)
+	err = v.Struct(_b)
 	if err != nil {
-		b.Error("boot validate fail", err)
+		_b.Error("boot validate fail", err)
 		os.Exit(1)
 	}
-	runner.StartBG(b)
-	<-b.Done()
-	err = b.Err()
+	runner.StartBG(_b)
+	<-_b.Done()
+	err = _b.Err()
 	if err != nil {
-		b.Error("error occurred", err)
+		_b.Error("error occurred", err)
 		os.Exit(1)
 	}
 }
 
-var (
-	_daemons []DaemonType // dependencies in order
-	_cfgMap  = make(map[string]interface{})
-)
+func SetLoggerLevel(lvl string) {
+	_b.SetLoggerLevel(lvl)
+}
 
-// RegisterDaemon register a Daemon creator and its config creator.
-func RegisterDaemon(typ DaemonType, creator plugin.Creator, cfgCreator plugin.CfgCreator) {
+// RegDaemon register a Daemon creator and its config creator.
+func RegDaemon(typ DaemonType, creator plugin.Creator, cfgCreator plugin.CfgCreator) {
 	if slices.Contains(_daemons, typ) {
 		return
 	}
@@ -66,8 +71,8 @@ func RegisterDaemon(typ DaemonType, creator plugin.Creator, cfgCreator plugin.Cf
 	_daemons = append(_daemons, typ)
 }
 
-// RegisterCfg register additional config, cfg type must be pointer.
-func RegisterCfg(name string, cfg interface{}) {
+// RegCfg register additional config, cfg type must be pointer.
+func RegCfg(name string, cfg interface{}) {
 	if _, exists := _cfgMap[name]; exists {
 		return
 	}

@@ -21,23 +21,24 @@ import (
 var azblobURLSuffix = "core.windows.net"
 
 func CreateAppendBlob(ctx context.Context, url string, ak string, sk string) error {
-	req, err := http.NewRequestWithContext(ctx, http.MethodPut, url, nil)
-	if err != nil {
-		return errs.Wrap(err, "new put blob request fail")
-	}
-	req.Header.Set(HeaderXmsBlobType, "AppendBlob")
+	var respBody = bytes.NewBuffer(nil)
+	resp, err := httpc.Put(ctx, commonTimeout, url,
+		httpc.WithHeaders(HeaderXmsBlobType, "AppendBlob"),
+		azblobSignOption(ak, sk),
+		httpc.CheckStatusCode(http.StatusCreated),
+		httpc.ToBytesBuffer(respBody))
 
-	err = AzblobSign(req, ak, sk)
 	if err != nil {
-		return errs.Wrap(err, "sign azblob fail")
-	}
-
-	body, resp, err := httpc.DoBody(req)
-	if err != nil {
-		return errs.Wrapf(err, "do http request create append blob fail: %d, body: %s", resp.StatusCode, string(body))
+		return errs.Wrapf(err, "do http request create append blob fail: %v, body: %s", resp, respBody.String())
 	}
 
 	return nil
+}
+
+func azblobSignOption(ak, sk string) httpc.Option {
+	return httpc.ReqOptionFunc(func(r *http.Request) error {
+		return AzblobSign(r, ak, sk)
+	})
 }
 
 func AzblobSign(req *http.Request, account string, key string) error {

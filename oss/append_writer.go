@@ -73,9 +73,7 @@ func (w *AppendWriter) Write(p []byte) (int, error) {
 
 	if oss.IsAzblob(w.URL) && !w.created {
 		err = retry.Do(
-			func() error {
-				return oss.CreateAppendBlob(w.ctx, w.URL, w.Ak, w.Sk)
-			},
+			func() error { return oss.CreateAppendBlob(w.ctx, w.URL, w.Ak, w.Sk) },
 			retry.Attempts(uint(w.Retry)),
 		)
 		if err != nil {
@@ -84,9 +82,9 @@ func (w *AppendWriter) Write(p []byte) (int, error) {
 		w.created = true
 	}
 
-	resp, err := w.retryAppend(p)
+	respBody, resp, err := w.retryAppend(p)
 	if err != nil {
-		return 0, errs.Wrapf(err, "append to oss object fail, resp: %s", string(resp))
+		return 0, errs.Wrapf(err, "append to oss object fail, resp: %v, resp body: %s", resp, respBody.String())
 	}
 
 	return len(p), nil
@@ -101,18 +99,16 @@ func (w *AppendWriter) Close() error {
 }
 
 func (w *AppendWriter) delete() error {
-	ctx, cancel := context.WithTimeout(w.ctx, time.Second*time.Duration(w.Timeout))
-	defer cancel()
-	return oss.Delete(ctx, w.URL, w.Ak, w.Sk, w.Region)
+	return oss.Delete(w.ctx, time.Second*time.Duration(w.Timeout), w.URL, w.Ak, w.Sk, w.Region)
 }
 
 func (w *AppendWriter) addAuth(req *http.Request) error {
 	return oss.Sign(req, w.Ak, w.Sk, w.Region)
 }
 
-func (w *AppendWriter) retryAppend(payload []byte) ([]byte, error) {
+func (w *AppendWriter) retryAppend(payload []byte) (*bytes.Buffer, *http.Response, error) {
 	var (
-		respBody  []byte
+		respBody  *bytes.Buffer
 		resp      *http.Response
 		retryErrs error
 	)
@@ -136,7 +132,7 @@ func (w *AppendWriter) retryAppend(payload []byte) ([]byte, error) {
 	)
 
 	if err != nil {
-		return respBody, errs.Wrap(retryErrs, "append failed with max retry")
+		return respBody, resp, errs.Wrap(retryErrs, "append failed with max retry")
 	}
 
 	var (
@@ -149,65 +145,46 @@ func (w *AppendWriter) retryAppend(payload []byte) ([]byte, error) {
 	} else {
 		pos, exists, err = oss.GetNextPositionFromResponse(resp)
 		if err != nil {
-			return respBody, errs.Wrapf(err, "get next position from response fail, header: %+v", resp.Header)
+			return respBody, resp, errs.Wrapf(err, "get next position from response fail")
 		}
 	}
 
 	if !exists {
-		return respBody, errs.Errorf("next position not exists in response: %+v", resp.Header)
+		return respBody, resp, errs.Errorf("next position not exists in response")
 	}
 	if w.Pos+len(payload) > pos {
-		return respBody, errs.Errorf("not all body been written, next: %d, cur: %d, body len: %d", pos, w.Pos, len(payload))
+		return respBody, resp, errs.Errorf("not all body been written, next: %d, cur: %d, body len: %d", pos, w.Pos, len(payload))
 	}
 	w.Pos = pos
 
-	return respBody, nil
+	return respBody, resp, nil
 }
 
-func (w *AppendWriter) doAppend(body []byte) ([]byte, *http.Response, error) {
+func (w *AppendWriter) doAppend(body []byte) (*bytes.Buffer, *http.Response, error) {
 	var (
-		req *http.Request
-		err error
+		resp     *http.Response
+		respBody = bytes.NewBuffer(nil)
+		err      error
 	)
 
-	ctx, cancel := context.WithTimeout(w.ctx, time.Second*time.Duration(w.Timeout))
-	defer cancel()
-
 	if oss.IsAzblob(w.URL) {
-		req, err = http.NewRequestWithContext(ctx, http.MethodPut, w.URL+"?comp=appendblock", bytes.NewReader(body))
-		if req != nil {
-			req.Header.Set(oss.HeaderAzblobAppendPositionHeader, strconv.Itoa(w.Pos))
-		}
+		resp, err = httpc.Put(w.ctx, time.Second*time.Duration(w.Timeout), w.URL+"?comp=appendblock",
+			httpc.WithBody(body),
+			httpc.WithHeaders(oss.HeaderAzblobAppendPositionHeader, strconv.Itoa(w.Pos)),
+			httpc.ReqOptionFunc(w.addAuth),
+			httpc.CheckStatusCode(http.StatusCreated),
+			httpc.ToBytesBuffer(respBody))
 	} else {
-		req, err = http.NewRequestWithContext(ctx, http.MethodPost,
-			w.URL+appendURLSuffix+fmt.Sprintf("&position=%d", w.Pos), bytes.NewReader(body))
+		url := w.URL + appendURLSuffix + fmt.Sprintf("&position=%d", w.Pos)
+		resp, err = httpc.Put(w.ctx, time.Second*time.Duration(w.Timeout), url,
+			httpc.WithBody(body),
+			httpc.ReqOptionFunc(w.addAuth),
+			httpc.CheckStatusCode(http.StatusOK),
+			httpc.ToBytesBuffer(respBody))
 	}
 
-	if err != nil {
-		return nil, nil, errs.Wrap(err, "new append request fail")
+	if err == nil || errors.Is(err, context.Canceled) {
+		return respBody, resp, nil
 	}
-
-	err = w.addAuth(req)
-	if err != nil {
-		return nil, nil, errs.Wrap(err, "sign oss req fail")
-	}
-
-	req.ContentLength = int64(len(body))
-
-	body, resp, err := httpc.DoBody(req)
-	if err != nil && !errors.Is(err, context.Canceled) {
-		return nil, nil, errs.Wrap(err, "do http request fail")
-	}
-
-	if oss.IsAzblob(w.URL) {
-		if resp.StatusCode != http.StatusCreated {
-			return body, resp, errs.Errorf("http resp status code is not created: %d, body: %s", resp.StatusCode, string(body))
-		}
-	} else {
-		if resp.StatusCode != http.StatusOK {
-			return body, resp, errs.Errorf("http resp status code is not ok: %d, body: %s", resp.StatusCode, string(body))
-		}
-	}
-
-	return body, resp, nil
+	return respBody, resp, errs.Wrap(err, "do http response fail")
 }

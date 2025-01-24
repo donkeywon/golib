@@ -1,10 +1,10 @@
 package cloud
 
 import (
-	"encoding/json"
-	"time"
-
+	"bytes"
 	"github.com/donkeywon/golib/util/httpc"
+	"github.com/donkeywon/golib/util/jsons"
+	"net/http"
 )
 
 type HuaweiEcsNetworkQosData struct {
@@ -18,29 +18,28 @@ type HuaweiEcsNetworkData struct {
 
 func IsHuawei() bool {
 	metadata, err := GetHuaweiEcsMetadata()
-	if len(metadata) > 0 && err == nil {
+	if metadata != nil && metadata.Len() > 0 && err == nil {
 		return true
 	}
 	return false
 }
 
-func GetHuaweiEcsMetadata() ([]byte, error) {
-	body, _, err := httpc.Gtimeout(time.Second, "http://169.254.169.254/openstack/latest/meta_data.json")
-	return body, err
+func GetHuaweiEcsMetadata() (*bytes.Buffer, error) {
+	resp := bytes.NewBuffer(nil)
+	_, err := httpc.Get(nil, cloudMetadataReqTimeout, "http://169.254.169.254/openstack/latest/meta_data.json",
+		httpc.CheckStatusCode(http.StatusOK),
+		httpc.ToBytesBuffer(resp),
+	)
+	return resp, err
 }
 
 func GetHuaweiEcsNetworkData() (*HuaweiEcsNetworkData, error) {
-	data, _, err := httpc.Gtimeout(time.Second, "http://169.254.169.254/openstack/latest/network_data.json")
-	if err != nil {
-		return nil, err
-	}
-
 	networkData := &HuaweiEcsNetworkData{}
-	err = json.Unmarshal(data, networkData)
-	if err != nil {
-		return nil, err
-	}
-	return networkData, nil
+	_, err := httpc.Get(nil, cloudMetadataReqTimeout, "http://169.254.169.254/openstack/latest/network_data.json",
+		httpc.CheckStatusCode(http.StatusOK),
+		httpc.ToAnyUnmarshal(networkData, jsons.Unmarshal),
+	)
+	return networkData, err
 }
 
 func GetHuaweiEcsNetworkSpeed() (int, error) {

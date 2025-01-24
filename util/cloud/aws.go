@@ -1,11 +1,10 @@
 package cloud
 
 import (
-	"net/http"
-	"time"
-
+	"bytes"
 	"github.com/donkeywon/golib/errs"
 	"github.com/donkeywon/golib/util/httpc"
+	"net/http"
 )
 
 var (
@@ -221,23 +220,24 @@ var (
 
 func IsAws() bool {
 	token, err := GetEC2IMDSv2Token()
-	if len(token) > 0 && err == nil {
+	if token.Len() > 0 && err == nil {
 		return true
 	}
 	return false
 }
 
-func GetEC2InstanceType() ([]byte, error) {
+func GetEC2InstanceType() (*bytes.Buffer, error) {
 	token, err := GetEC2IMDSv2Token()
 	if err != nil {
 		return nil, err
 	}
 
-	body, _, err := httpc.Gtimeout(
-		time.Second,
-		"http://169.254.169.254/latest/meta-data/instance-type",
-		"X-aws-ec2-metadata-token",
-		string(token))
+	body := bytes.NewBuffer(nil)
+	_, err = httpc.Get(nil, cloudMetadataReqTimeout, "http://169.254.169.254/latest/meta-data/instance-type",
+		httpc.WithHeaders("X-aws-ec2-metadata-token", token.String()),
+		httpc.CheckStatusCode(http.StatusOK),
+		httpc.ToBytesBuffer(body),
+	)
 	return body, err
 }
 
@@ -247,23 +247,21 @@ func GetAwsEc2NetSpeed() (int, error) {
 		return 0, err
 	}
 
-	instanceTypeS := string(instanceType)
-	speed, exists := awsInstanceTypeNetworkSpeedMap[instanceTypeS]
+	instanceTypeStr := instanceType.String()
+	speed, exists := awsInstanceTypeNetworkSpeedMap[instanceTypeStr]
 	if !exists {
-		return 0, errs.Errorf("instance net speed not found, type: %s", instanceTypeS)
+		return 0, errs.Errorf("instance net speed not found, type: %s", instanceTypeStr)
 	}
 
 	return speed, nil
 }
 
-func GetEC2IMDSv2Token() ([]byte, error) {
-	body, _, err := httpc.Dtimeout(
-		time.Second,
-		http.MethodPut,
-		"http://169.254.169.254/latest/api/token",
-		nil,
-		http.StatusOK,
-		"X-aws-ec2-metadata-token-ttl-seconds",
-		"30")
+func GetEC2IMDSv2Token() (*bytes.Buffer, error) {
+	body := bytes.NewBuffer(nil)
+	_, err := httpc.Put(nil, cloudMetadataReqTimeout, "http://169.254.169.254/latest/api/token",
+		httpc.WithHeaders("X-aws-ec2-metadata-token-ttl-seconds", "30"),
+		httpc.CheckStatusCode(http.StatusOK),
+		httpc.ToBytesBuffer(body),
+	)
 	return body, err
 }
