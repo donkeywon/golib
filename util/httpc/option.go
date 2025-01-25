@@ -3,12 +3,14 @@ package httpc
 import (
 	"bytes"
 	"errors"
-	"github.com/donkeywon/golib/errs"
-	"github.com/donkeywon/golib/util/jsons"
 	"io"
 	"net/http"
 	"net/url"
 	"strings"
+
+	"github.com/donkeywon/golib/errs"
+	"github.com/donkeywon/golib/util/httpu"
+	"github.com/donkeywon/golib/util/jsons"
 )
 
 var (
@@ -59,15 +61,16 @@ func WithBodyReader(reader io.Reader) Option {
 }
 
 func WithBodyJSON(v any) Option {
-	return WithBodyMarshal(v, jsons.Marshal)
+	return WithBodyMarshal(v, httpu.MIMEJSON, jsons.Marshal)
 }
 
-func WithBodyMarshal(v any, marshal func(v any) ([]byte, error)) Option {
+func WithBodyMarshal(v any, contentType string, marshal func(v any) ([]byte, error)) Option {
 	return ReqOptionFunc(func(r *http.Request) error {
 		bs, err := marshal(v)
 		if err != nil {
 			return errs.Wrap(err, "failed to marshal request body")
 		}
+		r.Header.Set(httpu.HeaderContentType, contentType)
 		r.Body = io.NopCloser(bytes.NewReader(bs))
 		return nil
 	})
@@ -79,7 +82,7 @@ func WithBodyForm(form url.Values) Option {
 			return nil
 		}
 		r.Body = io.NopCloser(strings.NewReader(form.Encode()))
-		r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		r.Header.Set(httpu.HeaderContentType, httpu.MIMEPOSTForm)
 		return nil
 	})
 }
@@ -149,20 +152,6 @@ func ToWriter(w io.Writer) Option {
 		if err != nil {
 			return errs.Wrap(err, "failed to read response body to writer")
 		}
-		return nil
-	})
-}
-
-func ToHeader(h *http.Header) Option {
-	return RespOptionFunc(func(resp *http.Response) error {
-		*h = resp.Header.Clone()
-		return nil
-	})
-}
-
-func ToStatusCode(statusCode *int) Option {
-	return RespOptionFunc(func(resp *http.Response) error {
-		*statusCode = resp.StatusCode
 		return nil
 	})
 }

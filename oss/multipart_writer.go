@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/xml"
 	"fmt"
+	"github.com/donkeywon/golib/util/httpu"
 	"net/http"
 	"sync"
 	"time"
@@ -141,22 +142,25 @@ func (w *MultiPartWriter) Complete() error {
 		checkStatus int
 		resp        *http.Response
 		respBody    = bytes.NewBuffer(nil)
+		contentType string
 	)
 
 	if oss.IsAzblob(w.URL) {
 		url = w.URL + "?comp=blocklist"
 		checkStatus = http.StatusCreated
 		body = &BlockList{Latest: w.blockList}
+		contentType = httpu.MIMEPlainUTF8
 	} else {
 		url = w.URL + "?uploadId=" + w.uploadID
 		checkStatus = http.StatusOK
 		body = &CompleteMultipartUpload{Parts: w.parts}
+		contentType = httpu.MIMEXML
 	}
 
 	resp, err = retry.DoWithData(func() (*http.Response, error) {
 		return httpc.Put(nil, time.Second*time.Duration(w.Timeout), url,
 			httpc.ReqOptionFunc(w.addAuth),
-			httpc.WithBodyMarshal(body, xml.Marshal),
+			httpc.WithBodyMarshal(body, contentType, xml.Marshal),
 			httpc.CheckStatusCode(checkStatus),
 			httpc.ToBytesBuffer(respBody),
 		)

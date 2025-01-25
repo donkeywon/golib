@@ -29,6 +29,22 @@ func Put(ctx context.Context, timeout time.Duration, url string, opts ...Option)
 	return Do(ctx, timeout, http.MethodPut, url, opts...)
 }
 
+func Patch(ctx context.Context, timeout time.Duration, url string, opts ...Option) (*http.Response, error) {
+	return Do(ctx, timeout, http.MethodPatch, url, opts...)
+}
+
+func Connect(ctx context.Context, timeout time.Duration, url string, opts ...Option) (*http.Response, error) {
+	return Do(ctx, timeout, http.MethodConnect, url, opts...)
+}
+
+func Options(ctx context.Context, timeout time.Duration, url string, opts ...Option) (*http.Response, error) {
+	return Do(ctx, timeout, http.MethodOptions, url, opts...)
+}
+
+func Trace(ctx context.Context, timeout time.Duration, url string, opts ...Option) (*http.Response, error) {
+	return Do(ctx, timeout, http.MethodTrace, url, opts...)
+}
+
 func Do(ctx context.Context, timeout time.Duration, method string, url string, opts ...Option) (*http.Response, error) {
 	if ctx == nil {
 		ctx = context.Background()

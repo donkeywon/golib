@@ -5,7 +5,7 @@ import (
 	"runtime"
 )
 
-func SetFirst(s interface{}, f interface{}) bool {
+func SetFirstMatchedField(s interface{}, f interface{}) bool {
 	sValue := reflect.ValueOf(s)
 	if reflect.Indirect(sValue).Kind() != reflect.Struct {
 		return false
