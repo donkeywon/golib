@@ -19,7 +19,7 @@ var (
 )
 
 func TestMain(m *testing.M) {
-	plugin.RegisterWithCfg(stepTypeTick, func() interface{} { return newTickStep() }, func() interface{} { return &tickStepCfg{Interval: 1} })
+	plugin.RegWithCfg(stepTypeTick, func() any { return newTickStep() }, func() any { return &tickStepCfg{Interval: 1} })
 	cfg := NewCfg()
 	cfg.PoolSize = 2
 	cfg.QueueSize = 5
@@ -108,11 +108,11 @@ func (t *tickStep) Start() error {
 	return nil
 }
 
-func (t *tickStep) GetCfg() interface{} {
+func (t *tickStep) GetCfg() any {
 	return t.Cfg
 }
 
-func (t *tickStep) Type() interface{} {
+func (t *tickStep) Type() any {
 	return stepTypeTick
 }
 

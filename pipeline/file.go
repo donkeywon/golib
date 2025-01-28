@@ -9,7 +9,7 @@ import (
 )
 
 func init() {
-	plugin.RegisterWithCfg(RWTypeFile, func() interface{} { return NewFileRW() }, func() interface{} { return NewFileRWCfg() })
+	plugin.RegWithCfg(RWTypeFile, func() any { return NewFileRW() }, func() any { return NewFileRWCfg() })
 }
 
 const RWTypeFile RWType = "file"
@@ -67,10 +67,10 @@ func (f *FileRW) Init() error {
 	return f.RW.Init()
 }
 
-func (f *FileRW) Type() interface{} {
+func (f *FileRW) Type() any {
 	return RWTypeFile
 }
 
-func (f *FileRW) GetCfg() interface{} {
+func (f *FileRW) GetCfg() any {
 	return f.FileRWCfg
 }

@@ -32,7 +32,7 @@ func NewCfg() *Cfg {
 	}
 }
 
-// Build logger from cfg.
+// Build logger from cfg
 // DO NOT CREATE GLOBAL LOGGER.
 // USE PROVIDED LOGGER, SUCH AS Runner.Info
 func (c *Cfg) Build() (Logger, error) {

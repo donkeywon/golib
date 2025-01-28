@@ -1,4 +1,4 @@
-package ds
+package db
 
 import (
 	"time"
@@ -8,7 +8,7 @@ const (
 	DefaultEnableExportMetrics = true
 )
 
-type DSCfg struct {
+type DBCfg struct {
 	Name        string        `yaml:"name"`
 	Type        string        `yaml:"type"`
 	DSN         string        `yaml:"dsn"`
@@ -19,8 +19,8 @@ type DSCfg struct {
 }
 
 type Cfg struct {
-	DS                  []*DSCfg `yaml:"ds"`
-	EnableExportMetrics bool     `env:"DS_ENABLE_EXPORT_METRICS"   yaml:"enableExportMetrics"   flag-long:"ds-enable-export-metrics"   flag-description:"export datasource pool metrics with prometheus protocol"`
+	DB                  []*DBCfg `yaml:"db"`
+	EnableExportMetrics bool     `env:"DB_ENABLE_EXPORT_METRICS"   yaml:"enableExportMetrics"   flag-long:"db-enable-export-metrics"   flag-description:"export database conn pool metrics with prometheus protocol"`
 }
 
 func NewCfg() *Cfg {

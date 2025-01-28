@@ -7,7 +7,7 @@ import (
 )
 
 func init() {
-	plugin.RegisterWithCfg(RWTypeTail, func() interface{} { return NewTailRW() }, func() interface{} { return NewTailRWCfg() })
+	plugin.RegWithCfg(RWTypeTail, func() any { return NewTailRW() }, func() any { return NewTailRWCfg() })
 }
 
 const RWTypeTail RWType = "tail"
@@ -54,10 +54,10 @@ func (t *TailRW) Stop() error {
 	return t.t.Close()
 }
 
-func (t *TailRW) Type() interface{} {
+func (t *TailRW) Type() any {
 	return RWTypeTail
 }
 
-func (t *TailRW) GetCfg() interface{} {
+func (t *TailRW) GetCfg() any {
 	return t.TailRWCfg
 }

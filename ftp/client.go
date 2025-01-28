@@ -111,7 +111,7 @@ func (c *Client) keepalive() {
 	}
 }
 
-func (c *Client) cmdDataConn(format string, args ...interface{}) (net.Conn, error) {
+func (c *Client) cmdDataConn(format string, args ...any) (net.Conn, error) {
 	conn, err := c.openDataConn()
 	if err != nil {
 		return nil, errs.Wrap(err, "open data conn fail")
@@ -136,7 +136,7 @@ func (c *Client) cmdDataConn(format string, args ...interface{}) (net.Conn, erro
 	return conn, nil
 }
 
-func (c *Client) cmd(expected int, format string, args ...interface{}) (int, string, error) {
+func (c *Client) cmd(expected int, format string, args ...any) (int, string, error) {
 	_, err := c.conn.Cmd(format, args...)
 	if err != nil {
 		return 0, "", err
@@ -145,7 +145,7 @@ func (c *Client) cmd(expected int, format string, args ...interface{}) (int, str
 	return c.conn.ReadResponse(expected)
 }
 
-func (c *Client) RawCmd(format string, args ...interface{}) (int, string, error) {
+func (c *Client) RawCmd(format string, args ...any) (int, string, error) {
 	return c.cmd(-1, format, args...)
 }
 

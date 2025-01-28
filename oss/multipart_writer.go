@@ -138,7 +138,7 @@ func (w *MultiPartWriter) Complete() error {
 	var (
 		url         string
 		err         error
-		body        interface{}
+		body        any
 		checkStatus int
 		resp        *http.Response
 		respBody    = bytes.NewBuffer(nil)

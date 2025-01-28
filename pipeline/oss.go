@@ -7,7 +7,7 @@ import (
 )
 
 func init() {
-	plugin.RegisterWithCfg(RWTypeOss, func() interface{} { return NewOssRW() }, func() interface{} { return NewOssRWCfg() })
+	plugin.RegWithCfg(RWTypeOss, func() any { return NewOssRW() }, func() any { return NewOssRWCfg() })
 }
 
 const (
@@ -66,21 +66,21 @@ func (o *OssRW) Init() error {
 	return o.RW.Init()
 }
 
-func (o *OssRW) Type() interface{} {
+func (o *OssRW) Type() any {
 	return RWTypeOss
 }
 
-func (o *OssRW) GetCfg() interface{} {
+func (o *OssRW) GetCfg() any {
 	return o.OssRWCfg
 }
 
-func (o *OssRW) hookLogWrite(n int, bs []byte, err error, cost int64, misc ...interface{}) error {
+func (o *OssRW) hookLogWrite(n int, bs []byte, err error, cost int64, misc ...any) error {
 	o.Info("write", "bs_len", len(bs), "bs_cap", cap(bs), "nw", n, "cost", cost,
 		"async_chan_len", o.AsyncChanLen(), "async_chan_cap", o.AsyncChanCap(), "misc", misc, "err", err)
 	return nil
 }
 
-func (o *OssRW) hookLogRead(n int, bs []byte, err error, cost int64, misc ...interface{}) error {
+func (o *OssRW) hookLogRead(n int, bs []byte, err error, cost int64, misc ...any) error {
 	o.Info("read", "bs_len", len(bs), "bs_cap", cap(bs), "nr", n, "cost", cost,
 		"async_chan_len", o.AsyncChanLen(), "async_chan_cap", o.AsyncChanCap(), "misc", misc, "err", err)
 	return nil

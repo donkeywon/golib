@@ -12,7 +12,7 @@ import (
 )
 
 func init() {
-	plugin.RegisterWithCfg(StepTypeCmd, func() interface{} { return NewCmdStep() }, func() interface{} { return NewCmdStepCfg() })
+	plugin.RegWithCfg(StepTypeCmd, func() any { return NewCmdStep() }, func() any { return NewCmdStepCfg() })
 }
 
 const StepTypeCmd StepType = "cmd"
@@ -83,10 +83,10 @@ func (c *CmdStep) Stop() error {
 	return cmd.MustStop(context.Background(), c.cmd)
 }
 
-func (c *CmdStep) Type() interface{} {
+func (c *CmdStep) Type() any {
 	return StepTypeCmd
 }
 
-func (c *CmdStep) GetCfg() interface{} {
+func (c *CmdStep) GetCfg() any {
 	return c.Cfg
 }

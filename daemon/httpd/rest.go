@@ -15,9 +15,9 @@ const (
 )
 
 type Resp struct {
-	Code RespCode    `json:"code"`
-	Msg  string      `json:"msg"`
-	Data interface{} `json:"data"`
+	Code RespCode `json:"code"`
+	Msg  string   `json:"msg"`
+	Data any      `json:"data"`
 }
 
 func RestRecoverMiddleware(next http.Handler) http.Handler {

@@ -141,11 +141,11 @@ func ErrToStack(err error, w io.Writer, errsDepth int) {
 	}
 }
 
-func PanicToErr(p interface{}) error {
+func PanicToErr(p any) error {
 	return PanicToErrWithMsg(p, "panic")
 }
 
-func PanicToErrWithMsg(p interface{}, msg string) error {
+func PanicToErrWithMsg(p any, msg string) error {
 	var err error
 	switch pt := p.(type) {
 	case error:

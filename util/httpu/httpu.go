@@ -36,15 +36,15 @@ const (
 	MIMETOML              = "application/toml"
 )
 
-func RespOk(data interface{}, w http.ResponseWriter, headersKV ...string) {
+func RespOk(data any, w http.ResponseWriter, headersKV ...string) {
 	Resp(http.StatusOK, data, w, headersKV...)
 }
 
-func RespFail(data interface{}, w http.ResponseWriter, headersKV ...string) {
+func RespFail(data any, w http.ResponseWriter, headersKV ...string) {
 	Resp(http.StatusInternalServerError, data, w, headersKV...)
 }
 
-func Resp(statusCode int, data interface{}, w http.ResponseWriter, headersKV ...string) {
+func Resp(statusCode int, data any, w http.ResponseWriter, headersKV ...string) {
 	if data == nil {
 		RespRaw(statusCode, nil, w, headersKV...)
 		return
@@ -88,15 +88,15 @@ func RespHTML(statusCode int, data []byte, w http.ResponseWriter, headersKV ...s
 	RespRaw(statusCode, data, w, headersKV...)
 }
 
-func RespJSONOk(data interface{}, w http.ResponseWriter, headersKV ...string) {
+func RespJSONOk(data any, w http.ResponseWriter, headersKV ...string) {
 	RespJSON(http.StatusOK, data, w, headersKV...)
 }
 
-func RespJSONFail(data interface{}, w http.ResponseWriter, headersKV ...string) {
+func RespJSONFail(data any, w http.ResponseWriter, headersKV ...string) {
 	RespJSON(http.StatusInternalServerError, data, w, headersKV...)
 }
 
-func RespJSON(statusCode int, data interface{}, w http.ResponseWriter, headersKV ...string) {
+func RespJSON(statusCode int, data any, w http.ResponseWriter, headersKV ...string) {
 	setContentTypeHeader(w, MIMEJSON)
 	if data == nil {
 		RespRaw(statusCode, nil, w, headersKV...)
@@ -123,23 +123,23 @@ func setContentTypeHeader(w http.ResponseWriter, t string) {
 	}
 }
 
-func ReqToJSON(r *http.Request, obj interface{}) error {
+func ReqToJSON(r *http.Request, obj any) error {
 	return jsons.NewDecoder(r.Body).Decode(obj)
 }
 
-func ReqToXML(r *http.Request, obj interface{}) error {
+func ReqToXML(r *http.Request, obj any) error {
 	return xml.NewDecoder(r.Body).Decode(obj)
 }
 
-func ReqToYAML(r *http.Request, obj interface{}) error {
+func ReqToYAML(r *http.Request, obj any) error {
 	return yaml.NewDecoder(r.Body).Decode(obj)
 }
 
-func ReqToTOML(r *http.Request, obj interface{}) error {
+func ReqToTOML(r *http.Request, obj any) error {
 	return toml.NewDecoder(r.Body).Decode(obj)
 }
 
-func ReqToPB(r *http.Request, obj interface{}) error {
+func ReqToPB(r *http.Request, obj any) error {
 	msg, ok := obj.(proto.Message)
 	if !ok {
 		return errors.New("obj is not proto.Message type")

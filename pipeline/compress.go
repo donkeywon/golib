@@ -12,7 +12,7 @@ import (
 )
 
 func init() {
-	plugin.RegisterWithCfg(RWTypeCompress, func() interface{} { return NewCompressRW() }, func() interface{} { return NewCompressRWCfg() })
+	plugin.RegWithCfg(RWTypeCompress, func() any { return NewCompressRW() }, func() any { return NewCompressRWCfg() })
 }
 
 const (
@@ -111,11 +111,11 @@ func (c *CompressRW) NestWriter(w io.WriteCloser) error {
 	return c.RW.NestWriter(c.compressWriter)
 }
 
-func (c *CompressRW) Type() interface{} {
+func (c *CompressRW) Type() any {
 	return RWTypeCompress
 }
 
-func (c *CompressRW) GetCfg() interface{} {
+func (c *CompressRW) GetCfg() any {
 	return c.CompressRWCfg
 }
 

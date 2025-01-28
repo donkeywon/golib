@@ -51,11 +51,11 @@ func (u *Upd) Stop() error {
 	return u.Runner.Stop()
 }
 
-func (u *Upd) Type() interface{} {
+func (u *Upd) Type() any {
 	return DaemonTypeUpd
 }
 
-func (u *Upd) GetCfg() interface{} {
+func (u *Upd) GetCfg() any {
 	return u.Cfg
 }
 

@@ -13,6 +13,6 @@ type RxTxRateLimiter interface {
 }
 
 type RateLimiterCfg struct {
-	Cfg  interface{}     `json:"cfg"  yaml:"cfg"`
+	Cfg  any             `json:"cfg"  yaml:"cfg"`
 	Type RateLimiterType `json:"type" yaml:"type"`
 }

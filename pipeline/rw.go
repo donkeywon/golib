@@ -41,7 +41,7 @@ const (
 
 type RWCfg struct {
 	Type      RWType       `json:"type"      validate:"required" yaml:"type"`
-	Cfg       interface{}  `json:"cfg"       validate:"required" yaml:"cfg"`
+	Cfg       any          `json:"cfg"       validate:"required" yaml:"cfg"`
 	CommonCfg *RWCommonCfg `json:"commonCfg" yaml:"commonCfg"`
 	Role      RWRole       `json:"role"      validate:"required" yaml:"role"`
 }
@@ -99,8 +99,8 @@ func (a *onceError) Load() error {
 	return a.err
 }
 
-type ReadHook func(n int, bs []byte, err error, cost int64, misc ...interface{}) error
-type WriteHook func(n int, bs []byte, err error, cost int64, misc ...interface{}) error
+type ReadHook func(n int, bs []byte, err error, cost int64, misc ...any) error
+type WriteHook func(n int, bs []byte, err error, cost int64, misc ...any) error
 
 type RW interface {
 	runner.Runner
@@ -311,11 +311,11 @@ func (b *baseRW) Stop() error {
 	return b.Runner.Stop()
 }
 
-func (b *baseRW) Type() interface{} {
+func (b *baseRW) Type() any {
 	panic("method RW.Type not implemented")
 }
 
-func (b *baseRW) GetCfg() interface{} {
+func (b *baseRW) GetCfg() any {
 	panic("method RW.GetCfg not implemented")
 }
 
@@ -550,7 +550,7 @@ func (b *baseRW) initHash() {
 	}
 }
 
-func (b *baseRW) hookManuallyStop(_ int, _ []byte, _ error, _ int64, _ ...interface{}) error {
+func (b *baseRW) hookManuallyStop(_ int, _ []byte, _ error, _ int64, _ ...any) error {
 	select {
 	case <-b.Stopping():
 		return ErrStoppedManually
@@ -917,32 +917,32 @@ func (b *baseRW) closeWriter() error {
 	return errors.Join(err, errs.Wrapf(closeErr, "%s close nested writer fail", b.Name()))
 }
 
-func (b *baseRW) hookIncWritten(n int, _ []byte, _ error, _ int64, _ ...interface{}) error {
+func (b *baseRW) hookIncWritten(n int, _ []byte, _ error, _ int64, _ ...any) error {
 	atomic.AddUint64(&b.nw, uint64(n))
 	return nil
 }
 
-func (b *baseRW) hookIncReadn(n int, _ []byte, _ error, _ int64, _ ...interface{}) error {
+func (b *baseRW) hookIncReadn(n int, _ []byte, _ error, _ int64, _ ...any) error {
 	atomic.AddUint64(&b.nr, uint64(n))
 	return nil
 }
 
-func (b *baseRW) hookHash(n int, bs []byte, _ error, _ int64, _ ...interface{}) error {
+func (b *baseRW) hookHash(n int, bs []byte, _ error, _ int64, _ ...any) error {
 	_, _ = b.hash.Write(bs[:n])
 	return nil
 }
 
-func (b *baseRW) hookDebugLogRead(n int, _ []byte, err error, cost int64, misc ...interface{}) error {
+func (b *baseRW) hookDebugLogRead(n int, _ []byte, err error, cost int64, misc ...any) error {
 	b.Debug("read hook log", "n", n, "err", err, "cost", fmt.Sprintf("%d ms", cost), "misc", misc)
 	return nil
 }
 
-func (b *baseRW) hookDebugLogWrite(n int, _ []byte, err error, cost int64, misc ...interface{}) error {
+func (b *baseRW) hookDebugLogWrite(n int, _ []byte, err error, cost int64, misc ...any) error {
 	b.Debug("write hook log", "n", n, "err", err, "cost", fmt.Sprintf("%d ms", cost), "misc", misc)
 	return nil
 }
 
-func (b *baseRW) hookReadRateLimit(n int, _ []byte, _ error, _ int64, _ ...interface{}) error {
+func (b *baseRW) hookReadRateLimit(n int, _ []byte, _ error, _ int64, _ ...any) error {
 	if n == 0 || b.rl == nil {
 		return nil
 	}
@@ -953,7 +953,7 @@ func (b *baseRW) hookReadRateLimit(n int, _ []byte, _ error, _ int64, _ ...inter
 	return nil
 }
 
-func (b *baseRW) hookWriteRateLimit(n int, _ []byte, _ error, _ int64, _ ...interface{}) error {
+func (b *baseRW) hookWriteRateLimit(n int, _ []byte, _ error, _ int64, _ ...any) error {
 	if n == 0 || b.rl == nil {
 		return nil
 	}
@@ -964,7 +964,7 @@ func (b *baseRW) hookWriteRateLimit(n int, _ []byte, _ error, _ int64, _ ...inte
 	return nil
 }
 
-func (b *baseRW) hookChecksum(_ int, _ []byte, err error, _ int64, _ ...interface{}) error {
+func (b *baseRW) hookChecksum(_ int, _ []byte, err error, _ int64, _ ...any) error {
 	if !errors.Is(err, io.EOF) {
 		return nil
 	}

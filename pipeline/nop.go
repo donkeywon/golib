@@ -3,7 +3,7 @@ package pipeline
 import "github.com/donkeywon/golib/plugin"
 
 func init() {
-	plugin.RegisterWithCfg(RWTypeNop, func() interface{} { return NewNopRW() }, func() interface{} { return NewNopRWCfg() })
+	plugin.RegWithCfg(RWTypeNop, func() any { return NewNopRW() }, func() any { return NewNopRWCfg() })
 }
 
 const RWTypeNop RWType = "nop"
@@ -25,10 +25,10 @@ func NewNopRW() *NopRW {
 	}
 }
 
-func (n *NopRW) Type() interface{} {
+func (n *NopRW) Type() any {
 	return RWTypeNop
 }
 
-func (n *NopRW) GetCfg() interface{} {
+func (n *NopRW) GetCfg() any {
 	return n.NopRWCfg
 }

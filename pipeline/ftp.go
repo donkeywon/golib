@@ -7,7 +7,7 @@ import (
 )
 
 func init() {
-	plugin.RegisterWithCfg(RWTypeFtp, func() interface{} { return NewFtpRW() }, func() interface{} { return NewFtpRWCfg() })
+	plugin.RegWithCfg(RWTypeFtp, func() any { return NewFtpRW() }, func() any { return NewFtpRWCfg() })
 }
 
 const (
@@ -68,21 +68,21 @@ func (f *FtpRW) Init() error {
 	return f.RW.Init()
 }
 
-func (f *FtpRW) Type() interface{} {
+func (f *FtpRW) Type() any {
 	return RWTypeFtp
 }
 
-func (f *FtpRW) GetCfg() interface{} {
+func (f *FtpRW) GetCfg() any {
 	return f.FtpRWCfg
 }
 
-func (f *FtpRW) hookLogWrite(n int, bs []byte, err error, cost int64, misc ...interface{}) error {
+func (f *FtpRW) hookLogWrite(n int, bs []byte, err error, cost int64, misc ...any) error {
 	f.Info("write", "bs_len", len(bs), "bs_cap", cap(bs), "nw", n, "cost", cost,
 		"async_chan_len", f.AsyncChanLen(), "async_chan_cap", f.AsyncChanCap(), "misc", misc, "err", err)
 	return nil
 }
 
-func (f *FtpRW) hookLogRead(n int, bs []byte, err error, cost int64, misc ...interface{}) error {
+func (f *FtpRW) hookLogRead(n int, bs []byte, err error, cost int64, misc ...any) error {
 	f.Info("read", "bs_len", len(bs), "bs_cap", cap(bs), "nr", n, "cost", cost,
 		"async_chan_len", f.AsyncChanLen(), "async_chan_cap", f.AsyncChanCap(), "misc", misc, "err", err)
 	return nil

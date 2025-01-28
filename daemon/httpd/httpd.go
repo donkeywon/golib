@@ -17,13 +17,13 @@ func init() {
 	D().RegisterMiddleware(D().logAndRecoverMiddleware)
 }
 
-const DaemonTypeHttpd boot.DaemonType = "httpd"
+const DaemonTypeHTTPd boot.DaemonType = "httpd"
 
 type MiddlewareFunc func(http.Handler) http.Handler
 
 var _h = New()
 
-type Httpd struct {
+type HTTPd struct {
 	runner.Runner
 	*Cfg
 
@@ -42,36 +42,36 @@ func newHTTPServer(cfg *Cfg) *http.Server {
 	}
 }
 
-func D() *Httpd {
+func D() *HTTPd {
 	return _h
 }
 
-func New() *Httpd {
-	return &Httpd{
-		Runner: runner.Create(string(DaemonTypeHttpd)),
+func New() *HTTPd {
+	return &HTTPd{
+		Runner: runner.Create(string(DaemonTypeHTTPd)),
 		mux:    http.NewServeMux(),
 	}
 }
 
-func (h *Httpd) Start() error {
+func (h *HTTPd) Start() error {
 	h.s = newHTTPServer(h.Cfg)
 	h.setMux()
 	return h.s.ListenAndServe()
 }
 
-func (h *Httpd) Stop() error {
+func (h *HTTPd) Stop() error {
 	return h.s.Close()
 }
 
-func (h *Httpd) Type() interface{} {
-	return DaemonTypeHttpd
+func (h *HTTPd) Type() any {
+	return DaemonTypeHTTPd
 }
 
-func (h *Httpd) GetCfg() interface{} {
+func (h *HTTPd) GetCfg() any {
 	return h.Cfg
 }
 
-func (h *Httpd) AppendError(err ...error) {
+func (h *HTTPd) AppendError(err ...error) {
 	for _, e := range err {
 		if !errors.Is(e, http.ErrServerClosed) {
 			h.Runner.AppendError(e)
@@ -79,15 +79,15 @@ func (h *Httpd) AppendError(err ...error) {
 	}
 }
 
-func (h *Httpd) RegisterMiddleware(mf ...MiddlewareFunc) {
+func (h *HTTPd) RegisterMiddleware(mf ...MiddlewareFunc) {
 	h.middlewares = append(h.middlewares, mf...)
 }
 
-func (h *Httpd) setMux() {
+func (h *HTTPd) setMux() {
 	h.s.Handler = h.mux
 }
 
-func (h *Httpd) buildHandlerChain(next http.Handler) http.Handler {
+func (h *HTTPd) buildHandlerChain(next http.Handler) http.Handler {
 	handler := next
 	for i := len(h.middlewares) - 1; i >= 0; i-- {
 		handler = h.middlewares[i](handler)
@@ -95,8 +95,8 @@ func (h *Httpd) buildHandlerChain(next http.Handler) http.Handler {
 	return handler
 }
 
-func logFields(r *http.Request, w *recordResponseWriter, startTs int64, endTs int64) []interface{} {
-	return []interface{}{
+func logFields(r *http.Request, w *recordResponseWriter, startTs int64, endTs int64) []any {
+	return []any{
 		"status", w.statusCode,
 		"uri", r.RequestURI,
 		"remote", r.RemoteAddr,
@@ -107,27 +107,30 @@ func logFields(r *http.Request, w *recordResponseWriter, startTs int64, endTs in
 	}
 }
 
-func (h *Httpd) Handle(pattern string, handler http.Handler) {
+func (h *HTTPd) Handle(pattern string, handler http.Handler) {
 	h.mux.Handle(pattern, h.buildHandlerChain(handler))
 }
 
-func (h *Httpd) HandleFunc(pattern string, handler http.HandlerFunc) {
+func (h *HTTPd) HandleFunc(pattern string, handler http.HandlerFunc) {
 	h.mux.HandleFunc(pattern, h.buildHandlerChain(handler).ServeHTTP)
 }
 
-func (h *Httpd) HandleRaw(pattern string, handler RawHandler) {
+func (h *HTTPd) HandleRaw(pattern string, handler RawHandler) {
 	h.mux.Handle(pattern, h.buildHandlerChain(handler))
 }
 
-func (h *Httpd) HandleAPI(pattern string, handler APIHandler) {
+func (h *HTTPd) HandleAPI(pattern string, handler APIHandler) {
 	h.mux.Handle(pattern, h.buildHandlerChain(handler))
 }
 
-func (h *Httpd) HandleREST(pattern string, handler RESTHandler) {
+func (h *HTTPd) HandleREST(pattern string, handler RESTHandler, reqBodyCreator RestReqCreator) {
+	if reqBodyCreator != nil {
+		_restReqCreatorMap[pattern] = reqBodyCreator
+	}
 	h.mux.Handle(pattern, h.buildHandlerChain(handler))
 }
 
-func (h *Httpd) logAndRecoverMiddleware(next http.Handler) http.Handler {
+func (h *HTTPd) logAndRecoverMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w = newWriteOnceRecordResponseWriter(w)
 
@@ -146,7 +149,7 @@ func (h *Httpd) logAndRecoverMiddleware(next http.Handler) http.Handler {
 			}
 		}()
 
-		h.Debug("start handle req",
+		h.Debug("begin handling req",
 			"uri", r.RequestURI,
 			"remote", r.RemoteAddr,
 			"req_method", r.Method,

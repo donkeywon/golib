@@ -5,7 +5,7 @@ import (
 	"runtime"
 )
 
-func SetFirstMatchedField(s interface{}, f interface{}) bool {
+func SetFirstMatchedField(s any, f any) bool {
 	sValue := reflect.ValueOf(s)
 	if reflect.Indirect(sValue).Kind() != reflect.Struct {
 		return false
@@ -31,11 +31,11 @@ func SetFirstMatchedField(s interface{}, f interface{}) bool {
 	return true
 }
 
-func GetFuncName(v interface{}) string {
+func GetFuncName(v any) string {
 	return runtime.FuncForPC(reflect.ValueOf(v).Pointer()).Name()
 }
 
-func IsStructPointer(v interface{}) bool {
+func IsStructPointer(v any) bool {
 	rv := reflect.ValueOf(v)
 	if rv.Kind() != reflect.Pointer {
 		return false
@@ -44,14 +44,14 @@ func IsStructPointer(v interface{}) bool {
 	return rv.Elem().Kind() == reflect.Struct
 }
 
-func IsPointer(v interface{}) bool {
+func IsPointer(v any) bool {
 	return reflect.ValueOf(v).Kind() == reflect.Pointer
 }
 
-func IsStruct(v interface{}) bool {
+func IsStruct(v any) bool {
 	return reflect.ValueOf(v).Kind() == reflect.Struct
 }
 
-func IsFunc(v interface{}) bool {
+func IsFunc(v any) bool {
 	return reflect.ValueOf(v).Kind() == reflect.Func
 }

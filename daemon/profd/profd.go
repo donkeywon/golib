@@ -105,11 +105,11 @@ func (p *Profd) Stop() error {
 	return nil
 }
 
-func (p *Profd) Type() interface{} {
+func (p *Profd) Type() any {
 	return DaemonTypeProfd
 }
 
-func (p *Profd) GetCfg() interface{} {
+func (p *Profd) GetCfg() any {
 	return p.Cfg
 }
 

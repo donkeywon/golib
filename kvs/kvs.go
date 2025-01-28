@@ -9,8 +9,8 @@ import (
 type Type string
 
 type Cfg struct {
-	Type Type        `yaml:"type" json:"type"`
-	Cfg  interface{} `yaml:"cfg"  json:"cfg"`
+	Type Type `yaml:"type" json:"type"`
+	Cfg  any  `yaml:"cfg"  json:"cfg"`
 }
 
 type KVS interface {

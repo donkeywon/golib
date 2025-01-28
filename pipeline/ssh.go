@@ -13,7 +13,7 @@ import (
 )
 
 func init() {
-	plugin.RegisterWithCfg(RWTypeSSH, func() interface{} { return NewSSHRW() }, func() interface{} { return NewSSHRWCfg() })
+	plugin.RegWithCfg(RWTypeSSH, func() any { return NewSSHRW() }, func() any { return NewSSHRWCfg() })
 }
 
 const (
@@ -98,21 +98,21 @@ func (s *SSHRW) Start() error {
 	return nil
 }
 
-func (s *SSHRW) Type() interface{} {
+func (s *SSHRW) Type() any {
 	return RWTypeSSH
 }
 
-func (s *SSHRW) GetCfg() interface{} {
+func (s *SSHRW) GetCfg() any {
 	return s.SSHRWCfg
 }
 
-func (s *SSHRW) hookLogWrite(n int, bs []byte, err error, cost int64, misc ...interface{}) error {
+func (s *SSHRW) hookLogWrite(n int, bs []byte, err error, cost int64, misc ...any) error {
 	s.Info("write", "bs_len", len(bs), "bs_cap", cap(bs), "nw", n, "cost", cost,
 		"async_chan_len", s.AsyncChanLen(), "async_chan_cap", s.AsyncChanCap(), "misc", misc, "err", err)
 	return nil
 }
 
-func (s *SSHRW) hookLogRead(n int, bs []byte, err error, cost int64, misc ...interface{}) error {
+func (s *SSHRW) hookLogRead(n int, bs []byte, err error, cost int64, misc ...any) error {
 	s.Info("read", "bs_len", len(bs), "bs_cap", cap(bs), "nr", n, "cost", cost,
 		"async_chan_len", s.AsyncChanLen(), "async_chan_cap", s.AsyncChanCap(), "misc", misc, "err", err)
 	return nil

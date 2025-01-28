@@ -18,7 +18,7 @@ var (
 )
 
 // Option must implement reqOption or respOption.
-type Option interface{}
+type Option any
 
 type reqOption interface {
 	HandleReq(*http.Request) error
@@ -122,7 +122,7 @@ func ToBytesBuffer(buf *bytes.Buffer) Option {
 	})
 }
 
-func ToJSON(v interface{}) Option {
+func ToJSON(v any) Option {
 	return RespOptionFunc(func(resp *http.Response) error {
 		err := jsons.NewDecoder(resp.Body).Decode(v)
 		if err != nil {

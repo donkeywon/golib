@@ -8,7 +8,7 @@ import (
 )
 
 func init() {
-	plugin.RegisterWithCfg(RWTypeNull, func() interface{} { return NewNullRW() }, func() interface{} { return NewNullRWCfg() })
+	plugin.RegWithCfg(RWTypeNull, func() any { return NewNullRW() }, func() any { return NewNullRWCfg() })
 }
 
 type null struct{}
@@ -61,10 +61,10 @@ func (f *NullRW) Init() error {
 	return f.RW.Init()
 }
 
-func (f *NullRW) Type() interface{} {
+func (f *NullRW) Type() any {
 	return RWTypeFile
 }
 
-func (f *NullRW) GetCfg() interface{} {
+func (f *NullRW) GetCfg() any {
 	return f.NullRWCfg
 }

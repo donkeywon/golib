@@ -9,8 +9,8 @@ import (
 )
 
 func init() {
-	plugin.RegisterCfg(RateLimiterTypeSleep, func() interface{} { return NewSleepRateLimiterCfg() })
-	plugin.Register(RateLimiterTypeSleep, func() interface{} { return NewSleepRateLimiter() })
+	plugin.RegCfg(RateLimiterTypeSleep, func() any { return NewSleepRateLimiterCfg() })
+	plugin.Reg(RateLimiterTypeSleep, func() any { return NewSleepRateLimiter() })
 }
 
 const RateLimiterTypeSleep RateLimiterType = "sleep"

@@ -10,7 +10,7 @@ import (
 )
 
 func init() {
-	plugin.RegisterWithCfg(StepTypePipeline, func() interface{} { return NewPipelineStep() }, func() interface{} { return NewPipelineCfg() })
+	plugin.RegWithCfg(StepTypePipeline, func() any { return NewPipelineStep() }, func() any { return NewPipelineCfg() })
 }
 
 const StepTypePipeline StepType = "pipeline"
@@ -60,10 +60,10 @@ func (p *PipelineStep) Stop() error {
 	return nil
 }
 
-func (p *PipelineStep) Type() interface{} {
+func (p *PipelineStep) Type() any {
 	return StepTypePipeline
 }
 
-func (p *PipelineStep) GetCfg() interface{} {
+func (p *PipelineStep) GetCfg() any {
 	return p.Cfg
 }

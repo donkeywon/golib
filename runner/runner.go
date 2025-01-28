@@ -317,6 +317,9 @@ func (br *baseRunner) Inherit(r Runner) {
 }
 
 func (br *baseRunner) SetCtx(ctx context.Context) {
+	if ctx == nil {
+		panic("nil context")
+	}
 	br.ctx, br.cancel = context.WithCancel(ctx)
 }
 
