@@ -1,6 +1,7 @@
 package ratelimit
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -23,4 +24,15 @@ func TestHost(t *testing.T) {
 	require.NoError(t, h.Init())
 
 	time.Sleep(time.Second * 1000)
+}
+
+func TestCalcLimit(t *testing.T) {
+	nic := 3500
+	max := 1000
+	min := 10
+
+	self := 100.0
+	for cur := 0.0; cur < 3500; cur += 100 {
+		fmt.Println(calcLimit(cur, max, min, nic, self))
+	}
 }
