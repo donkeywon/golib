@@ -27,12 +27,14 @@ func TestHost(t *testing.T) {
 }
 
 func TestCalcLimit(t *testing.T) {
-	nic := 3500
-	max := 1000
-	min := 10
-
+	nic := 3500.0
+	max := 1000.0
+	min := 10.0
 	self := 100.0
-	for cur := 0.0; cur < 3500; cur += 100 {
-		fmt.Println(calcLimit(cur, max, min, nic, self))
+
+	for other := 100.0; other < 3500; other += 100 {
+		self = calcLimit(other+self, max, min, nic, self)
+
+		fmt.Println(other, self)
 	}
 }
