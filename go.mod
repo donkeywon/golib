@@ -9,7 +9,7 @@ require (
 	github.com/earthboundkid/versioninfo/v2 v2.24.1
 	github.com/fsnotify/fsnotify v1.8.0
 	github.com/go-playground/validator/v10 v10.24.0
-	github.com/goccy/go-yaml v1.15.15
+	github.com/goccy/go-yaml v1.15.17
 	github.com/google/uuid v1.6.0
 	github.com/icza/backscanner v0.0.0-20241124160932-dff01ac50250
 	github.com/jinzhu/copier v0.4.0
@@ -24,9 +24,9 @@ require (
 	github.com/zeebo/xxh3 v1.0.2
 	go.uber.org/zap v1.27.0
 	golang.org/x/crypto v0.32.0
-	golang.org/x/sys v0.29.0
-	golang.org/x/time v0.9.0
-	google.golang.org/protobuf v1.36.3
+	golang.org/x/sys v0.30.0
+	golang.org/x/time v0.10.0
+	google.golang.org/protobuf v1.36.4
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 )
 

@@ -1,6 +1,7 @@
 package httpd
 
 import (
+	"context"
 	"github.com/donkeywon/golib/util/v"
 	"net/http"
 
@@ -25,7 +26,7 @@ func (ah APIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	httpu.RespOk(ah(w, r), w)
 }
 
-type RESTHandler func(any) (any, error)
+type RESTHandler func(context.Context, any) (any, error)
 
 func (rh RESTHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	defer func() {
@@ -59,7 +60,7 @@ func (rh RESTHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	result, err := rh(req)
+	result, err := rh(r.Context(), req)
 	if err != nil {
 		httpu.RespJSONFail(Resp{
 			Code: RespCodeFail,
