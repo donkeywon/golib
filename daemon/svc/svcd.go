@@ -2,11 +2,11 @@ package svc
 
 import (
 	"fmt"
-	"github.com/donkeywon/golib/plugin"
 	"strings"
 
 	"github.com/donkeywon/golib/boot"
 	"github.com/donkeywon/golib/errs"
+	"github.com/donkeywon/golib/plugin"
 	"github.com/donkeywon/golib/runner"
 	"github.com/donkeywon/golib/util/reflects"
 )
@@ -81,17 +81,17 @@ func (s *svcd) Init() error {
 	return s.Runner.Init()
 }
 
-func (s *svcd) Reg(ns Namespace, m Module, svcName Name, creator Creator) {
-	checkValid(ns, m, svcName)
+func (s *svcd) Reg(ns Namespace, m Module, n Name, creator Creator) {
+	checkValid(ns, m, n)
 
-	fqn := buildFQN(ns, m, svcName)
+	fqn := buildFQN(ns, m, n)
 	s.svcCreators = append(s.svcCreators, svcCreatorWithFQN{fqn: fqn, creator: creator})
 }
 
-func (s *svcd) RegWithCfg(ns Namespace, m Module, svcName Name, creator Creator, cfgCreator CfgCreator) {
-	s.Reg(ns, m, svcName, creator)
+func (s *svcd) RegWithCfg(ns Namespace, m Module, n Name, creator Creator, cfgCreator CfgCreator) {
+	s.Reg(ns, m, n, creator)
 
-	fqn := buildFQN(ns, m, svcName)
+	fqn := buildFQN(ns, m, n)
 	cfg := cfgCreator()
 	if cfg == nil {
 		panic(fmt.Errorf("cfg is nil, FQN: %s", fqn))
@@ -101,8 +101,8 @@ func (s *svcd) RegWithCfg(ns Namespace, m Module, svcName Name, creator Creator,
 	boot.RegCfg(fqn, cfg)
 }
 
-func (s *svcd) Get(ns Namespace, m Module, svcName Name) Svc {
-	fqn := buildFQN(ns, m, svcName)
+func (s *svcd) Get(ns Namespace, m Module, n Name) Svc {
+	fqn := buildFQN(ns, m, n)
 	ins, exists := s.svcMap[fqn]
 	if !exists {
 		panic(fmt.Errorf("svc not exists, maybe dependencies order is invalid, FQN: %s", fqn))
@@ -119,27 +119,27 @@ func (s *svcd) GetCfg() any {
 	return s.Cfg
 }
 
-func Reg(ns Namespace, m Module, svcName Name, creator Creator) {
-	_s.Reg(ns, m, svcName, creator)
+func Reg(ns Namespace, m Module, n Name, creator Creator) {
+	_s.Reg(ns, m, n, creator)
 }
 
-func RegWithCfg(ns Namespace, m Module, svcName Name, creator Creator, cfgCreator CfgCreator) {
-	_s.RegWithCfg(ns, m, svcName, creator, cfgCreator)
+func RegWithCfg(ns Namespace, m Module, n Name, creator Creator, cfgCreator CfgCreator) {
+	_s.RegWithCfg(ns, m, n, creator, cfgCreator)
 }
 
-func Get(ns Namespace, m Module, svcName Name) Svc {
-	return _s.Get(ns, m, svcName)
+func Get(ns Namespace, m Module, n Name) Svc {
+	return _s.Get(ns, m, n)
 }
 
-func buildFQN(ns Namespace, m Module, svcName Name) string {
-	return fmt.Sprintf("%s.%s.%s", ns, m, svcName)
+func buildFQN(ns Namespace, m Module, n Name) string {
+	return fmt.Sprintf("%s.%s.%s", ns, m, n)
 }
 
-func checkValid(ns Namespace, m Module, svcName Name) {
-	if strings.Contains(string(ns), ".") || strings.Contains(string(m), ".") || strings.Contains(string(svcName), ".") {
-		panic("namespace or module or svcName must not contain dot(.) character")
+func checkValid(ns Namespace, m Module, n Name) {
+	if strings.Contains(string(ns), ".") || strings.Contains(string(m), ".") || strings.Contains(string(n), ".") {
+		panic("namespace or module or name must not contain dot(.) character")
 	}
-	if string(ns) == "" || string(m) == "" || svcName == "" {
-		panic("namespace and module and svcName must not empty")
+	if string(ns) == "" || string(m) == "" || n == "" {
+		panic("namespace and module and name must not empty")
 	}
 }
