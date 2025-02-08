@@ -16,10 +16,6 @@ type canceler interface {
 	Cancel()
 }
 
-type optionApplier interface {
-	WithOptions(...Option)
-}
-
 type readerWrapper interface {
 	WrapReader(io.Reader)
 }

@@ -28,6 +28,10 @@ type setter interface {
 	Set(Common)
 }
 
+type optionApplier interface {
+	WithOptions(...Option)
+}
+
 type Option interface {
 	apply(*option)
 }
