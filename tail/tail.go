@@ -18,9 +18,6 @@ var (
 	ErrFileRenamed = errors.New("file renamed")
 )
 
-type Options struct {
-}
-
 type Reader struct {
 	fi       os.FileInfo
 	file     *os.File

@@ -2,9 +2,10 @@ package cloud
 
 import (
 	"bytes"
+	"net/http"
+
 	"github.com/donkeywon/golib/errs"
 	"github.com/donkeywon/golib/util/httpc"
-	"net/http"
 )
 
 var (

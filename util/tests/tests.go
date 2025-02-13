@@ -13,14 +13,14 @@ var (
 	debugRunner = &struct {
 		runner.Runner
 	}{
-		Runner: runner.Create(""),
+		Runner: runner.Create("test"),
 	}
 
 	dl            = log.Default()
 	defaultRunner = &struct {
 		runner.Runner
 	}{
-		Runner: runner.Create(""),
+		Runner: runner.Create("test"),
 	}
 )
 

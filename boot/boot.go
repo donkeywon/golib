@@ -60,7 +60,7 @@ func Boot(opt ...Option) {
 	}
 }
 
-// SetLoggerLevel dynamic change log level after Boot.
+// SetLoggerLevel change log level dynamically after Boot.
 func SetLoggerLevel(lvl string) {
 	_b.SetLoggerLevel(lvl)
 }
