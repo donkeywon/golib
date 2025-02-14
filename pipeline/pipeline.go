@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"github.com/donkeywon/golib/errs"
+	"github.com/donkeywon/golib/pipeline/rw"
 	"github.com/donkeywon/golib/plugin"
 	"github.com/donkeywon/golib/runner"
 	"github.com/donkeywon/golib/util/v"
@@ -18,24 +19,24 @@ func init() {
 const PluginTypePipeline plugin.Type = "ppl"
 
 type Cfg struct {
-	RWs []*RWCfg `json:"rws" validate:"required" yaml:"rws"`
+	RWs []*rw.Cfg `json:"rws" validate:"required" yaml:"rws"`
 }
 
 func NewCfg() *Cfg {
 	return &Cfg{}
 }
 
-func (c *Cfg) Add(role RWRole, typ RWType, cfg any, commonCfg *RWCommonCfg) *Cfg {
-	c.RWs = append(c.RWs, &RWCfg{
-		Type:      typ,
-		Cfg:       cfg,
-		CommonCfg: commonCfg,
-		Role:      role,
+func (c *Cfg) Add(role rw.Role, typ rw.Type, cfg any, commonCfg *rw.ExtraCfg) *Cfg {
+	c.RWs = append(c.RWs, &rw.Cfg{
+		Type:     typ,
+		Cfg:      cfg,
+		ExtraCfg: commonCfg,
+		Role:     role,
 	})
 	return c
 }
 
-func (c *Cfg) AddCfg(cfg *RWCfg) *Cfg {
+func (c *Cfg) AddCfg(cfg *rw.Cfg) *Cfg {
 	c.RWs = append(c.RWs, cfg)
 	return c
 }
@@ -172,17 +173,17 @@ func (p *Pipeline) Result() *Result {
 	return r
 }
 
-func createRWGroups(rwCfgGroups [][]*RWCfg) []*RWGroup {
+func createRWGroups(rwCfgGroups [][]*rw.Cfg) []*RWGroup {
 	var rwGroups []*RWGroup
 	for _, rwCfgGroup := range rwCfgGroups {
 		rwGroupCfg := NewRWGroupCfg()
 		readers, starter, writers := splitRWCfgGroup(rwCfgGroup)
 		for _, reader := range readers {
-			rwGroupCfg.FromReader(reader.Type, reader.Cfg, reader.CommonCfg)
+			rwGroupCfg.FromReader(reader.Type, reader.Cfg, reader.ExtraCfg)
 		}
-		rwGroupCfg.SetStarter(starter.Type, starter.Cfg, starter.CommonCfg)
+		rwGroupCfg.SetStarter(starter.Type, starter.Cfg, starter.ExtraCfg)
 		for _, writer := range writers {
-			rwGroupCfg.ToWriter(writer.Type, writer.Cfg, writer.CommonCfg)
+			rwGroupCfg.ToWriter(writer.Type, writer.Cfg, writer.ExtraCfg)
 		}
 
 		rwGroup := NewRWGroup()
@@ -192,7 +193,7 @@ func createRWGroups(rwCfgGroups [][]*RWCfg) []*RWGroup {
 	return rwGroups
 }
 
-func groupRWCfgByStarter(rws []*RWCfg) [][]*RWCfg {
+func groupRWCfgByStarter(rws []*rw.Cfg) [][]*rw.Cfg {
 	// RW between starter must like
 	// Srrr...rrrS
 	// Swww...wwwS
@@ -208,8 +209,8 @@ func groupRWCfgByStarter(rws []*RWCfg) [][]*RWCfg {
 	// WW append
 	// WR new group
 	// WS new group
-	var rwGroups [][]*RWCfg
-	var group []*RWCfg
+	var rwGroups [][]*rw.Cfg
+	var group []*rw.Cfg
 	for i := range rws {
 		if i == 0 {
 			group = append(group, rws[i])
@@ -217,16 +218,16 @@ func groupRWCfgByStarter(rws []*RWCfg) [][]*RWCfg {
 		}
 		curRole := rws[i].Role
 		previousRole := rws[i-1].Role
-		if previousRole == RWRoleReader && curRole == RWRoleReader ||
-			previousRole == RWRoleReader && curRole == RWRoleStarter ||
-			previousRole == RWRoleStarter && curRole == RWRoleWriter ||
-			previousRole == RWRoleWriter && curRole == RWRoleWriter {
+		if previousRole == rw.RoleReader && curRole == rw.RoleReader ||
+			previousRole == rw.RoleReader && curRole == rw.RoleStarter ||
+			previousRole == rw.RoleStarter && curRole == rw.RoleWriter ||
+			previousRole == rw.RoleWriter && curRole == rw.RoleWriter {
 			group = append(group, rws[i])
 			continue
 		}
 
 		rwGroups = append(rwGroups, group)
-		group = make([]*RWCfg, 1)
+		group = make([]*rw.Cfg, 1)
 		group[0] = rws[i]
 	}
 	if len(group) != 0 {
@@ -235,28 +236,28 @@ func groupRWCfgByStarter(rws []*RWCfg) [][]*RWCfg {
 	return rwGroups
 }
 
-func splitRWCfgGroup(rwCfgGroup []*RWCfg) ([]*RWCfg, *RWCfg, []*RWCfg) {
+func splitRWCfgGroup(rwCfgGroup []*rw.Cfg) ([]*rw.Cfg, *rw.Cfg, []*rw.Cfg) {
 	var (
-		readers []*RWCfg
-		starter *RWCfg
-		writers []*RWCfg
+		readers []*rw.Cfg
+		starter *rw.Cfg
+		writers []*rw.Cfg
 	)
 	for _, rwCfg := range rwCfgGroup {
 		switch rwCfg.Role {
-		case RWRoleReader:
+		case rw.RoleReader:
 			readers = append(readers, rwCfg)
-		case RWRoleStarter:
+		case rw.RoleStarter:
 			starter = rwCfg
-		case RWRoleWriter:
+		case rw.RoleWriter:
 			writers = append(writers, rwCfg)
 		}
 	}
 	return readers, starter, writers
 }
 
-func hasStarter(rws []*RWCfg) bool {
-	for _, rw := range rws {
-		if rw.Role == RWRoleStarter {
+func hasStarter(rws []*rw.Cfg) bool {
+	for _, _rw := range rws {
+		if _rw.Role == rw.RoleStarter {
 			return true
 		}
 	}

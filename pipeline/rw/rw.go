@@ -1,6 +1,7 @@
-package pipeline
+package rw
 
 import (
+	"context"
 	"crypto/md5"
 	"crypto/sha1"
 	"crypto/sha256"
@@ -27,25 +28,25 @@ import (
 var (
 	ErrChecksumNotMatch = errors.New("checksum not match")
 
-	CreateBaseRW = newBaseRW
+	CreateBase = newBase
 )
 
 const (
-	RWRoleStarter RWRole = "starter"
-	RWRoleReader  RWRole = "reader"
-	RWRoleWriter  RWRole = "writer"
+	RoleStarter Role = "starter"
+	RoleReader  Role = "reader"
+	RoleWriter  Role = "writer"
 
 	defaultHashAlgo = "xxh3"
 )
 
-type RWCfg struct {
-	Type      RWType       `json:"type"      validate:"required" yaml:"type"`
-	Cfg       any          `json:"cfg"       validate:"required" yaml:"cfg"`
-	CommonCfg *RWCommonCfg `json:"commonCfg" yaml:"commonCfg"`
-	Role      RWRole       `json:"role"      validate:"required" yaml:"role"`
+type Cfg struct {
+	Type     Type      `json:"type"      validate:"required" yaml:"type"`
+	Cfg      any       `json:"cfg"       validate:"required" yaml:"cfg"`
+	ExtraCfg *ExtraCfg `json:"extraCfg"  yaml:"extraCfg"`
+	Role     Role      `json:"role"      validate:"required" yaml:"role"`
 }
 
-type RWCommonCfg struct {
+type ExtraCfg struct {
 	RateLimiterCfg     *ratelimit.RateLimiterCfg `json:"rateLimiterCfg"     yaml:"rateLimiterCfg"`
 	BufSize            int                       `json:"bufSize"            yaml:"bufSize"`
 	Deadline           int                       `json:"deadline"           yaml:"deadline"`
@@ -58,10 +59,10 @@ type RWCommonCfg struct {
 	HashAlgo           string                    `json:"hashAlgo"           yaml:"hashAlgo"`
 }
 
-type RWType string
-type RWRole string
+type Type string
+type Role string
 
-func CreateRW(rwCfg *RWCfg) (RW, error) {
+func CreateRW(rwCfg *Cfg) (RW, error) {
 	cfg := plugin.CreateCfg(rwCfg.Type)
 	err := conv.ConvertOrMerge(cfg, rwCfg.Cfg)
 	if err != nil {
@@ -69,11 +70,11 @@ func CreateRW(rwCfg *RWCfg) (RW, error) {
 	}
 
 	rw := plugin.CreateWithCfg(rwCfg.Type, cfg).(RW)
-	if rwCfg.CommonCfg == nil {
-		rwCfg.CommonCfg = &RWCommonCfg{}
+	if rwCfg.ExtraCfg == nil {
+		rwCfg.ExtraCfg = &ExtraCfg{}
 	}
 	rw.As(rwCfg.Role)
-	ApplyCommonCfgToRW(rw, rwCfg.CommonCfg)
+	ApplyCommonCfgToRW(rw, rwCfg.ExtraCfg)
 	return rw, nil
 }
 
@@ -138,9 +139,9 @@ type RW interface {
 	IsReader() bool
 	AsWriter()
 	IsWriter() bool
-	As(RWRole)
-	Is(RWRole) bool
-	Role() RWRole
+	As(Role)
+	Is(Role) bool
+	Role() Role
 }
 
 // baseRW implement RW interface
@@ -149,6 +150,7 @@ type RW interface {
 type baseRW struct {
 	rl ratelimit.RxTxRateLimiter
 	runner.Runner
+	cancel             context.CancelFunc
 	w                  io.WriteCloser
 	r                  io.ReadCloser
 	buf                *bytespool.Bytes
@@ -160,7 +162,7 @@ type baseRW struct {
 	werr               onceError
 	rerr               onceError
 	checksum           string
-	role               RWRole
+	role               Role
 	readHooks          []ReadHook
 	writeHooks         []WriteHook
 	offset             int
@@ -171,6 +173,8 @@ type baseRW struct {
 	lastFlushTS        int64
 	asyncChanBufSize   int
 	closeOnce          sync.Once
+	closeReaderOnce    sync.Once
+	closeWriterOnce    sync.Once
 	mu                 sync.Mutex
 	enableRateLimit    bool
 	enableMonitorSpeed bool
@@ -178,7 +182,7 @@ type baseRW struct {
 	async              bool
 }
 
-func newBaseRW(name string) RW {
+func newBase(name string) RW {
 	return &baseRW{
 		Runner: runner.Create(name),
 		closed: make(chan struct{}),
@@ -186,12 +190,6 @@ func newBaseRW(name string) RW {
 }
 
 func (b *baseRW) Init() (err error) {
-	defer func() {
-		if err != nil {
-			b.Warn("close after RW init failed", "err", err, "close_err", b.Close())
-		}
-	}()
-
 	if !b.IsStarter() && b.Reader() != nil && b.Writer() != nil {
 		return errs.New("RW cannot has nested reader and writer at the same time")
 	}
@@ -200,8 +198,8 @@ func (b *baseRW) Init() (err error) {
 		return errs.New("RW has no nested reader and writer")
 	}
 
-	b.HookWrite(b.hookIncWritten, b.hookDebugLogWrite)
-	b.HookRead(b.hookIncReadn, b.hookDebugLogRead)
+	b.HookWrite(b.hookIncWritten, b.hookDebugLogWrite, b.hookCancel)
+	b.HookRead(b.hookIncReadn, b.hookDebugLogRead, b.hookCancel)
 
 	if b.checksum != "" {
 		b.EnableCalcHash(b.hashAlgo)
@@ -258,6 +256,13 @@ func (b *baseRW) Init() (err error) {
 		return errs.New("RW can only be one of the roles: Reader|Writer|Starter")
 	}
 
+	if b.Ctx() == nil {
+		b.SetCtx(context.Background())
+	}
+	ctx, cancel := context.WithCancel(b.Ctx())
+	b.cancel = cancel
+	b.SetCtx(ctx)
+
 	return b.Runner.Init()
 }
 
@@ -313,38 +318,38 @@ func (b *baseRW) Writer() io.WriteCloser {
 }
 
 func (b *baseRW) AsStarter() {
-	b.As(RWRoleStarter)
+	b.As(RoleStarter)
 }
 
 func (b *baseRW) IsStarter() bool {
-	return b.Is(RWRoleStarter)
+	return b.Is(RoleStarter)
 }
 
 func (b *baseRW) AsReader() {
-	b.As(RWRoleReader)
+	b.As(RoleReader)
 }
 
 func (b *baseRW) IsReader() bool {
-	return b.Is(RWRoleReader)
+	return b.Is(RoleReader)
 }
 
 func (b *baseRW) AsWriter() {
-	b.As(RWRoleWriter)
+	b.As(RoleWriter)
 }
 
 func (b *baseRW) IsWriter() bool {
-	return b.Is(RWRoleWriter)
+	return b.Is(RoleWriter)
 }
 
-func (b *baseRW) As(role RWRole) {
+func (b *baseRW) As(role Role) {
 	b.role = role
 }
 
-func (b *baseRW) Is(role RWRole) bool {
+func (b *baseRW) Is(role Role) bool {
 	return b.role == role
 }
 
-func (b *baseRW) Role() RWRole {
+func (b *baseRW) Role() Role {
 	return b.role
 }
 
@@ -409,7 +414,14 @@ func (b *baseRW) Write(p []byte) (int, error) {
 	return nw, err
 }
 
+func (b *baseRW) Cancel() {
+	if b.cancel != nil {
+		b.cancel()
+	}
+}
+
 func (b *baseRW) Close() error {
+	b.Cancel()
 	return errors.Join(b.closeReader(), b.closeWriter())
 }
 
@@ -803,11 +815,13 @@ func (b *baseRW) closeReader() error {
 	}
 
 	var err error
-	b.closeOnce.Do(func() {
+	b.closeReaderOnce.Do(func() {
 		b.Info("close nested reader")
 		err = b.Reader().Close()
 
-		close(b.closed)
+		b.closeOnce.Do(func() {
+			close(b.closed)
+		})
 
 		if b.bufSize > 0 && b.buf != nil {
 			b.mu.Lock()
@@ -841,8 +855,10 @@ func (b *baseRW) closeWriter() error {
 		err      error
 		flushErr error
 	)
-	b.closeOnce.Do(func() {
-		close(b.closed)
+	b.closeWriterOnce.Do(func() {
+		b.closeOnce.Do(func() {
+			close(b.closed)
+		})
 
 		if b.bufSize > 0 && b.buf != nil {
 			b.Info("close-flush")
@@ -880,6 +896,15 @@ func (b *baseRW) closeWriter() error {
 		return flushErr
 	}
 	return nil
+}
+
+func (b *baseRW) hookCancel(_ int, _ []byte, _ error, _ int64, _ ...any) error {
+	select {
+	case <-b.Ctx().Done():
+		return b.Ctx().Err()
+	default:
+		return nil
+	}
 }
 
 func (b *baseRW) hookIncWritten(n int, _ []byte, _ error, _ int64, _ ...any) error {
@@ -980,7 +1005,7 @@ func (b *baseRW) monitorSpeed() {
 	}
 }
 
-func ApplyCommonCfgToRW(rw RW, cfg *RWCommonCfg) {
+func ApplyCommonCfgToRW(rw RW, cfg *ExtraCfg) {
 	if cfg == nil {
 		return
 	}
@@ -998,11 +1023,11 @@ func ApplyCommonCfgToRW(rw RW, cfg *RWCommonCfg) {
 	}
 	if cfg.BufSize > 0 {
 		switch rw.Role() {
-		case RWRoleReader:
+		case RoleReader:
 			rw.EnableReadBuf(cfg.BufSize, cfg.EnableAsync, cfg.AsyncChanBufSize)
-		case RWRoleWriter:
+		case RoleWriter:
 			rw.EnableWriteBuf(cfg.BufSize, cfg.Deadline, cfg.EnableAsync, cfg.AsyncChanBufSize)
-		case RWRoleStarter:
+		case RoleStarter:
 			if rw.Writer() != nil {
 				rw.EnableWriteBuf(cfg.BufSize, cfg.Deadline, cfg.EnableAsync, cfg.AsyncChanBufSize)
 			} else {

@@ -1,4 +1,4 @@
-package pipeline
+package rw
 
 import (
 	"io"
@@ -8,7 +8,7 @@ import (
 )
 
 func init() {
-	plugin.RegWithCfg(RWTypeNull, func() any { return NewNullRW() }, func() any { return NewNullRWCfg() })
+	plugin.RegWithCfg(TypeNull, func() any { return NewNull() }, func() any { return NewNullCfg() })
 }
 
 type null struct{}
@@ -27,27 +27,27 @@ func (n *null) Close() error {
 
 var nrw = &null{}
 
-const RWTypeNull RWType = "null"
+const TypeNull Type = "null"
 
-type NullRWCfg struct {
+type NullCfg struct {
 }
 
-func NewNullRWCfg() *NullRWCfg {
-	return &NullRWCfg{}
+func NewNullCfg() *NullCfg {
+	return &NullCfg{}
 }
 
-type NullRW struct {
+type Null struct {
 	RW
-	*NullRWCfg
+	*NullCfg
 }
 
-func NewNullRW() *NullRW {
-	return &NullRW{
-		RW: CreateBaseRW(string(RWTypeFile)),
+func NewNull() *Null {
+	return &Null{
+		RW: CreateBase(string(TypeFile)),
 	}
 }
 
-func (f *NullRW) Init() error {
+func (f *Null) Init() error {
 	if f.IsStarter() {
 		return errs.New("nullRW cannot be Starter")
 	}
@@ -61,10 +61,10 @@ func (f *NullRW) Init() error {
 	return f.RW.Init()
 }
 
-func (f *NullRW) Type() any {
-	return RWTypeFile
+func (f *Null) Type() any {
+	return TypeFile
 }
 
-func (f *NullRW) GetCfg() any {
-	return f.NullRWCfg
+func (f *Null) GetCfg() any {
+	return f.NullCfg
 }

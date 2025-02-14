@@ -1,6 +1,7 @@
-package pipeline
+package rw
 
 import (
+	"errors"
 	"fmt"
 	"path/filepath"
 
@@ -12,16 +13,16 @@ import (
 )
 
 func init() {
-	plugin.RegWithCfg(RWTypeSSH, func() any { return NewSSHRW() }, func() any { return NewSSHRWCfg() })
+	plugin.RegWithCfg(TypeSSH, func() any { return NewSSH() }, func() any { return NewSSHCfg() })
 }
 
 const (
-	RWTypeSSH RWType = "ssh"
+	TypeSSH Type = "ssh"
 
 	defaultSSHTimeout = 30
 )
 
-type SSHRWCfg struct {
+type SSHCfg struct {
 	Addr       string `json:"addr"       validate:"required"  yaml:"addr"`
 	User       string `json:"user"       validate:"required"  yaml:"user"`
 	Pwd        string `json:"pwd"        yaml:"pwd"`
@@ -30,15 +31,15 @@ type SSHRWCfg struct {
 	Path       string `json:"path"       validate:"required"  yaml:"path"`
 }
 
-func NewSSHRWCfg() *SSHRWCfg {
-	return &SSHRWCfg{
+func NewSSHCfg() *SSHCfg {
+	return &SSHCfg{
 		Timeout: defaultSSHTimeout,
 	}
 }
 
-type SSHRW struct {
+type SSH struct {
 	RW
-	*SSHRWCfg
+	*SSHCfg
 
 	sshCmd       string
 	sshCli       *ssh.Client
@@ -46,27 +47,27 @@ type SSHRW struct {
 	sshStderrBuf *bufferpool.Buffer
 }
 
-func NewSSHRW() RW {
-	return &SSHRW{
-		RW: CreateBaseRW(string(RWTypeSSH)),
+func NewSSH() RW {
+	return &SSH{
+		RW: CreateBase(string(TypeSSH)),
 	}
 }
 
-func (s *SSHRW) Init() error {
+func (s *SSH) Init() error {
 	if !s.IsStarter() {
 		return errs.New("ssh rw must be Starter")
 	}
 
 	var err error
-	s.sshCli, s.sshSess, err = sshs.NewClient(s.SSHRWCfg.Addr, s.SSHRWCfg.User, s.SSHRWCfg.Pwd, []byte(s.SSHRWCfg.PrivateKey), s.SSHRWCfg.Timeout)
+	s.sshCli, s.sshSess, err = sshs.NewClient(s.SSHCfg.Addr, s.SSHCfg.User, s.SSHCfg.Pwd, []byte(s.SSHCfg.PrivateKey), s.SSHCfg.Timeout)
 	if err != nil {
 		return errs.Wrap(err, "create ssh cli and session failed")
 	}
 	if s.Reader() != nil {
-		s.sshCmd = sshWriteCmd(s.SSHRWCfg.Path)
+		s.sshCmd = sshWriteCmd(s.SSHCfg.Path)
 		s.sshSess.Stdin = s
 	} else if s.Writer() != nil {
-		s.sshCmd = sshReadCmd(s.SSHRWCfg.Path)
+		s.sshCmd = sshReadCmd(s.SSHCfg.Path)
 		s.sshSess.Stdout = s
 	} else {
 		return errs.Errorf("ssh rw must has Reader or Writer")
@@ -80,15 +81,12 @@ func (s *SSHRW) Init() error {
 	return s.RW.Init()
 }
 
-func (s *SSHRW) Start() error {
+func (s *SSH) Start() error {
 	err := s.sshSess.Run(s.sshCmd)
-	closeErr := sshs.Close(s.sshCli, s.sshSess)
-	if closeErr != nil {
-		s.Error("close ssh cli and session failed", closeErr)
-	}
-	closeErr = s.Close()
-	if closeErr != nil {
-		s.Error("close rw failed", closeErr)
+	exitError := &ssh.ExitError{}
+	if errors.As(err, &exitError) {
+		s.Info("exit signaled", "signal", exitError.Signal)
+		err = nil
 	}
 
 	if err != nil {
@@ -97,25 +95,29 @@ func (s *SSHRW) Start() error {
 	return nil
 }
 
-func (s *SSHRW) Stop() error {
+func (s *SSH) Close() error {
+	return errors.Join(sshs.Close(s.sshCli, s.sshSess), s.RW.Close())
+}
+
+func (s *SSH) Stop() error {
 	return s.sshSess.Signal(ssh.SIGKILL)
 }
 
-func (s *SSHRW) Type() any {
-	return RWTypeSSH
+func (s *SSH) Type() any {
+	return TypeSSH
 }
 
-func (s *SSHRW) GetCfg() any {
-	return s.SSHRWCfg
+func (s *SSH) GetCfg() any {
+	return s.SSHCfg
 }
 
-func (s *SSHRW) hookLogWrite(n int, bs []byte, err error, cost int64, misc ...any) error {
+func (s *SSH) hookLogWrite(n int, bs []byte, err error, cost int64, misc ...any) error {
 	s.Info("write", "bs_len", len(bs), "bs_cap", cap(bs), "nw", n, "cost", cost,
 		"async_chan_len", s.AsyncChanLen(), "async_chan_cap", s.AsyncChanCap(), "misc", misc, "err", err)
 	return nil
 }
 
-func (s *SSHRW) hookLogRead(n int, bs []byte, err error, cost int64, misc ...any) error {
+func (s *SSH) hookLogRead(n int, bs []byte, err error, cost int64, misc ...any) error {
 	s.Info("read", "bs_len", len(bs), "bs_cap", cap(bs), "nr", n, "cost", cost,
 		"async_chan_len", s.AsyncChanLen(), "async_chan_cap", s.AsyncChanCap(), "misc", misc, "err", err)
 	return nil

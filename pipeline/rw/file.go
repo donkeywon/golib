@@ -1,4 +1,4 @@
-package pipeline
+package rw
 
 import (
 	"os"
@@ -9,35 +9,35 @@ import (
 )
 
 func init() {
-	plugin.RegWithCfg(RWTypeFile, func() any { return NewFileRW() }, func() any { return NewFileRWCfg() })
+	plugin.RegWithCfg(TypeFile, func() any { return NewFile() }, func() any { return NewFileCfg() })
 }
 
-const RWTypeFile RWType = "file"
+const TypeFile Type = "file"
 
-type FileRWCfg struct {
+type FileCfg struct {
 	Path string `json:"path" yaml:"path"`
 	Perm uint32 `json:"perm" yaml:"perm"`
 }
 
-func NewFileRWCfg() *FileRWCfg {
-	return &FileRWCfg{}
+func NewFileCfg() *FileCfg {
+	return &FileCfg{}
 }
 
-type FileRW struct {
+type File struct {
 	RW
-	*FileRWCfg
+	*FileCfg
 
 	f          *os.File
 	parsedPerm int64
 }
 
-func NewFileRW() *FileRW {
-	return &FileRW{
-		RW: CreateBaseRW(string(RWTypeFile)),
+func NewFile() *File {
+	return &File{
+		RW: CreateBase(string(TypeFile)),
 	}
 }
 
-func (f *FileRW) Init() error {
+func (f *File) Init() error {
 	var err error
 
 	if f.Perm == 0 {
@@ -49,7 +49,7 @@ func (f *FileRW) Init() error {
 	}
 
 	if f.IsStarter() {
-		return errs.New("fileRW cannot be Starter")
+		return errs.New("file cannot be Starter")
 	}
 
 	if f.IsReader() {
@@ -67,10 +67,10 @@ func (f *FileRW) Init() error {
 	return f.RW.Init()
 }
 
-func (f *FileRW) Type() any {
-	return RWTypeFile
+func (f *File) Type() any {
+	return TypeFile
 }
 
-func (f *FileRW) GetCfg() any {
-	return f.FileRWCfg
+func (f *File) GetCfg() any {
+	return f.FileCfg
 }

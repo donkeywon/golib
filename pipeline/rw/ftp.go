@@ -1,4 +1,4 @@
-package pipeline
+package rw
 
 import (
 	"github.com/donkeywon/golib/errs"
@@ -7,17 +7,17 @@ import (
 )
 
 func init() {
-	plugin.RegWithCfg(RWTypeFtp, func() any { return NewFtpRW() }, func() any { return NewFtpRWCfg() })
+	plugin.RegWithCfg(TypeFtp, func() any { return NewFtp() }, func() any { return NewFtpCfg() })
 }
 
 const (
-	RWTypeFtp RWType = "ftp"
+	TypeFtp Type = "ftp"
 
 	defaultFtpTimeout = 600
 	defaultFtpRetry   = 3
 )
 
-type FtpRWCfg struct {
+type FtpCfg struct {
 	Addr    string `json:"addr"    validate:"required" yaml:"addr"`
 	User    string `json:"user"    validate:"required" yaml:"user"`
 	Pwd     string `json:"pwd"     validate:"required" yaml:"pwd"`
@@ -26,37 +26,37 @@ type FtpRWCfg struct {
 	Retry   int    `json:"retry"   yaml:"retry"`
 }
 
-func NewFtpRWCfg() *FtpRWCfg {
-	return &FtpRWCfg{
+func NewFtpCfg() *FtpCfg {
+	return &FtpCfg{
 		Timeout: defaultFtpTimeout,
 		Retry:   defaultFtpRetry,
 	}
 }
 
-type FtpRW struct {
+type Ftp struct {
 	RW
-	*FtpRWCfg
+	*FtpCfg
 }
 
-func NewFtpRW() RW {
-	return &FtpRW{
-		RW: CreateBaseRW(string(RWTypeFtp)),
+func NewFtp() RW {
+	return &Ftp{
+		RW: CreateBase(string(TypeFtp)),
 	}
 }
 
-func (f *FtpRW) Init() error {
+func (f *Ftp) Init() error {
 	if f.IsStarter() {
 		return errs.New("ftp rw must not be Starter")
 	}
 
 	if f.IsReader() {
-		r, err := createFtpReader(f.FtpRWCfg)
+		r, err := createFtpReader(f.FtpCfg)
 		if err != nil {
 			return errs.Wrap(err, "create ftp reader failed")
 		}
 		f.NestReader(r)
 	} else {
-		w, err := createFtpWriter(f.FtpRWCfg)
+		w, err := createFtpWriter(f.FtpCfg)
 		if err != nil {
 			return errs.Wrap(err, "create ftp writer failed")
 		}
@@ -68,27 +68,27 @@ func (f *FtpRW) Init() error {
 	return f.RW.Init()
 }
 
-func (f *FtpRW) Type() any {
-	return RWTypeFtp
+func (f *Ftp) Type() any {
+	return TypeFtp
 }
 
-func (f *FtpRW) GetCfg() any {
-	return f.FtpRWCfg
+func (f *Ftp) GetCfg() any {
+	return f.FtpCfg
 }
 
-func (f *FtpRW) hookLogWrite(n int, bs []byte, err error, cost int64, misc ...any) error {
+func (f *Ftp) hookLogWrite(n int, bs []byte, err error, cost int64, misc ...any) error {
 	f.Info("write", "bs_len", len(bs), "bs_cap", cap(bs), "nw", n, "cost", cost,
 		"async_chan_len", f.AsyncChanLen(), "async_chan_cap", f.AsyncChanCap(), "misc", misc, "err", err)
 	return nil
 }
 
-func (f *FtpRW) hookLogRead(n int, bs []byte, err error, cost int64, misc ...any) error {
+func (f *Ftp) hookLogRead(n int, bs []byte, err error, cost int64, misc ...any) error {
 	f.Info("read", "bs_len", len(bs), "bs_cap", cap(bs), "nr", n, "cost", cost,
 		"async_chan_len", f.AsyncChanLen(), "async_chan_cap", f.AsyncChanCap(), "misc", misc, "err", err)
 	return nil
 }
 
-func createFtpCfg(ftpCfg *FtpRWCfg) *ftp.Cfg {
+func createFtpCfg(ftpCfg *FtpCfg) *ftp.Cfg {
 	return &ftp.Cfg{
 		Addr:    ftpCfg.Addr,
 		User:    ftpCfg.User,
@@ -98,7 +98,7 @@ func createFtpCfg(ftpCfg *FtpRWCfg) *ftp.Cfg {
 	}
 }
 
-func createFtpReader(ftpCfg *FtpRWCfg) (*ftp.Reader, error) {
+func createFtpReader(ftpCfg *FtpCfg) (*ftp.Reader, error) {
 	r := ftp.NewReader()
 	r.Cfg = createFtpCfg(ftpCfg)
 	r.Path = ftpCfg.Path
@@ -111,7 +111,7 @@ func createFtpReader(ftpCfg *FtpRWCfg) (*ftp.Reader, error) {
 	return r, nil
 }
 
-func createFtpWriter(ftpCfg *FtpRWCfg) (*ftp.Writer, error) {
+func createFtpWriter(ftpCfg *FtpCfg) (*ftp.Writer, error) {
 	w := ftp.NewWriter()
 	w.Cfg = createFtpCfg(ftpCfg)
 	w.Path = ftpCfg.Path
