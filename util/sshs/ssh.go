@@ -39,12 +39,12 @@ func NewClient(addr, user, pwd string, privateKey []byte, timeout int) (*ssh.Cli
 
 	client, err := ssh.Dial("tcp", addr, cfg)
 	if err != nil {
-		return nil, nil, errs.Wrap(err, "ssh connect fail")
+		return nil, nil, errs.Wrap(err, "ssh connect failed")
 	}
 
 	sess, err := client.NewSession()
 	if err != nil {
-		return nil, nil, errors.Join(client.Close(), errs.Wrap(err, "ssh create session fail"))
+		return nil, nil, errors.Join(client.Close(), errs.Wrap(err, "create ssh session failed"))
 	}
 	return client, sess, nil
 }
@@ -67,7 +67,7 @@ func Close(cli *ssh.Client, sess *ssh.Session) error {
 	}
 
 	if err != nil {
-		return errs.Wrap(err, "close ssh client fail")
+		return errs.Wrap(err, "close ssh client failed")
 	}
 	return nil
 }

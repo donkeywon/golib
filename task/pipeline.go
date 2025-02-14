@@ -43,7 +43,7 @@ func (p *PipelineStep) Init() error {
 
 	err = runner.Init(p.p)
 	if err != nil {
-		return errs.Wrap(err, "init pipeline fail")
+		return errs.Wrap(err, "init pipeline failed")
 	}
 
 	return p.Step.Init()

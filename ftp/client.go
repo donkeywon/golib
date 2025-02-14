@@ -60,7 +60,7 @@ func (c *Client) Init() error {
 		func() error {
 			c.netConn, err = net.DialTimeout("tcp", c.Addr, time.Second*time.Duration(c.Timeout))
 			if err != nil {
-				return errs.Wrap(err, "ftp dial fail")
+				return errs.Wrap(err, "ftp dial failed")
 			}
 			return nil
 		},
@@ -72,7 +72,7 @@ func (c *Client) Init() error {
 
 	c.netConn, err = net.DialTimeout("tcp", c.Addr, time.Second*time.Duration(c.Timeout))
 	if err != nil {
-		return errs.Wrap(err, "ftp dial fail")
+		return errs.Wrap(err, "ftp dial failed")
 	}
 
 	c.conn = textproto.NewConn(c.netConn)
@@ -86,7 +86,7 @@ func (c *Client) Init() error {
 
 			err = c.login()
 			if err != nil {
-				return errs.Wrap(err, "login fail")
+				return errs.Wrap(err, "login failed")
 			}
 			return nil
 		},
@@ -114,19 +114,19 @@ func (c *Client) keepalive() {
 func (c *Client) cmdDataConn(format string, args ...any) (net.Conn, error) {
 	conn, err := c.openDataConn()
 	if err != nil {
-		return nil, errs.Wrap(err, "open data conn fail")
+		return nil, errs.Wrap(err, "open data conn failed")
 	}
 
 	_, err = c.conn.Cmd(format, args...)
 	if err != nil {
 		err = errors.Join(err, conn.Close())
-		return nil, errs.Wrap(err, "cmd conn fail")
+		return nil, errs.Wrap(err, "cmd conn failed")
 	}
 
 	code, msg, err := c.conn.ReadResponse(-1)
 	if err != nil {
 		err = errors.Join(err, conn.Close())
-		return nil, errs.Wrap(err, "read cmd conn response fail")
+		return nil, errs.Wrap(err, "read cmd conn response failed")
 	}
 	if code != StatusAlreadyOpen && code != StatusAboutToSend {
 		conn.Close()
@@ -152,7 +152,7 @@ func (c *Client) RawCmd(format string, args ...any) (int, string, error) {
 func (c *Client) openDataConn() (net.Conn, error) {
 	host, port, err := c.pasv()
 	if err != nil {
-		return nil, errs.Wrap(err, "pasv fail")
+		return nil, errs.Wrap(err, "pasv failed")
 	}
 
 	addr := net.JoinHostPort(host, strconv.Itoa(port))
@@ -200,7 +200,7 @@ func (c *Client) pasv() (string, int, error) {
 func (c *Client) Delete(path string) error {
 	_, _, err := c.cmd(StatusRequestedFileActionOK, "DELE %s", path)
 	if err != nil {
-		return errs.Wrap(err, "ftp cmd DELE fail")
+		return errs.Wrap(err, "ftp cmd DELE failed")
 	}
 	return nil
 }
@@ -208,7 +208,7 @@ func (c *Client) Delete(path string) error {
 func (c *Client) login() error {
 	code, msg, err := c.cmd(-1, "USER %s", c.User)
 	if err != nil {
-		return errs.Wrap(err, "ftp cmd USER fail")
+		return errs.Wrap(err, "ftp cmd USER failed")
 	}
 
 	switch code {
@@ -216,7 +216,7 @@ func (c *Client) login() error {
 	case StatusUserOK:
 		_, _, err = c.cmd(StatusLoggedIn, "PASS %s", c.Pwd)
 		if err != nil {
-			return errs.Wrap(err, "ftp cmd PASS fail")
+			return errs.Wrap(err, "ftp cmd PASS failed")
 		}
 	default:
 		return errs.Errorf("ftp cmd USER response code unknown: %d, msg: %s", code, msg)
@@ -230,7 +230,7 @@ func (c *Client) DirExists(path string) (bool, error) {
 	parentPath := filepath.Dir(path)
 	entrys, err := c.List(parentPath)
 	if err != nil {
-		return false, errs.Wrap(err, "LIST fail")
+		return false, errs.Wrap(err, "LIST failed")
 	}
 	for _, entry := range entrys {
 		if entry.Name == dir && entry.Type == EntryTypeFolder {
@@ -243,7 +243,7 @@ func (c *Client) DirExists(path string) (bool, error) {
 func (c *Client) Mkdir(name string) error {
 	_, _, err := c.cmd(StatusPathCreated, "MKD %s", name)
 	if err != nil {
-		return errs.Wrap(err, "ftp cmd MKD fail")
+		return errs.Wrap(err, "ftp cmd MKD failed")
 	}
 	return nil
 }
@@ -261,7 +261,7 @@ func (c *Client) MkdirRecur(path string) error {
 
 		entrys, err := c.List("")
 		if err != nil {
-			return errs.Wrap(err, "LIST fail")
+			return errs.Wrap(err, "LIST failed")
 		}
 
 		pathExists, isDir := c.pathExists(paths[i], entrys)
@@ -271,13 +271,13 @@ func (c *Client) MkdirRecur(path string) error {
 		if !pathExists {
 			err = c.Mkdir(paths[i])
 			if err != nil {
-				return errs.Wrap(err, "MKD fail")
+				return errs.Wrap(err, "MKD failed")
 			}
 		}
 
 		err = c.ChangeDir(paths[i])
 		if err != nil {
-			return errs.Wrap(err, "CWD fail")
+			return errs.Wrap(err, "CWD failed")
 		}
 	}
 
@@ -309,7 +309,7 @@ func (c *Client) pathExists(path string, entrys []*Entry) (bool, bool) {
 func (c *Client) checkDataShut() error {
 	_, _, err := c.conn.ReadResponse(StatusClosingDataConnection)
 	if err != nil {
-		return errs.Wrap(err, "read response StatusClosingDataConnection fail")
+		return errs.Wrap(err, "read response StatusClosingDataConnection failed")
 	}
 	return nil
 }
@@ -317,7 +317,7 @@ func (c *Client) checkDataShut() error {
 func (c *Client) ChangeDir(path string) error {
 	_, _, err := c.cmd(StatusRequestedFileActionOK, "CWD %s", path)
 	if err != nil {
-		return errs.Wrap(err, "ftp cmd CWD fail")
+		return errs.Wrap(err, "ftp cmd CWD failed")
 	}
 	return nil
 }
@@ -400,7 +400,7 @@ func (c *Client) List(path string) ([]*Entry, error) {
 func (c *Client) TransType(typ string) error {
 	_, _, err := c.cmd(StatusCommandOK, "TYPE "+typ)
 	if err != nil {
-		return errs.Wrap(err, "ftp cmd TYPE fail")
+		return errs.Wrap(err, "ftp cmd TYPE failed")
 	}
 	return nil
 }
@@ -413,11 +413,11 @@ func (c *Client) Quit() error {
 	var err error
 	_, err = c.conn.Cmd("QUIT")
 	if err != nil {
-		err = errs.Wrap(err, "ftp cmd QUIT fail")
+		err = errs.Wrap(err, "ftp cmd QUIT failed")
 	}
 	closeErr := c.conn.Close()
 	if closeErr != nil {
-		err = errors.Join(err, errs.Wrap(closeErr, "close ftp conn fail"))
+		err = errors.Join(err, errs.Wrap(closeErr, "close ftp conn failed"))
 	}
 	return err
 }

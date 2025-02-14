@@ -1,7 +1,6 @@
 package pipeline
 
 import (
-	"errors"
 	"fmt"
 	"path/filepath"
 
@@ -61,7 +60,7 @@ func (s *SSHRW) Init() error {
 	var err error
 	s.sshCli, s.sshSess, err = sshs.NewClient(s.SSHRWCfg.Addr, s.SSHRWCfg.User, s.SSHRWCfg.Pwd, []byte(s.SSHRWCfg.PrivateKey), s.SSHRWCfg.Timeout)
 	if err != nil {
-		return errs.Wrap(err, "create ssh cli and session fail")
+		return errs.Wrap(err, "create ssh cli and session failed")
 	}
 	if s.Reader() != nil {
 		s.sshCmd = sshWriteCmd(s.SSHRWCfg.Path)
@@ -83,19 +82,23 @@ func (s *SSHRW) Init() error {
 
 func (s *SSHRW) Start() error {
 	err := s.sshSess.Run(s.sshCmd)
-	if errors.Is(err, ErrStoppedManually) {
-		err = nil
-	}
-
 	closeErr := sshs.Close(s.sshCli, s.sshSess)
 	if closeErr != nil {
-		closeErr = errs.Wrap(closeErr, "close ssh cli and session fail")
+		s.Error("close ssh cli and session failed", closeErr)
+	}
+	closeErr = s.Close()
+	if closeErr != nil {
+		s.Error("close rw failed", closeErr)
 	}
 
 	if err != nil {
-		return errs.Wrapf(err, "ssh session run fail, cmd: %s", s.sshCmd)
+		return errs.Wrapf(err, "ssh cmd failed: %s", s.sshCmd)
 	}
 	return nil
+}
+
+func (s *SSHRW) Stop() error {
+	return s.sshSess.Signal(ssh.SIGKILL)
 }
 
 func (s *SSHRW) Type() any {

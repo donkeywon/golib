@@ -49,7 +49,7 @@ func LoadAsBool(kvs KVS, k string) (bool, error) {
 	}
 	vv, err := conv.ToBool(v)
 	if err != nil {
-		return false, errs.Wrap(err, "convert value to bool fail")
+		return false, errs.Wrap(err, "convert value to bool failed")
 	}
 	return vv, nil
 }
@@ -64,7 +64,7 @@ func LoadAsString(kvs KVS, k string) (string, error) {
 	}
 	vv, err := conv.ToString(v)
 	if err != nil {
-		return "", errs.Wrap(err, "convert value to string fail")
+		return "", errs.Wrap(err, "convert value to string failed")
 	}
 	return vv, nil
 }
@@ -94,7 +94,7 @@ func LoadAsIntOr(kvs KVS, k string, d int) (int, error) {
 	}
 	vv, err := conv.ToInt(v)
 	if err != nil {
-		return 0, errs.Wrap(err, "convert value to int fail")
+		return 0, errs.Wrap(err, "convert value to int failed")
 	}
 	return vv, nil
 }
@@ -113,7 +113,7 @@ func LoadAsUintOr(kvs KVS, k string, d uint) (uint, error) {
 	}
 	vv, err := conv.ToUint(v)
 	if err != nil {
-		return 0, errs.Wrap(err, "convert value to uint fail")
+		return 0, errs.Wrap(err, "convert value to uint failed")
 	}
 	return vv, nil
 }
@@ -132,7 +132,7 @@ func LoadAsFloatOr(kvs KVS, k string, d float64) (float64, error) {
 	}
 	vv, err := conv.ToFloat(v)
 	if err != nil {
-		return 0, errs.Wrap(err, "convert value to float64 fail")
+		return 0, errs.Wrap(err, "convert value to float64 failed")
 	}
 	return vv, nil
 }

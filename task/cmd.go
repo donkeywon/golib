@@ -73,7 +73,7 @@ func (c *CmdStep) Start() error {
 	}
 
 	if err != nil {
-		return errs.Wrap(err, "exec cmd fail")
+		return errs.Wrap(err, "exec cmd failed")
 	}
 
 	return nil

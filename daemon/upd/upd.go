@@ -130,7 +130,7 @@ func (u *Upd) upgrade(vi *VerInfo) bool {
 		u.Info("download dst path exists, remove it", "path", vi.DownloadDstPath)
 		err = os.Remove(vi.DownloadDstPath)
 		if err != nil {
-			u.Error("remove exists download dst path fail", err)
+			u.Error("remove exists download dst path failed", err)
 			return false
 		}
 	}
@@ -138,7 +138,7 @@ func (u *Upd) upgrade(vi *VerInfo) bool {
 	u.Info("start download new package")
 	err = downloadPackage(vi.DownloadDstPath, vi.StoreCfg)
 	if err != nil {
-		u.Error("download new package fail", err)
+		u.Error("download new package failed", err)
 		return false
 	}
 	u.Info("download new package done")
@@ -147,7 +147,7 @@ func (u *Upd) upgrade(vi *VerInfo) bool {
 		u.Info("stopping all")
 		runner.StopAndWait(u.Parent())
 		if u.Parent().ChildrenErr() != nil {
-			u.Error("stop all fail", u.Parent().ChildrenErr())
+			u.Error("stop all failed", u.Parent().ChildrenErr())
 		}
 	}()
 
@@ -162,7 +162,7 @@ func (u *Upd) upgrade(vi *VerInfo) bool {
 	var cmdResult *cmd.Result
 	cmdResult, err = cmd.Run(deployCmd...)
 	if err != nil {
-		u.Error("deploy new package fail", err, "cmd_result", cmdResult)
+		u.Error("deploy new package failed", err, "cmd_result", cmdResult)
 		os.Exit(1)
 	}
 	u.Info("deploy new package done")
@@ -170,7 +170,7 @@ func (u *Upd) upgrade(vi *VerInfo) bool {
 	u.Info("start new version")
 	cmdResult, err = cmd.RunCtx(u.Ctx(), startCmd...)
 	if err != nil {
-		u.Error("start new version fail", err, "cmd_result", cmdResult)
+		u.Error("start new version failed", err, "cmd_result", cmdResult)
 		os.Exit(1)
 	}
 	u.Info("start new version done, exit now")
@@ -199,7 +199,7 @@ func downloadPackage(downloadDstPath string, storeCfg *pipeline.RWCfg) error {
 	p.Inherit(D())
 	err := runner.Init(p)
 	if err != nil {
-		return errs.Wrap(err, "init download pipeline fail")
+		return errs.Wrap(err, "init download pipeline failed")
 	}
 
 	runner.Start(p)

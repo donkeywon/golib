@@ -109,7 +109,7 @@ func (p *Metricsd) loadOrStore(name string, creator func() prometheus.Metric) pr
 	m = creator()
 	err := p.reg.Register(m.(prometheus.Collector))
 	if err != nil {
-		p.Error("register metrics fail", err, "name", name)
+		p.Error("register metrics failed", err, "name", name)
 		return m
 	}
 

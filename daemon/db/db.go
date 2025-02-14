@@ -73,7 +73,7 @@ func (d *DB) Stop() error {
 		db := d.dbs[dbCfg.Name]
 		err := db.Close()
 		if err != nil {
-			d.Error("close db fail", err, "name", dbCfg.Name, "type", dbCfg.Type)
+			d.Error("close db failed", err, "name", dbCfg.Name, "type", dbCfg.Type)
 		}
 	}
 	return nil

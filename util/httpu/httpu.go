@@ -51,7 +51,7 @@ func Resp(statusCode int, data any, w http.ResponseWriter, headersKV ...string) 
 	}
 	s, err := conv.ToString(data)
 	if err != nil {
-		err = errs.Wrap(err, "convert response data to string fail")
+		err = errs.Wrap(err, "convert response data to string failed")
 		RespRaw(http.StatusInternalServerError, conv.String2Bytes(errs.ErrToStackString(err)), w, headersKV...)
 		return
 	}
@@ -71,7 +71,7 @@ func RespRaw(statusCode int, data []byte, w http.ResponseWriter, headersKV ...st
 	w.WriteHeader(statusCode)
 	_, err := w.Write(data)
 	if err != nil {
-		panic(errs.Wrap(err, "http write data to response fail"))
+		panic(errs.Wrap(err, "http write data to response failed"))
 	}
 }
 
@@ -105,7 +105,7 @@ func RespJSON(statusCode int, data any, w http.ResponseWriter, headersKV ...stri
 
 	bs, err := jsons.Marshal(data)
 	if err != nil {
-		panic(errs.Wrap(err, "data marshal to json fail"))
+		panic(errs.Wrap(err, "data marshal to json failed"))
 	}
 	RespRaw(statusCode, bs, w, headersKV...)
 }

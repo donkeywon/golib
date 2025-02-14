@@ -83,7 +83,7 @@ func (w *MultiPartWriter) Write(p []byte) (int, error) {
 	if !oss.IsAzblob(w.URL) && !w.initialized {
 		w.uploadID, err = w.initMultiPart()
 		if err != nil {
-			return 0, errs.Wrap(err, "init multi part fail")
+			return 0, errs.Wrap(err, "init multi part failed")
 		}
 		w.initialized = true
 		w.curPartNo = 1
@@ -94,7 +94,7 @@ func (w *MultiPartWriter) Write(p []byte) (int, error) {
 		if w.uploadErr == nil {
 			w.uploadErr = err
 		}
-		return 0, errs.Wrap(err, "upload part fail")
+		return 0, errs.Wrap(err, "upload part failed")
 	}
 
 	return len(p), nil

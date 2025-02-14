@@ -59,7 +59,7 @@ func Init(r Runner) (err error) {
 	defer func() {
 		p := recover()
 		if p != nil {
-			err = errs.PanicToErrWithMsg(p, fmt.Sprintf("panic when %s init", r.Name()))
+			err = errs.PanicToErrWithMsg(p, fmt.Sprintf("panic on %s init", r.Name()))
 		}
 	}()
 	r.Info("init")
@@ -92,7 +92,7 @@ func Start(r Runner) {
 	defer func() {
 		err := recover()
 		if err != nil {
-			r.AppendError(errs.PanicToErrWithMsg(err, fmt.Sprintf("panic when %s running", r.Name())))
+			r.AppendError(errs.PanicToErrWithMsg(err, fmt.Sprintf("panic on %s running", r.Name())))
 		}
 
 		if r.markStopping() {
@@ -112,7 +112,7 @@ func Start(r Runner) {
 				defer func() {
 					err = recover()
 					if err != nil {
-						r.Parent().AppendError(errs.PanicToErrWithMsg(err, fmt.Sprintf("panic when %s OnChildDone: %s", r.Parent().Name(), r.Name())))
+						r.Parent().AppendError(errs.PanicToErrWithMsg(err, fmt.Sprintf("panic on %s OnChildDone: %s", r.Parent().Name(), r.Name())))
 					}
 				}()
 				r.Parent().AppendError(r.Parent().OnChildDone(r))
@@ -131,15 +131,14 @@ func Start(r Runner) {
 	}
 
 	go func() {
-		// 当r.Start()立即返回的情况下，上方的defer函数里的r.markStopping()和r.Cancel()可能会在此goroutine执行前就全部执行结束
-		// 这种情况下r.Stopping()和r.Ctx().Done()这两个case会同时可进入，会随机进入一个，偶尔就会进入到r.Ctx().Done()这个case里
-		// 所以偶尔就会看到明明没有调r.Cancel()，但是却走到r.Ctx().Done()的case里
-		// 在r.Ctx().Done()这个case里再判断一次r.Stopping()
-
 		select {
 		case <-r.Stopping():
 			return
 		case <-r.Ctx().Done():
+			// 当r.Start()立即返回的情况下，上方的defer函数里的r.markStopping()和r.Cancel()可能会在此goroutine执行前就全部执行结束
+			// 这种情况下r.Stopping()和r.Ctx().Done()这两个case会同时可进入，会随机进入一个，偶尔就会进入到r.Ctx().Done()这个case里
+			// 所以偶尔就会看到明明没有调r.Cancel()，但是却走到r.Ctx().Done()的case里
+			// 在这个case里再判断一次r.Stopping()
 			select {
 			case <-r.Stopping():
 				return
@@ -164,24 +163,29 @@ func StartBG(r Runner) {
 
 // Stop a runner, in most scenario, Stop is a notification action, used to notify the Runner to stop.
 func Stop(r Runner) {
-	stop(r, false)
-	if len(r.Children()) > 0 {
-		for i := len(r.Children()) - 1; i >= 0; i-- {
-			stop(r.Children()[i], false)
-		}
-	}
+	stopRunnerAndChildren(r, false)
 }
 
 // StopAndWait notify Runner to stop, and notify the Runner's children
 // in reverse order to stop and wait for the children to finish.
 func StopAndWait(r Runner) {
-	stop(r, false)
+	stopRunnerAndChildren(r, true)
+}
+
+func stopRunnerAndChildren(r Runner, wait bool) {
+	stop(r, wait)
 	if len(r.Children()) > 0 {
 		for i := len(r.Children()) - 1; i >= 0; i-- {
-			stop(r.Children()[i], true)
+			stop(r.Children()[i], wait)
+			if wait {
+				<-r.Children()[i].Done()
+			}
 		}
 	}
-	<-r.Done()
+
+	if wait {
+		<-r.Done()
+	}
 }
 
 func stop(r Runner, wait bool) {
@@ -211,7 +215,6 @@ func stop(r Runner, wait bool) {
 		r.Info("stop done before started")
 		r.markStopDone()
 		r.markDone()
-		return
 	}
 }
 
@@ -219,7 +222,7 @@ func safeStop(r Runner) {
 	defer func() {
 		err := recover()
 		if err != nil {
-			r.AppendError(errs.PanicToErrWithMsg(err, "panic when stopping"))
+			r.AppendError(errs.PanicToErrWithMsg(err, "panic on stopping"))
 		}
 	}()
 	r.AppendError(r.Stop())

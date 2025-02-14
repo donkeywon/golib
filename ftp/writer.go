@@ -24,22 +24,22 @@ func NewWriter() *Writer {
 func (w *Writer) Init() error {
 	err := w.Client.Init()
 	if err != nil {
-		return errs.Wrap(err, "init ftp client fail")
+		return errs.Wrap(err, "init ftp client failed")
 	}
 
 	err = w.Client.TransType("I")
 	if err != nil {
-		return errs.Wrap(err, "change transfer type fail")
+		return errs.Wrap(err, "change transfer type failed")
 	}
 
 	err = w.Client.MkdirRecur(filepath.Dir(w.Path))
 	if err != nil {
-		return errs.Wrap(err, "mkdir fail")
+		return errs.Wrap(err, "mkdir failed")
 	}
 
 	w.dataConn, err = w.Client.cmdDataConn("STOR %s", filepath.Base(w.Path))
 	if err != nil {
-		return errs.Wrap(err, "STOR fail")
+		return errs.Wrap(err, "STOR failed")
 	}
 
 	return nil

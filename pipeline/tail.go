@@ -42,7 +42,7 @@ func (t *TailRW) Init() error {
 	var err error
 	t.t, err = tail.NewReader(t.Path, t.Pos)
 	if err != nil {
-		return errs.Wrap(err, "create tail reader fail")
+		return errs.Wrap(err, "create tail reader failed")
 	}
 
 	_ = t.NestReader(t.t)

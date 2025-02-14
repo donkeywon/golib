@@ -46,11 +46,11 @@ func (c *CmdRW) Init() error {
 func (c *CmdRW) Start() error {
 	result, err := cmd.RunCmd(context.Background(), c.cmd, c.Cfg, func(cmd *exec.Cmd) error {
 		if c.Writer() != nil {
-			cmd.Stdout = c
+			cmd.Stdout = c.Writer()
 		}
 
 		if c.Reader() != nil {
-			cmd.Stdin = c
+			cmd.Stdin = c.Reader()
 		}
 		return nil
 	})
@@ -65,20 +65,25 @@ func (c *CmdRW) Start() error {
 		c.Store(consts.FieldCmdSignaled, result.Signaled)
 	}
 
+	err = c.Close()
+	if err != nil {
+		c.Error("close failed after cmd exit", err)
+	}
+
 	if result != nil && result.Signaled {
 		select {
 		case <-c.Stopping():
-			c.Info("exit signaled", "error", err)
+			c.Info("exit signaled", "err", err)
 			return nil
 		default:
 		}
 	}
 
-	if err == nil {
-		return nil
+	if err != nil {
+		return errs.Wrapf(err, "cmd exit, result: %v", result)
 	}
 
-	return errs.Wrapf(err, "cmd exit, result: %v", result)
+	return nil
 }
 
 func (c *CmdRW) Stop() error {

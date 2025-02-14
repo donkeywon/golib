@@ -66,7 +66,7 @@ func (w *AppendWriter) Write(p []byte) (int, error) {
 			retry.Attempts(uint(w.Retry)),
 		)
 		if err != nil {
-			return 0, errs.Wrap(err, "delete oss object fail")
+			return 0, errs.Wrap(err, "delete oss object failed")
 		}
 		w.deleted = true
 	}
@@ -77,7 +77,7 @@ func (w *AppendWriter) Write(p []byte) (int, error) {
 			retry.Attempts(uint(w.Retry)),
 		)
 		if err != nil {
-			return 0, errs.Wrap(err, "create append blob fail")
+			return 0, errs.Wrap(err, "create append blob failed")
 		}
 		w.created = true
 	}
@@ -145,7 +145,7 @@ func (w *AppendWriter) retryAppend(payload []byte) (*bytes.Buffer, *http.Respons
 	} else {
 		pos, exists, err = oss.GetNextPositionFromResponse(resp)
 		if err != nil {
-			return respBody, resp, errs.Wrapf(err, "get next position from response fail")
+			return respBody, resp, errs.Wrapf(err, "get next position from response failed")
 		}
 	}
 
@@ -186,5 +186,5 @@ func (w *AppendWriter) doAppend(body []byte) (*bytes.Buffer, *http.Response, err
 	if err == nil || errors.Is(err, context.Canceled) {
 		return respBody, resp, nil
 	}
-	return respBody, resp, errs.Wrap(err, "do http response fail")
+	return respBody, resp, errs.Wrap(err, "do http response failed")
 }

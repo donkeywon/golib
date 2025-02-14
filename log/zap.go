@@ -208,11 +208,11 @@ func NewZapLogger(c *Cfg) (Logger, error) {
 	cfg.Encoding = c.Format
 	cfg.OutputPaths, err = buildOutputs(c)
 	if err != nil {
-		return nil, errs.Wrap(err, "build log outputs fail")
+		return nil, errs.Wrap(err, "build log outputs failed")
 	}
 	zl, err := cfg.Build(zap.WrapCore(core.NewStackExtractCore), zap.AddCaller(), zap.AddCallerSkip(1))
 	if err != nil {
-		return nil, errs.Wrap(err, "build logger fail")
+		return nil, errs.Wrap(err, "build logger failed")
 	}
 	return &zapLogger{
 		Logger: zl,

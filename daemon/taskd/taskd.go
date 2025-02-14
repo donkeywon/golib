@@ -127,8 +127,7 @@ func (td *Taskd) StopTask(taskID string) error {
 	default:
 	}
 
-	go runner.Stop(t)
-	<-t.Done()
+	runner.StopAndWait(t)
 	td.Info("task stopped", "task_id", taskID)
 	return nil
 }
@@ -158,8 +157,7 @@ func (td *Taskd) PauseTask(taskID string) error {
 	}
 
 	td.Info("pausing task", "task_id", taskID)
-	go runner.Stop(t)
-	<-t.Done()
+	runner.StopAndWait(t)
 	td.Info("task paused", "task_id", taskID)
 	td.markTaskPausing(t)
 	return nil
@@ -196,7 +194,7 @@ func (td *Taskd) ResumeTask(taskID string) (*task.Task, error) {
 	})
 
 	if err != nil {
-		td.Error("resume task fail", err, "task_id", taskID)
+		td.Error("resume task failed", err, "task_id", taskID)
 		td.markTaskPausing(t)
 		td.unmarkTaskAndTaskID(t.Cfg.ID)
 		return newT, err
@@ -220,8 +218,8 @@ func (td *Taskd) createInit(taskCfg *task.Cfg) (*task.Task, error) {
 	t, err := td.createTask(taskCfg)
 	td.hookTask(t, err, td.createHooks, "create", nil)
 	if err != nil {
-		td.Error("create task fail", err, "cfg", taskCfg)
-		return t, errs.Wrap(err, "create task fail")
+		td.Error("create task failed", err, "cfg", taskCfg)
+		return t, errs.Wrap(err, "create task failed")
 	}
 
 	t.RegisterStepDoneHook(td.stepDoneHooks...)
@@ -230,8 +228,8 @@ func (td *Taskd) createInit(taskCfg *task.Cfg) (*task.Task, error) {
 	err = td.initTask(t)
 	td.hookTask(t, err, td.initHooks, "init", nil)
 	if err != nil {
-		td.Error("init task fail", err, "cfg", taskCfg)
-		return t, errs.Wrap(err, "init task fail")
+		td.Error("init task failed", err, "cfg", taskCfg)
+		return t, errs.Wrap(err, "init task failed")
 	}
 
 	return t, nil
@@ -251,7 +249,7 @@ func (td *Taskd) submit(t *task.Task, wait bool, must bool) bool {
 
 		err := t.Err()
 		if err != nil {
-			td.Error("task fail", err, "task_id", t.Cfg.ID, "task_type", t.Cfg.Type)
+			td.Error("task failed", err, "task_id", t.Cfg.ID, "task_type", t.Cfg.Type)
 		} else {
 			td.Info("task done", "task_id", t.Cfg.ID, "task_type", t.Cfg.Type)
 		}
@@ -299,7 +297,7 @@ func (td *Taskd) createInitSubmit(taskCfg *task.Cfg, wait bool, must bool, befor
 	t, err := td.createInit(taskCfg)
 	if err != nil {
 		td.unmarkTaskID(taskCfg.ID)
-		return nil, false, errs.Wrap(err, "create init task fail")
+		return nil, false, errs.Wrap(err, "create init task failed")
 	}
 
 	select {

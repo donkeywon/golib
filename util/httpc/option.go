@@ -68,7 +68,7 @@ func WithBodyMarshal(v any, contentType string, marshal func(v any) ([]byte, err
 	return ReqOptionFunc(func(r *http.Request) error {
 		bs, err := marshal(v)
 		if err != nil {
-			return errs.Wrap(err, "failed to marshal request body")
+			return errs.Wrap(err, "marshal request body failed")
 		}
 		r.Header.Set(httpu.HeaderContentType, contentType)
 		r.Body = io.NopCloser(bytes.NewReader(bs))
@@ -106,7 +106,7 @@ func ToBytes(n *int, b []byte) Option {
 		var err error
 		*n, err = r.Body.Read(b)
 		if err != nil {
-			return errs.Wrap(err, "failed to read response body")
+			return errs.Wrap(err, "read response body failed")
 		}
 		return err
 	})
@@ -116,7 +116,7 @@ func ToBytesBuffer(buf *bytes.Buffer) Option {
 	return RespOptionFunc(func(resp *http.Response) error {
 		_, err := io.Copy(buf, resp.Body)
 		if err != nil {
-			return errs.Wrap(err, "failed to read response body")
+			return errs.Wrap(err, "read response body failed")
 		}
 		return err
 	})
@@ -126,7 +126,7 @@ func ToJSON(v any) Option {
 	return RespOptionFunc(func(resp *http.Response) error {
 		err := jsons.NewDecoder(resp.Body).Decode(v)
 		if err != nil {
-			return errs.Wrap(err, "failed to decode response body")
+			return errs.Wrap(err, "decode response body failed")
 		}
 		return nil
 	})
@@ -136,11 +136,11 @@ func ToAnyUnmarshal(v any, unmarshaler func(bs []byte, v any) error) Option {
 	return RespOptionFunc(func(resp *http.Response) error {
 		bs, err := io.ReadAll(resp.Body)
 		if err != nil {
-			return errs.Wrap(err, "failed to read response body")
+			return errs.Wrap(err, "read response body failed")
 		}
 		err = unmarshaler(bs, v)
 		if err != nil {
-			return errs.Wrapf(err, "failed to decode response body: %s", string(bs))
+			return errs.Wrapf(err, "decode response body failed: %s", string(bs))
 		}
 		return nil
 	})
@@ -150,7 +150,7 @@ func ToWriter(w io.Writer) Option {
 	return RespOptionFunc(func(resp *http.Response) error {
 		_, err := io.Copy(w, resp.Body)
 		if err != nil {
-			return errs.Wrap(err, "failed to read response body to writer")
+			return errs.Wrap(err, "read response body to writer failed")
 		}
 		return nil
 	})
