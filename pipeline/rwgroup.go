@@ -1,6 +1,7 @@
 package pipeline
 
 import (
+	"errors"
 	"github.com/donkeywon/golib/errs"
 	"github.com/donkeywon/golib/plugin"
 	"github.com/donkeywon/golib/runner"
@@ -98,11 +99,16 @@ func (g *RWGroup) Init() error {
 func (g *RWGroup) Start() error {
 	defer func() {
 		defer func() {
-			err := recover()
-			if err != nil {
-				g.AppendError(errs.PanicToErrWithMsg(err, "panic on closing starter"))
+			pe := recover()
+			if pe != nil {
+				g.AppendError(errs.PanicToErrWithMsg(pe, "panic on closing starter"))
 			}
 		}()
+
+		pe := recover()
+		if pe != nil {
+			g.AppendError(errs.PanicToErrWithMsg(pe, "panic on init all rws and start"))
+		}
 
 		err := g.starter.Close()
 		if err != nil {
@@ -204,7 +210,12 @@ func (g *RWGroup) initReaders() error {
 
 		err = runner.Init(g.readers[i])
 		if err != nil {
-			return errs.Wrapf(err, "init reader(%d) %s failed", i, g.readers[i].Type())
+			err = errs.Wrapf(err, "init reader(%d) %s failed", i, g.readers[i].Type())
+			cerr := g.readers[i].Close()
+			if cerr != nil {
+				err = errors.Join(err, errs.Wrapf(cerr, "close reader(%s) failed", g.readers[i].Type()))
+			}
+			return err
 		}
 	}
 
@@ -223,7 +234,12 @@ func (g *RWGroup) initWriters() error {
 
 		err = runner.Init(g.writers[i])
 		if err != nil {
-			return errs.Wrapf(err, "init writer(%d) %s failed", i, g.writers[i].Type())
+			err = errs.Wrapf(err, "init writer(%d) %s failed", i, g.writers[i].Type())
+			cerr := g.writers[i].Close()
+			if cerr != nil {
+				err = errors.Join(err, errs.Wrapf(cerr, "close writer(%d) failed", i))
+			}
+			return err
 		}
 	}
 	return nil
