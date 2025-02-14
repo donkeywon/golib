@@ -26,11 +26,11 @@ func NewCfg() *Cfg {
 	return &Cfg{}
 }
 
-func (c *Cfg) Add(role rw.Role, typ rw.Type, cfg any, commonCfg *rw.ExtraCfg) *Cfg {
+func (c *Cfg) Add(role rw.Role, typ rw.Type, cfg any, extraCfg *rw.ExtraCfg) *Cfg {
 	c.RWs = append(c.RWs, &rw.Cfg{
 		Type:     typ,
 		Cfg:      cfg,
-		ExtraCfg: commonCfg,
+		ExtraCfg: extraCfg,
 		Role:     role,
 	})
 	return c
@@ -87,21 +87,15 @@ func (p *Pipeline) Init() error {
 	for i := 0; i < len(p.rwGroups)-1; i++ {
 		pr, pw := io.Pipe()
 		if len(p.rwGroups[i].Writers()) > 0 {
-			err = p.rwGroups[i].LastWriter().NestWriter(pw)
+			p.rwGroups[i].LastWriter().NestWriter(pw)
 		} else {
-			err = p.rwGroups[i].Starter().NestWriter(pw)
-		}
-		if err != nil {
-			return errs.Wrapf(err, "rwGroup(%d) nest pipe writer failed", i)
+			p.rwGroups[i].Starter().NestWriter(pw)
 		}
 
 		if len(p.rwGroups[i+1].Readers()) > 0 {
-			err = p.rwGroups[i+1].FirstReader().NestReader(pr)
+			p.rwGroups[i+1].FirstReader().NestReader(pr)
 		} else {
-			err = p.rwGroups[i+1].Starter().NestReader(pr)
-		}
-		if err != nil {
-			return errs.Wrapf(err, "rwGroup(%d) nest pipe reader failed", i+1)
+			p.rwGroups[i+1].Starter().NestReader(pr)
 		}
 	}
 

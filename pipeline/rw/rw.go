@@ -107,8 +107,8 @@ type RW interface {
 	io.ReadWriteCloser
 	plugin.Plugin
 
-	NestReader(io.ReadCloser) error
-	NestWriter(io.WriteCloser) error
+	NestReader(io.ReadCloser)
+	NestWriter(io.WriteCloser)
 	Reader() io.ReadCloser
 	Writer() io.WriteCloser
 
@@ -173,8 +173,6 @@ type baseRW struct {
 	lastFlushTS        int64
 	asyncChanBufSize   int
 	closeOnce          sync.Once
-	closeReaderOnce    sync.Once
-	closeWriterOnce    sync.Once
 	mu                 sync.Mutex
 	enableRateLimit    bool
 	enableMonitorSpeed bool
@@ -283,30 +281,22 @@ func (b *baseRW) GetCfg() any {
 	panic("method RW.GetCfg not implemented")
 }
 
-func (b *baseRW) NestReader(r io.ReadCloser) error {
+func (b *baseRW) NestReader(r io.ReadCloser) {
 	if rw, ok := r.(RW); ok && b.Reader() != nil {
-		err := rw.NestReader(b.Reader())
-		if err != nil {
-			return errs.Wrapf(err, "rw(%s) nest reader failed", rw.Type())
-		}
+		rw.NestReader(b.Reader())
 		b.r = rw
 	} else {
 		b.r = r
 	}
-	return nil
 }
 
-func (b *baseRW) NestWriter(w io.WriteCloser) error {
+func (b *baseRW) NestWriter(w io.WriteCloser) {
 	if rw, ok := w.(RW); ok && b.Writer() != nil {
-		err := rw.NestWriter(b.Writer())
-		if err != nil {
-			return errs.Wrapf(err, "rw(%s) nest writer failed", rw.Type())
-		}
+		rw.NestWriter(b.Writer())
 		b.w = rw
 	} else {
 		b.w = w
 	}
-	return nil
 }
 
 func (b *baseRW) Reader() io.ReadCloser {
@@ -815,30 +805,28 @@ func (b *baseRW) closeReader() error {
 	}
 
 	var err error
-	b.closeReaderOnce.Do(func() {
-		b.Info("close nested reader")
-		err = b.Reader().Close()
+	b.Info("close nested reader")
+	err = b.Reader().Close()
 
-		b.closeOnce.Do(func() {
-			close(b.closed)
-		})
-
-		if b.bufSize > 0 && b.buf != nil {
-			b.mu.Lock()
-			b.buf.Free()
-			b.mu.Unlock()
-		}
-
-		if b.async {
-			for bs := range b.asyncChan {
-				if bs == nil {
-					break
-				}
-				b.Info("consume remaining buf in async channel", "len", bs.Len())
-				bs.Free()
-			}
-		}
+	b.closeOnce.Do(func() {
+		close(b.closed)
 	})
+
+	if b.bufSize > 0 && b.buf != nil {
+		b.mu.Lock()
+		b.buf.Free()
+		b.mu.Unlock()
+	}
+
+	if b.async {
+		for bs := range b.asyncChan {
+			if bs == nil {
+				break
+			}
+			b.Info("consume remaining buf in async channel", "len", bs.Len())
+			bs.Free()
+		}
+	}
 
 	if err != nil {
 		return errs.Wrapf(err, "%s close nested reader failed", b.Name())
@@ -855,37 +843,35 @@ func (b *baseRW) closeWriter() error {
 		err      error
 		flushErr error
 	)
-	b.closeWriterOnce.Do(func() {
-		b.closeOnce.Do(func() {
-			close(b.closed)
-		})
-
-		if b.bufSize > 0 && b.buf != nil {
-			b.Info("close-flush")
-
-			b.mu.Lock()
-			flushErr = b.flushNoLock()
-			if flushErr != nil {
-				flushErr = errs.Wrap(flushErr, "close-flush failed")
-			}
-			if b.buf != nil {
-				b.buf.Free()
-				b.buf = nil
-			}
-			b.mu.Unlock()
-		}
-		if b.async {
-			close(b.asyncChan)
-			// 等async线程写完
-			<-b.asyncDone
-		}
-
-		b.Info("close nested writer")
-		err = b.Writer().Close()
-		if err != nil {
-			err = errs.Wrapf(err, "%s close nested writer failed", b.Name())
-		}
+	b.closeOnce.Do(func() {
+		close(b.closed)
 	})
+
+	if b.bufSize > 0 && b.buf != nil {
+		b.Info("close-flush")
+
+		b.mu.Lock()
+		flushErr = b.flushNoLock()
+		if flushErr != nil {
+			flushErr = errs.Wrap(flushErr, "close-flush failed")
+		}
+		if b.buf != nil {
+			b.buf.Free()
+			b.buf = nil
+		}
+		b.mu.Unlock()
+	}
+	if b.async {
+		close(b.asyncChan)
+		// 等async线程写完
+		<-b.asyncDone
+	}
+
+	b.Info("close nested writer")
+	err = b.Writer().Close()
+	if err != nil {
+		err = errs.Wrapf(err, "%s close nested writer failed", b.Name())
+	}
 	if flushErr != nil && err != nil {
 		errors.Join(flushErr, err)
 	}

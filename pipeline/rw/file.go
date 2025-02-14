@@ -54,10 +54,10 @@ func (f *File) Init() error {
 
 	if f.IsReader() {
 		f.f, err = os.OpenFile(f.Path, os.O_RDONLY, os.FileMode(f.parsedPerm))
-		_ = f.NestReader(f.f)
+		f.NestReader(f.f)
 	} else {
 		f.f, err = os.OpenFile(f.Path, os.O_WRONLY|os.O_CREATE, os.FileMode(f.parsedPerm))
-		_ = f.NestWriter(f.f)
+		f.NestWriter(f.f)
 	}
 
 	if err != nil {

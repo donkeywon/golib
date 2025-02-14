@@ -1,6 +1,8 @@
 package task
 
 import (
+	"errors"
+	"io"
 	"strings"
 	"time"
 
@@ -66,12 +68,7 @@ func (s *SSHStep) Start() error {
 	}
 
 	defer func() {
-		select {
-		case <-s.Stopping():
-			return
-		default:
-		}
-		err = s.close()
+		err = sshs.Close(s.cli, s.sess)
 		if err != nil {
 			s.Error("close ssh client failed", err)
 		}
@@ -100,11 +97,11 @@ func (s *SSHStep) Start() error {
 }
 
 func (s *SSHStep) Stop() error {
-	return s.close()
-}
-
-func (s *SSHStep) close() error {
-	return sshs.Close(s.cli, s.sess)
+	err := s.sess.Signal(ssh.SIGKILL)
+	if errors.Is(err, io.EOF) {
+		return nil
+	}
+	return nil
 }
 
 func (s *SSHStep) Type() any {
