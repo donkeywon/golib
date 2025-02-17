@@ -115,7 +115,7 @@ func (h *HostRateLimiter) NicSpeedMBps() int {
 
 func (h *HostRateLimiter) RxWaitN(ctx context.Context, n int, timeout time.Duration) error {
 	if ctx == nil {
-		ctx = h.Ctx()
+		panic("nil context")
 	}
 	if timeout > 0 {
 		var cancel context.CancelFunc
@@ -131,7 +131,7 @@ func (h *HostRateLimiter) RxWaitN(ctx context.Context, n int, timeout time.Durat
 
 func (h *HostRateLimiter) TxWaitN(ctx context.Context, n int, timeout time.Duration) error {
 	if ctx == nil {
-		ctx = h.Ctx()
+		panic("nil context")
 	}
 	if timeout > 0 {
 		var cancel context.CancelFunc
