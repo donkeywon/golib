@@ -241,10 +241,10 @@ func minInt(a, b int) int {
 	return b
 }
 
-func deduplicateWithStackTracer(stErr stackTracer, s *stack) int {
+func deduplicateWithStackTracer(err stackTracer, s *stack) int {
 	st := s.StackTrace()
+	errSt := err.StackTrace()
 	for i := 0; i < len(st); i++ {
-		errSt := stErr.StackTrace()
 		for j := 0; j < len(errSt); j++ {
 			if uintptr(st[i]) == uintptr(errSt[j]) {
 				return i
