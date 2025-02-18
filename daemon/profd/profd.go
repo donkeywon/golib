@@ -73,8 +73,8 @@ func (p *Profd) Init() error {
 	}
 
 	if p.Cfg.EnableHTTPProf {
-		httpd.D().HandleRaw("/debug/pprof/start/{mode}", p.startProf)
-		httpd.D().HandleRaw("/debug/pprof/stop", p.stopProf)
+		httpd.D().HandleRaw("/debug/prof/start/{mode}", p.startProf)
+		httpd.D().HandleRaw("/debug/prof/stop", p.stopProf)
 	}
 
 	if p.Cfg.EnableWebProf {
