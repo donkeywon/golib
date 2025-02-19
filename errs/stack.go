@@ -252,7 +252,7 @@ func deduplicateWithStackTracer(err stackTracer, s *stack) int {
 	for i := 0; i < len(errSt); i++ {
 		for j := 0; j < len(st); j++ {
 			if st[j] == errSt[i] {
-				return i
+				return j
 			}
 		}
 	}
