@@ -4,10 +4,36 @@ import (
 	"time"
 
 	"github.com/donkeywon/golib/errs"
-	"github.com/donkeywon/golib/util/eth"
 )
 
-var cloudMetadataReqTimeout = 10 * time.Second
+var (
+	cloudMetadataReqTimeout = time.Second
+
+	speedGetter = map[Type]func() (int, error){
+		TypeAws:     GetAwsEc2NetSpeed,
+		TypeHuawei:  GetHuaweiEcsNetworkSpeed,
+		TypeAliyun:  GetAliEcsNetworkSpeed,
+		TypeTencent: GetTencentCvmNetworkSpeed,
+		TypeAzure:   GetAzureVMNicSpeed,
+	}
+
+	Which = func() Type {
+		switch {
+		case IsHuawei():
+			return TypeHuawei
+		case IsAws():
+			return TypeAws
+		case IsAliyun():
+			return TypeAliyun
+		case IsAzure():
+			return TypeAzure
+		case IsTencent():
+			return TypeTencent
+		default:
+			return TypeUnknown
+		}
+	}
+)
 
 type Type string
 
@@ -20,42 +46,15 @@ const (
 	TypeTencent Type = "tencent"
 )
 
-func GetNicSpeed() (int, error) {
-	typ := Which()
-	var (
-		speed int
-		err   error
-	)
-	switch typ {
-	case TypeAws:
-		speed, err = GetAwsEc2NetSpeed()
-	case TypeHuawei:
-		speed, err = GetHuaweiEcsNetworkSpeed()
-	case TypeAliyun:
-		speed, err = GetAliEcsNetworkSpeed()
-	case TypeTencent:
-		speed, err = GetTencentCvmNetworkSpeed()
-	case TypeAzure:
-		speed, err = eth.GetNicSpeed("eth0")
-	default:
-		speed, err = 0, errs.Errorf("unknown cloud type: %s", typ)
-	}
-	return speed, err
+func RegCloudNicSpeedGetter(typ Type, getter func() (int, error)) {
+	speedGetter[typ] = getter
 }
 
-func Which() Type {
-	switch {
-	case IsHuawei():
-		return TypeHuawei
-	case IsAws():
-		return TypeAws
-	case IsAliyun():
-		return TypeAliyun
-	case IsAzure():
-		return TypeAzure
-	case IsTencent():
-		return TypeTencent
-	default:
-		return TypeUnknown
+func GetNicSpeed() (int, error) {
+	typ := Which()
+	getter, ok := speedGetter[typ]
+	if !ok {
+		return 0, errs.Errorf("unknown cloud type: %s", typ)
 	}
+	return getter()
 }

@@ -2,6 +2,7 @@ package cloud
 
 import (
 	"bytes"
+	"context"
 	"net/http"
 
 	"github.com/donkeywon/golib/util/httpc"
@@ -27,7 +28,7 @@ func IsHuawei() bool {
 
 func GetHuaweiEcsMetadata() (*bytes.Buffer, error) {
 	resp := bytes.NewBuffer(nil)
-	_, err := httpc.Get(nil, cloudMetadataReqTimeout, "http://169.254.169.254/openstack/latest/meta_data.json",
+	_, err := httpc.Get(context.Background(), cloudMetadataReqTimeout, "http://169.254.169.254/openstack/latest/meta_data.json",
 		httpc.CheckStatusCode(http.StatusOK),
 		httpc.ToBytesBuffer(resp),
 	)
@@ -36,7 +37,7 @@ func GetHuaweiEcsMetadata() (*bytes.Buffer, error) {
 
 func GetHuaweiEcsNetworkData() (*HuaweiEcsNetworkData, error) {
 	networkData := &HuaweiEcsNetworkData{}
-	_, err := httpc.Get(nil, cloudMetadataReqTimeout, "http://169.254.169.254/openstack/latest/network_data.json",
+	_, err := httpc.Get(context.Background(), cloudMetadataReqTimeout, "http://169.254.169.254/openstack/latest/network_data.json",
 		httpc.CheckStatusCode(http.StatusOK),
 		httpc.ToAnyUnmarshal(networkData, jsons.Unmarshal),
 	)

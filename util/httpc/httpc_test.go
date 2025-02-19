@@ -16,7 +16,7 @@ import (
 func TestGet(t *testing.T) {
 	respBody := bytes.NewBuffer(nil)
 	reqBody := []byte("abc")
-	_, err := Get(nil, time.Second, "http://127.0.0.1:8085/get",
+	_, err := Get(context.Background(), time.Second, "http://127.0.0.1:8085/get",
 		WithHeaders("test-header", "test-value"),
 		WithBody(reqBody),
 		CheckStatusCode(http.StatusOK),
@@ -38,7 +38,7 @@ func TestPostJSON(t *testing.T) {
 		FieldA: "abc",
 		FieldB: 123,
 	}
-	_, err := Post(nil, time.Second, "http://127.0.0.1:8085/post",
+	_, err := Post(context.Background(), time.Second, "http://127.0.0.1:8085/post",
 		WithHeaders("test-header", "test-value"),
 		WithBodyJSON(reqBody),
 		CheckStatusCode(http.StatusOK),
