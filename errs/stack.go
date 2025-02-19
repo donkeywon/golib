@@ -183,6 +183,10 @@ func (s *stack) Format(st fmt.State, verb rune) {
 	}
 }
 
+func (s *stack) Stack() []uintptr {
+	return *s
+}
+
 func (s *stack) StackTrace() StackTrace {
 	f := make([]Frame, len(*s))
 	for i := 0; i < len(f); i++ {
@@ -242,11 +246,12 @@ func minInt(a, b int) int {
 }
 
 func deduplicateWithStackTracer(err stackTracer, s *stack) int {
-	st := s.StackTrace()
-	errSt := err.StackTrace()
-	for i := 0; i < len(st); i++ {
-		for j := 0; j < len(errSt); j++ {
-			if uintptr(st[i]) == uintptr(errSt[j]) {
+	st := s.Stack()
+	errSt := err.Stack()
+
+	for i := 0; i < len(errSt); i++ {
+		for j := 0; j < len(st); j++ {
+			if st[j] == errSt[i] {
 				return i
 			}
 		}
