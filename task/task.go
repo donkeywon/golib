@@ -152,15 +152,15 @@ func (t *Task) Stop() error {
 	return nil
 }
 
-func (t *Task) RegisterStepDoneHook(hook ...StepHook) {
+func (t *Task) HookStepDone(hook ...StepHook) {
 	t.stepDoneHooks = append(t.stepDoneHooks, hook...)
 }
 
-func (t *Task) RegisterDeferStepDoneHook(hook ...StepHook) {
+func (t *Task) HookDeferStepDone(hook ...StepHook) {
 	t.deferStepDoneHooks = append(t.deferStepDoneHooks, hook...)
 }
 
-func (t *Task) RegisterCollector(c Collector) {
+func (t *Task) SetCollector(c Collector) {
 	t.collector = c
 }
 
