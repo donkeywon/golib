@@ -27,6 +27,7 @@ type Runner interface {
 	SetCtx(context.Context)
 	Cancel()
 	setCtxAndCancel(context.Context)
+	initCtx()
 
 	Inherit(Runner)
 
@@ -64,9 +65,6 @@ func Init(r Runner) (err error) {
 		}
 	}()
 	r.Info("init")
-	if r.Ctx() == nil {
-		r.SetCtx(context.Background())
-	}
 	err = r.Init()
 	if err != nil {
 		return
@@ -90,11 +88,7 @@ func Start(r Runner) {
 		return
 	}
 
-	if r.Ctx() == nil {
-		r.setCtxAndCancel(context.Background())
-	} else {
-		r.setCtxAndCancel(r.Ctx())
-	}
+	r.initCtx()
 
 	defer func() {
 		err := recover()
@@ -162,6 +156,7 @@ func Start(r Runner) {
 
 // StartBG start a runner and its children in the background.
 func StartBG(r Runner) {
+	r.initCtx()
 	go Start(r)
 	for _, c := range r.Children() {
 		go Start(c)
@@ -250,6 +245,7 @@ type baseRunner struct {
 	stopping     chan struct{}
 	name         string
 	children     []Runner
+	initCtxOnce  sync.Once
 	startedOnce  sync.Once
 	doneOnce     sync.Once
 	stopDoneOnce sync.Once
@@ -303,12 +299,6 @@ func (br *baseRunner) Init() error {
 	if br.NoErrKVS == nil {
 		br.NoErrKVS = kvs.NewMapKVS()
 	}
-	if br.Ctx() == nil {
-		br.SetCtx(context.Background())
-	}
-	if br.cancel == nil {
-		br.ctx, br.cancel = context.WithCancel(br.Ctx())
-	}
 	return nil
 }
 
@@ -323,7 +313,6 @@ func (br *baseRunner) Stop() error {
 
 func (br *baseRunner) Inherit(r Runner) {
 	br.WithLoggerFrom(r)
-	br.SetCtx(r.Ctx())
 }
 
 func (br *baseRunner) SetCtx(ctx context.Context) {
@@ -335,12 +324,28 @@ func (br *baseRunner) SetCtx(ctx context.Context) {
 
 func (br *baseRunner) Cancel() {
 	br.cancelOnce.Do(func() {
-		br.cancel()
+		if br.cancel != nil {
+			br.cancel()
+		}
 	})
 }
 
 func (br *baseRunner) setCtxAndCancel(ctx context.Context) {
 	br.ctx, br.cancel = context.WithCancel(ctx)
+}
+
+func (br *baseRunner) initCtx() {
+	br.initCtxOnce.Do(func() {
+		if br.ctx == nil {
+			br.ctx = context.Background()
+		}
+		br.ctx, br.cancel = context.WithCancel(br.ctx)
+
+		for _, c := range br.Children() {
+			c.SetCtx(br.ctx)
+			c.initCtx()
+		}
+	})
 }
 
 func (br *baseRunner) Ctx() context.Context {

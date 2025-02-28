@@ -512,11 +512,11 @@ func (b *baseRW) initHash() {
 }
 
 func (b *baseRW) getBuf() *bytespool.Bytes {
-	return bytespool.GetBytesN(b.bufSize)
+	return bytespool.GetN(b.bufSize)
 }
 
 func (b *baseRW) getBufN(n int) *bytespool.Bytes {
-	return bytespool.GetBytesN(n)
+	return bytespool.GetN(n)
 }
 
 func (b *baseRW) read(p []byte) (nr int, err error) {
@@ -744,7 +744,7 @@ func (b *baseRW) asyncRead() {
 		default:
 		}
 
-		bs := bytespool.GetBytesN(b.bufSize)
+		bs := bytespool.GetN(b.bufSize)
 		nr, err := b.read(bs.B())
 		b.Debug("async read", "nr", nr, "err", err)
 		bs.Shrink(nr)

@@ -16,7 +16,7 @@ func ReadLines(r io.Reader, lines int, bufSize int) ([]string, error) {
 	if bufSize == 0 {
 		bufSize = defaultBufSize
 	}
-	bs := bytespool.GetBytesN(bufSize)
+	bs := bytespool.GetN(bufSize)
 	defer bs.Free()
 	scanner := bufio.NewScanner(r)
 	scanner.Buffer(bs.B(), bufSize)

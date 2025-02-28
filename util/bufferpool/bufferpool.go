@@ -18,7 +18,7 @@ type Buffer struct {
 	p *sync.Pool
 }
 
-func GetBuffer() *Buffer {
+func Get() *Buffer {
 	b, _ := _bufferPool.Get().(*Buffer)
 	b.p = _bufferPool
 	b.Reset()

@@ -1,6 +1,9 @@
-package pipeline
+package rw
 
 import (
+	"github.com/donkeywon/golib/errs"
+	"github.com/donkeywon/golib/log"
+	"github.com/donkeywon/golib/util/httpc"
 	"io"
 	"os"
 	"testing"
@@ -47,14 +50,13 @@ func (m *mockReader) Close() error {
 }
 
 func TestSimpleRead(t *testing.T) {
-	rw := NewNopRW()
-	err := rw.NestReader(&mockReader{limit: 15})
-	require.NoError(t, err)
+	rw := NewNop()
+	rw.NestReader(&mockReader{limit: 15})
 
 	rw.AsReader()
 	rw.EnableReadBuf(100, false, 10)
 
-	err = runner.Init(rw)
+	err := runner.Init(rw)
 	require.NoError(t, err)
 
 	bs := make([]byte, 10)
@@ -69,17 +71,31 @@ func TestSimpleRead(t *testing.T) {
 }
 
 func TestAsyncRead(t *testing.T) {
-	rw := NewNopRW()
-	err := rw.NestReader(&mockReader{limit: 15})
-	require.NoError(t, err)
+	rw := NewNop()
+	rw.NestReader(&mockReader{limit: 15})
 
 	rw.AsReader()
 	rw.EnableReadBuf(6, true, 5)
 	tests.DebugInit(rw)
 
-	err = runner.Init(rw)
+	err := runner.Init(rw)
 	require.NoError(t, err)
 
 	time.Sleep(time.Second)
 	require.Equal(t, 3, rw.AsyncChanLen())
+}
+
+func do() error {
+	_, err := httpc.Get(nil, time.Second, "http://127.0.0.1:5678")
+	if err != nil {
+		return errs.Wrap(err, "fetch meta fail")
+	}
+	return nil
+}
+
+func TestMeta(t *testing.T) {
+	err := do()
+	if err != nil {
+		log.Default().Error("fail", err)
+	}
 }

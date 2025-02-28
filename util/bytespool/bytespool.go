@@ -15,14 +15,14 @@ var (
 	}}
 )
 
-func GetBytes() *Bytes {
+func Get() *Bytes {
 	b, _ := _bytesPool.Get().(*Bytes)
 	b.p = _bytesPool
 	return b
 }
 
-func GetBytesN(n int) *Bytes {
-	b := GetBytes()
+func GetN(n int) *Bytes {
+	b := Get()
 	b.Grow(n)
 	return b
 }

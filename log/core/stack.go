@@ -25,7 +25,7 @@ func (c *errStackExtractCore) Write(ent zapcore.Entry, fields []zapcore.Field) e
 	if !hasErr(fields) {
 		return c.Core.Write(ent, fields)
 	}
-	buf := bufferpool.GetBuffer()
+	buf := bufferpool.Get()
 	defer buf.Free()
 	fields = extractFieldsStacksToBuff(buf, fields)
 

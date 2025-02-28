@@ -10,6 +10,7 @@ import (
 
 	"github.com/donkeywon/golib/errs"
 	"github.com/donkeywon/golib/log/core"
+	"github.com/donkeywon/golib/log/encoder"
 	"github.com/donkeywon/golib/log/sink"
 	"github.com/donkeywon/golib/util"
 	"github.com/donkeywon/golib/util/jsons"
@@ -23,11 +24,14 @@ import (
 func init() {
 	// lumberjack:///var/log/xxx.log?{"maxsize":100,"maxage":30,"maxbackups":30,"compress":true,"localtime":false}
 	_ = zap.RegisterSink("lumberjack", sink.NewLumberJackSinkFromURL)
+
+	_ = zap.RegisterEncoder("consolelite", encoder.NewConsoleLiteEncoder)
 }
 
 const (
-	JSONFormat    = "json"
-	ConsoleFormat = "console"
+	JSONFormat        = "json"
+	ConsoleFormat     = "console"
+	ConsoleLiteFormat = "consolelite"
 
 	LevelEncoderCapital      = "capital"
 	LevelEncoderCapitalColor = "capitalColor"
@@ -57,7 +61,7 @@ const (
 	DefaultDisableCaller     = false
 	DefaultDisableStacktrace = true // stack core will extract error stack, so zap's stack is useless
 
-	DefaultFormat                  = ConsoleFormat
+	DefaultFormat                  = ConsoleLiteFormat
 	DefaultEncoderMessageKey       = "msg"
 	DefaultEncoderLevelKey         = "lvl"
 	DefaultEncoderNameKey          = "logger"
