@@ -260,6 +260,7 @@ func buildOutputs(c *Cfg) ([]string, error) {
 func (z *zapLogger) WithLoggerName(n string) Logger {
 	return &zapLogger{
 		Logger: z.Logger.Named(n),
+		lvl:    z.lvl,
 	}
 }
 
