@@ -1,8 +1,7 @@
 package encoder
 
 import (
-	"bytes"
-
+	"github.com/donkeywon/golib/util/bufferpool"
 	"go.uber.org/zap/buffer"
 	"go.uber.org/zap/zapcore"
 )
@@ -35,24 +34,25 @@ func (c consoleLiteEncoder) Clone() zapcore.Encoder {
 }
 
 func (c consoleLiteEncoder) EncodeEntry(ent zapcore.Entry, fields []zapcore.Field) (*buffer.Buffer, error) {
-	lite := bytes.NewBuffer(make([]byte, 0, 256))
-	lite.WriteByte(ent.Level.CapitalString()[0])
+	buf := bufferpool.Get()
+	buf.WriteByte(ent.Level.CapitalString()[0])
 	if !ent.Time.IsZero() {
-		t := ent.Time.AppendFormat(lite.AvailableBuffer(), liteTimeEncoderLayout)
-		lite.Write(t)
+		t := ent.Time.AppendFormat(buf.AvailableBuffer(), liteTimeEncoderLayout)
+		buf.Write(t)
 	}
-	lite.WriteString(c.cfg.ConsoleSeparator)
-	lite.WriteString(ent.LoggerName)
+	buf.WriteString(c.cfg.ConsoleSeparator)
+	buf.WriteString(ent.LoggerName)
 	if ent.Caller.Defined {
 		if ent.LoggerName != "" {
-			lite.WriteByte('(')
+			buf.WriteByte('(')
 		}
-		lite.WriteString(ent.Caller.TrimmedPath())
+		buf.WriteString(ent.Caller.TrimmedPath())
 		if ent.LoggerName != "" {
-			lite.WriteByte(')')
+			buf.WriteByte(')')
 		}
 	}
-	ent.LoggerName = lite.String()
+	ent.LoggerName = buf.String()
+	buf.Free()
 
 	return c.Encoder.EncodeEntry(ent, fields)
 }

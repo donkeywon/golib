@@ -23,11 +23,10 @@ type Metricsd struct {
 	reg *prometheus.Registry
 }
 
-var _m = New()
-
-func D() *Metricsd {
-	return _m
-}
+var (
+	_m           = New()
+	D  *Metricsd = _m
+)
 
 func New() *Metricsd {
 	return &Metricsd{
@@ -58,7 +57,7 @@ func (p *Metricsd) GetCfg() any {
 }
 
 func (p *Metricsd) registerHTTPHandler() {
-	httpd.D().Handle(p.Cfg.HTTPEndpointPath, promhttp.HandlerFor(p.reg, promhttp.HandlerOpts{Registry: p.reg}))
+	httpd.D.Handle(p.Cfg.HTTPEndpointPath, promhttp.HandlerFor(p.reg, promhttp.HandlerOpts{Registry: p.reg}))
 }
 
 func (p *Metricsd) SetGauge(name string, v float64) {

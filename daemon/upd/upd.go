@@ -1,10 +1,11 @@
 package upd
 
 import (
-	"github.com/donkeywon/golib/pipeline/rw"
 	"os"
 	"sync/atomic"
 	"time"
+
+	"github.com/donkeywon/golib/pipeline/rw"
 
 	"github.com/donkeywon/golib/boot"
 	"github.com/donkeywon/golib/buildinfo"
@@ -18,7 +19,10 @@ import (
 
 const DaemonTypeUpd boot.DaemonType = "upd"
 
-var _u = New()
+var (
+	_u      = New()
+	D  *Upd = _u
+)
 
 // Upd must be first daemon
 type Upd struct {
@@ -28,10 +32,6 @@ type Upd struct {
 	upgrading          atomic.Bool
 	upgradingBlockChan chan struct{}
 	allDoneExceptMe    chan struct{}
-}
-
-func D() *Upd {
-	return _u
 }
 
 func New() *Upd {
@@ -197,7 +197,7 @@ func downloadPackage(downloadDstPath string, storeCfg *rw.Cfg) error {
 
 	p := pipeline.New()
 	p.Cfg = cfg
-	p.Inherit(D())
+	p.Inherit(D)
 	err := runner.Init(p)
 	if err != nil {
 		return errs.Wrap(err, "init download pipeline failed")

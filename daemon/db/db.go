@@ -63,7 +63,7 @@ func (d *DB) Init() error {
 		d.dbs[dbCfg.Name] = db
 	}
 	if d.Cfg.EnableExportMetrics {
-		metricsd.D().MustRegister(d)
+		metricsd.D.MustRegister(d)
 	}
 	return d.Runner.Init()
 }

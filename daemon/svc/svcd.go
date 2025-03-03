@@ -19,16 +19,16 @@ type Namespace string
 type Module string
 type Name string
 
-var _s = &svcd{
-	Runner:      runner.Create("svc"),
-	svcCreators: make([]svcCreatorWithFQN, 0, 64),
-	svcMap:      make(map[string]any),
-	svcCfgMap:   make(map[string]any),
-}
+var (
+	_s = &svcd{
+		Runner:      runner.Create("svc"),
+		svcCreators: make([]svcCreatorWithFQN, 0, 64),
+		svcMap:      make(map[string]any),
+		svcCfgMap:   make(map[string]any),
+	}
 
-func D() boot.Daemon {
-	return _s
-}
+	D boot.Daemon = _s
+)
 
 type svcCreatorWithFQN struct {
 	fqn     string
