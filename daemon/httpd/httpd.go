@@ -28,7 +28,7 @@ const DaemonTypeHTTPd boot.DaemonType = "httpd"
 type MiddlewareFunc func(http.Handler) http.Handler
 
 var (
-	_h       = New()
+	_h       = New().(*httpd)
 	D  HTTPD = _h
 )
 
@@ -51,7 +51,7 @@ func newHTTPServer(cfg *Cfg) *http.Server {
 	}
 }
 
-func New() *httpd {
+func New() HTTPD {
 	return &httpd{
 		Runner: runner.Create(string(DaemonTypeHTTPd)),
 		mux:    http.NewServeMux(),
@@ -142,8 +142,7 @@ func (h *httpd) logAndRecoverMiddleware(next http.Handler) http.Handler {
 			if e != nil {
 				err := errs.PanicToErr(e)
 				h.Error("handle req failed, panic occurred", err, logFields(r, w.(*recordResponseWriter), start, end)...)
-				errStr := errs.ErrToStackString(err)
-				httpu.RespRaw(http.StatusInternalServerError, conv.String2Bytes(errStr), w)
+				httpu.RespRaw(w, http.StatusInternalServerError, conv.String2Bytes(err.Error()))
 			} else {
 				h.Debug("end handle req", logFields(r, w.(*recordResponseWriter), start, end)...)
 			}

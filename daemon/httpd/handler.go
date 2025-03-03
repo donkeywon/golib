@@ -27,10 +27,10 @@ func (rh RESTHandler[I, O]) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	defer func() {
 		p := recover()
 		if p != nil {
-			httpu.RespJSONFail(&Resp{
+			httpu.RespJSONFail(w, &Resp{
 				Code: RespCodeFail,
-				Msg:  errs.ErrToStackString(errs.PanicToErr(p)),
-			}, w)
+				Msg:  errs.PanicToErr(p).Error(),
+			})
 		}
 	}()
 
@@ -38,8 +38,7 @@ func (rh RESTHandler[I, O]) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	err := httpu.ReqTo(r, &i)
 	if err != nil {
 		w.Header().Set(httpu.HeaderContentType, r.Header.Get(httpu.HeaderContentType))
-		w.WriteHeader(http.StatusBadRequest)
-		httpu.RespTo(w, &Resp{
+		httpu.RespJSON(w, http.StatusBadRequest, &Resp{
 			Code: RespCodeFail,
 			Msg:  "parse request fail: " + err.Error(),
 		})
@@ -49,26 +48,24 @@ func (rh RESTHandler[I, O]) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	err = v.Struct(i)
 	if err != nil {
 		w.Header().Set(httpu.HeaderContentType, r.Header.Get(httpu.HeaderContentType))
-		w.WriteHeader(http.StatusBadRequest)
-		httpu.RespTo(w, &Resp{
+		httpu.RespJSON(w, http.StatusBadRequest, &Resp{
 			Code: RespCodeFail,
 			Msg:  "validate request fail: " + err.Error(),
 		})
 		return
 	}
 
-	// TODO
 	o, err := rh(r.Context(), i)
 	if err != nil {
-		httpu.RespJSONFail(Resp{
+		httpu.RespJSONFail(w, &Resp{
 			Code: RespCodeFail,
 			Msg:  err.Error(),
-		}, w)
+		})
 		return
 	}
 
-	httpu.RespJSONOk(Resp{
+	httpu.RespJSONOk(w, &Resp{
 		Code: RespCodeOk,
 		Data: o,
-	}, w)
+	})
 }

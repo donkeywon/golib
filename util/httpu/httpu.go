@@ -36,37 +36,42 @@ const (
 	MIMETOML              = "application/toml"
 )
 
+type Encoder interface {
+	Encode(v any) error
+}
+
+type NewEncoder func(w io.Writer) Encoder
+
 func RespOk(data any, w http.ResponseWriter, headersKV ...string) {
-	Resp(http.StatusOK, data, w, headersKV...)
+	Resp(w, http.StatusOK, data, headersKV...)
 }
 
 func RespFail(data any, w http.ResponseWriter, headersKV ...string) {
-	Resp(http.StatusInternalServerError, data, w, headersKV...)
+	Resp(w, http.StatusInternalServerError, data, headersKV...)
 }
 
-func Resp(statusCode int, data any, w http.ResponseWriter, headersKV ...string) {
+func Resp(w http.ResponseWriter, statusCode int, data any, headersKV ...string) {
 	if data == nil {
-		RespRaw(statusCode, nil, w, headersKV...)
+		RespRaw(w, statusCode, nil, headersKV...)
 		return
 	}
 	s, err := conv.ToString(data)
 	if err != nil {
-		err = errs.Wrap(err, "convert response data to string failed")
-		RespRaw(http.StatusInternalServerError, conv.String2Bytes(errs.ErrToStackString(err)), w, headersKV...)
+		RespRaw(w, http.StatusInternalServerError, conv.String2Bytes("convert response data to string failed: "+err.Error()), headersKV...)
 		return
 	}
-	RespRaw(statusCode, conv.String2Bytes(s), w, headersKV...)
+	RespRaw(w, statusCode, conv.String2Bytes(s), headersKV...)
 }
 
 func RespRawOk(data []byte, w http.ResponseWriter, headersKV ...string) {
-	RespRaw(http.StatusOK, data, w, headersKV...)
+	RespRaw(w, http.StatusOK, data, headersKV...)
 }
 
 func RespRawFail(data []byte, w http.ResponseWriter, headersKV ...string) {
-	RespRaw(http.StatusInternalServerError, data, w, headersKV...)
+	RespRaw(w, http.StatusInternalServerError, data, headersKV...)
 }
 
-func RespRaw(statusCode int, data []byte, w http.ResponseWriter, headersKV ...string) {
+func RespRaw(w http.ResponseWriter, statusCode int, data []byte, headersKV ...string) {
 	setHeaders(w, headersKV...)
 	w.WriteHeader(statusCode)
 	_, err := w.Write(data)
@@ -75,71 +80,48 @@ func RespRaw(statusCode int, data []byte, w http.ResponseWriter, headersKV ...st
 	}
 }
 
-func RespHTMLOk(data []byte, w http.ResponseWriter, headersKV ...string) {
-	RespHTML(http.StatusOK, data, w, headersKV...)
+func RespReaderOk(w http.ResponseWriter, r io.Reader, headersKV ...string) {
+	RespReader(w, http.StatusOK, r, headersKV...)
 }
 
-func RespHTMLFail(data []byte, w http.ResponseWriter, headersKV ...string) {
-	RespHTML(http.StatusInternalServerError, data, w, headersKV...)
+func RespReaderFail(w http.ResponseWriter, r io.Reader, headersKV ...string) {
+	RespReader(w, http.StatusInternalServerError, r, headersKV...)
 }
 
-func RespHTML(statusCode int, data []byte, w http.ResponseWriter, headersKV ...string) {
-	setContentTypeHeader(w, MIMEHTML)
-	RespRaw(statusCode, data, w, headersKV...)
+func RespReader(w http.ResponseWriter, statusCode int, r io.Reader, headersKV ...string) {
+	setHeaders(w, headersKV...)
+	w.WriteHeader(statusCode)
+	_, err := io.Copy(w, r)
+	if err != nil {
+		panic(err)
+	}
 }
 
-func RespJSONOk(data any, w http.ResponseWriter, headersKV ...string) {
-	RespJSON(http.StatusOK, data, w, headersKV...)
+func RespJSONOk(w http.ResponseWriter, data any, headersKV ...string) {
+	RespJSON(w, http.StatusOK, data, headersKV...)
 }
 
-func RespJSONFail(data any, w http.ResponseWriter, headersKV ...string) {
-	RespJSON(http.StatusInternalServerError, data, w, headersKV...)
+func RespJSONFail(w http.ResponseWriter, data any, headersKV ...string) {
+	RespJSON(w, http.StatusInternalServerError, data, headersKV...)
 }
 
-func RespJSON(statusCode int, data any, w http.ResponseWriter, headersKV ...string) {
-	setContentTypeHeader(w, MIMEJSON)
+func RespJSON(w http.ResponseWriter, statusCode int, data any, headersKV ...string) {
+	RespEncoder(w, statusCode, data, MIMEJSON, func(w io.Writer) Encoder { return jsons.NewEncoder(w) }, headersKV...)
+}
+
+func RespEncoder(w http.ResponseWriter, statusCode int, data any, mime string, newEncoder NewEncoder, headersKV ...string) {
+	setContentTypeHeader(w, mime)
 	if data == nil {
-		RespRaw(statusCode, nil, w, headersKV...)
+		RespRaw(w, statusCode, nil, headersKV...)
 		return
 	}
 
-	bs, err := jsons.Marshal(data)
+	setHeaders(w, headersKV...)
+	w.WriteHeader(statusCode)
+	enc := newEncoder(w)
+	err := enc.Encode(data)
 	if err != nil {
-		panic(errs.Wrap(err, "data marshal to json failed"))
-	}
-	RespRaw(statusCode, bs, w, headersKV...)
-}
-
-func RespTo(w http.ResponseWriter, obj any) error {
-	contentType := w.Header().Get(HeaderContentType)
-	switch contentType {
-	case MIMEJSON, MIMEJSONUTF8:
-		return jsons.NewEncoder(w).Encode(obj)
-	case MIMEXML, MIMEXML2:
-		return xml.NewEncoder(w).Encode(obj)
-	case MIMEYAML, MIMEYAML2:
-		return yaml.NewEncoder(w).Encode(obj)
-	case MIMETOML:
-		return toml.NewEncoder(w).Encode(obj)
-	case MIMEPROTOBUF:
-		msg, ok := obj.(proto.Message)
-		if !ok {
-			return errors.New("obj is not proto.Message")
-		}
-		bs, err := proto.Marshal(msg)
-		if err != nil {
-			return err
-		}
-
-		_, err = w.Write(bs)
-		return err
-	default:
-		s, err := conv.ToString(obj)
-		if err != nil {
-			return err
-		}
-		_, err = w.Write(conv.String2Bytes(s))
-		return err
+		panic(errs.Wrap(err, "encode http response data fail"))
 	}
 }
 
