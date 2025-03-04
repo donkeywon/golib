@@ -5,12 +5,11 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/donkeywon/golib/pipeline/rw"
-
 	"github.com/donkeywon/golib/boot"
 	"github.com/donkeywon/golib/buildinfo"
 	"github.com/donkeywon/golib/errs"
 	"github.com/donkeywon/golib/pipeline"
+	"github.com/donkeywon/golib/pipeline/rw"
 	"github.com/donkeywon/golib/runner"
 	"github.com/donkeywon/golib/util/cmd"
 	"github.com/donkeywon/golib/util/paths"
@@ -169,7 +168,7 @@ func (u *Upd) upgrade(vi *VerInfo) bool {
 	u.Info("deploy new package done")
 
 	u.Info("start new version")
-	cmdResult, err = cmd.RunCtx(u.Ctx(), startCmd...)
+	cmdResult, err = cmd.Run(startCmd...)
 	if err != nil {
 		u.Error("start new version failed", err, "cmd_result", cmdResult)
 		os.Exit(1)
