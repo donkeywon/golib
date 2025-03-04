@@ -20,8 +20,10 @@ import (
 	"github.com/donkeywon/golib/ratelimit"
 	"github.com/donkeywon/golib/runner"
 	"github.com/donkeywon/golib/util/bytespool"
-	"github.com/donkeywon/golib/util/conv"
+	"github.com/donkeywon/golib/util/jsons"
 	"github.com/donkeywon/golib/util/reflects"
+	"github.com/donkeywon/golib/util/yamls"
+	"github.com/tidwall/gjson"
 	"github.com/zeebo/xxh3"
 )
 
@@ -46,6 +48,45 @@ type Cfg struct {
 	Role     Role      `json:"role"      validate:"required" yaml:"role"`
 }
 
+type cfgWithoutType struct {
+	Cfg      any       `json:"cfg"      yaml:"cfg"`
+	ExtraCfg *ExtraCfg `json:"extraCfg" yaml:"extraCfg"`
+	Role     Role      `json:"role"     yaml:"role"`
+}
+
+func (c *Cfg) UnmarshalJSON(data []byte) error {
+	return c.customUnmarshal(data, jsons.Unmarshal)
+}
+
+func (c *Cfg) UnmarshalYAML(data []byte) error {
+	return c.customUnmarshal(data, yamls.Unmarshal)
+}
+
+func (c *Cfg) customUnmarshal(data []byte, unmarshaler func([]byte, any) error) error {
+	typ := gjson.GetBytes(data, "type")
+	if !typ.Exists() {
+		return errs.Errorf("rw type is not present")
+	}
+	if typ.Type != gjson.String {
+		return errs.Errorf("invalid rw type")
+	}
+	c.Type = Type(typ.Str)
+
+	cv := cfgWithoutType{}
+	cv.Cfg = plugin.CreateCfg(c.Type)
+	if cv.Cfg == nil {
+		return errs.Errorf("created rw cfg is nil: %s", c.Type)
+	}
+	err := unmarshaler(data, &cv)
+	if err != nil {
+		return err
+	}
+	c.Cfg = cv.Cfg
+	c.ExtraCfg = cv.ExtraCfg
+	c.Role = cv.Role
+	return nil
+}
+
 type ExtraCfg struct {
 	RateLimiterCfg     *ratelimit.RateLimiterCfg `json:"rateLimiterCfg"     yaml:"rateLimiterCfg"`
 	BufSize            int                       `json:"bufSize"            yaml:"bufSize"`
@@ -62,20 +103,14 @@ type ExtraCfg struct {
 type Type string
 type Role string
 
-func CreateRW(rwCfg *Cfg) (RW, error) {
-	cfg := plugin.CreateCfg(rwCfg.Type)
-	err := conv.ConvertOrMerge(cfg, rwCfg.Cfg)
-	if err != nil {
-		return nil, errs.Wrapf(err, "invalid rw(%s) cfg", rwCfg.Type)
-	}
-
-	rw := plugin.CreateWithCfg(rwCfg.Type, cfg).(RW)
+func CreateRW(rwCfg *Cfg) RW {
+	rw := plugin.CreateWithCfg(rwCfg.Type, rwCfg.Cfg).(RW)
 	if rwCfg.ExtraCfg == nil {
 		rwCfg.ExtraCfg = &ExtraCfg{}
 	}
 	rw.As(rwCfg.Role)
 	ApplyCommonCfgToRW(rw, rwCfg.ExtraCfg)
-	return rw, nil
+	return rw
 }
 
 type onceError struct {

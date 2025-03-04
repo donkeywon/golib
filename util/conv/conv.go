@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/donkeywon/golib/util/jsons"
-	"github.com/jinzhu/copier"
 )
 
 func ToString(v any) (string, error) {
@@ -221,24 +220,4 @@ func ToFloat(v any) (float64, error) {
 		err = fmt.Errorf("unexpected value type, expected: string or any float type, actual: %s", reflect.TypeOf(v))
 	}
 	return vv, err
-}
-
-func MapTo(dst any, m map[string]any) error {
-	bs, err := jsons.Marshal(m)
-	if err != nil {
-		return err
-	}
-	return jsons.Unmarshal(bs, dst)
-}
-
-func ConvertOrMerge(dst any, src any) error {
-	var err error
-	if cm, ok := src.(map[string]any); ok {
-		err = MapTo(dst, cm)
-	} else if reflect.TypeOf(src) == reflect.TypeOf(dst) {
-		err = copier.CopyWithOption(dst, src, copier.Option{IgnoreEmpty: true, DeepCopy: true})
-	} else {
-		err = fmt.Errorf("cannot convert or merge from src(%s) to dst(%s)", reflect.TypeOf(src), reflect.TypeOf(dst))
-	}
-	return err
 }

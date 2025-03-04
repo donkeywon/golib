@@ -9,7 +9,7 @@ import (
 	"github.com/donkeywon/golib/errs"
 	"github.com/donkeywon/golib/util/conv"
 	"github.com/donkeywon/golib/util/jsons"
-	"github.com/goccy/go-yaml"
+	"github.com/donkeywon/golib/util/yamls"
 	"github.com/pelletier/go-toml/v2"
 	"google.golang.org/protobuf/proto"
 )
@@ -147,7 +147,7 @@ func ReqToXML(r *http.Request, obj any) error {
 }
 
 func ReqToYAML(r *http.Request, obj any) error {
-	return yaml.NewDecoder(r.Body).Decode(obj)
+	return yamls.NewDecoder(r.Body).Decode(obj)
 }
 
 func ReqToTOML(r *http.Request, obj any) error {

@@ -4,24 +4,25 @@ import (
 	"testing"
 
 	"github.com/donkeywon/golib/runner"
+	"github.com/donkeywon/golib/task/step"
 	"github.com/donkeywon/golib/util/cmd"
 	"github.com/donkeywon/golib/util/tests"
 	"github.com/stretchr/testify/require"
 )
 
 func TestTask(t *testing.T) {
-	cfg := NewCfg().Add(StepTypeCmd, &cmd.Cfg{
+	cfg := NewCfg().Add(step.TypeCmd, &cmd.Cfg{
 		Command: []string{"echo", "1"},
-	}).Add(StepTypeCmd, &cmd.Cfg{
+	}).Add(step.TypeCmd, &cmd.Cfg{
 		Command: []string{"echo", "2"},
-	}).Defer(StepTypeCmd, &cmd.Cfg{
+	}).Defer(step.TypeCmd, &cmd.Cfg{
 		Command: []string{"echo", "3"},
-	}).Defer(StepTypeCmd, &cmd.Cfg{
+	}).Defer(step.TypeCmd, &cmd.Cfg{
 		Command: []string{"echo", "4"},
-	}).SetID("test-task")
+	}).SetID("test-task").SetType(Type("test"))
 
 	cfg.CurStepIdx = 0
-	cfg.CurDeferStepIdx = 3
+	cfg.CurDeferStepIdx = 0
 
 	task := New()
 	task.Cfg = cfg

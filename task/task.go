@@ -8,7 +8,7 @@ import (
 	"github.com/donkeywon/golib/errs"
 	"github.com/donkeywon/golib/plugin"
 	"github.com/donkeywon/golib/runner"
-	"github.com/donkeywon/golib/util/conv"
+	"github.com/donkeywon/golib/task/step"
 	"github.com/donkeywon/golib/util/reflects"
 	"github.com/donkeywon/golib/util/v"
 )
@@ -23,7 +23,7 @@ type Type string
 
 type Collector func(*Task) any
 
-type StepHook func(*Task, int, Step)
+type StepHook func(*Task, int, step.Step)
 
 type Hook func(*Task, error, *HookExtraData)
 
@@ -32,18 +32,13 @@ type HookExtraData struct {
 	SubmitWait bool
 }
 
-type StepCfg struct {
-	Type StepType `json:"type" validate:"required" yaml:"type"`
-	Cfg  any      `json:"cfg"  validate:"required" yaml:"cfg"`
-}
-
 type Cfg struct {
-	ID              string     `json:"id"              validate:"required" yaml:"id"`
-	Type            Type       `json:"type"            validate:"required" yaml:"type"`
-	Steps           []*StepCfg `json:"steps"           validate:"required" yaml:"steps"`
-	DeferSteps      []*StepCfg `json:"deferSteps"      yaml:"deferSteps"`
-	CurStepIdx      int        `json:"curStepIdx"      yaml:"curStepIdx"`
-	CurDeferStepIdx int        `json:"curDeferStepIdx" yaml:"curDeferStepIdx"`
+	ID              string      `json:"id"              validate:"required" yaml:"id"`
+	Type            Type        `json:"type"            validate:"required" yaml:"type"`
+	Steps           []*step.Cfg `json:"steps"           validate:"required" yaml:"steps"`
+	DeferSteps      []*step.Cfg `json:"deferSteps"      yaml:"deferSteps"`
+	CurStepIdx      int         `json:"curStepIdx"      yaml:"curStepIdx"`
+	CurDeferStepIdx int         `json:"curDeferStepIdx" yaml:"curDeferStepIdx"`
 }
 
 func NewCfg() *Cfg {
@@ -60,13 +55,13 @@ func (c *Cfg) SetType(t Type) *Cfg {
 	return c
 }
 
-func (c *Cfg) Add(typ StepType, cfg any) *Cfg {
-	c.Steps = append(c.Steps, &StepCfg{Type: typ, Cfg: cfg})
+func (c *Cfg) Add(typ step.Type, cfg any) *Cfg {
+	c.Steps = append(c.Steps, &step.Cfg{Type: typ, Cfg: cfg})
 	return c
 }
 
-func (c *Cfg) Defer(typ StepType, cfg any) *Cfg {
-	c.DeferSteps = append(c.DeferSteps, &StepCfg{Type: typ, Cfg: cfg})
+func (c *Cfg) Defer(typ step.Type, cfg any) *Cfg {
+	c.DeferSteps = append(c.DeferSteps, &step.Cfg{Type: typ, Cfg: cfg})
 	return c
 }
 
@@ -84,8 +79,8 @@ type Task struct {
 	stepDoneHooks      []StepHook
 	deferStepDoneHooks []StepHook
 
-	steps      []Step
-	deferSteps []Step
+	steps      []step.Step
+	deferSteps []step.Step
 
 	collector Collector
 }
@@ -104,18 +99,12 @@ func (t *Task) Init() error {
 	}
 
 	for i, cfg := range t.Cfg.Steps {
-		step, er := t.createStep(i, cfg, false)
-		if er != nil {
-			return errs.Wrapf(er, "create step(%d) %s failed", i, cfg.Type)
-		}
+		step := t.createStep(i, cfg, false)
 		t.steps = append(t.steps, step)
 	}
 
 	for i, cfg := range t.Cfg.DeferSteps {
-		step, er := t.createStep(i, cfg, true)
-		if er != nil {
-			return errs.Wrapf(er, "create defer step(%d) %s failed", i, cfg.Type)
-		}
+		step := t.createStep(i, cfg, true)
 		t.deferSteps = append(t.deferSteps, step)
 	}
 
@@ -184,19 +173,19 @@ func (t *Task) result() *Result {
 	return r
 }
 
-func (t *Task) Steps() []Step {
+func (t *Task) Steps() []step.Step {
 	return t.steps
 }
 
-func (t *Task) CurStep() Step {
+func (t *Task) CurStep() step.Step {
 	return t.Steps()[t.CurStepIdx]
 }
 
-func (t *Task) DeferSteps() []Step {
+func (t *Task) DeferSteps() []step.Step {
 	return t.deferSteps
 }
 
-func (t *Task) CurDeferStep() Step {
+func (t *Task) CurDeferStep() step.Step {
 	return t.DeferSteps()[t.CurDeferStepIdx]
 }
 
@@ -212,9 +201,8 @@ func (t *Task) GetCfg() any {
 	return t.Cfg
 }
 
-func (t *Task) createStep(idx int, cfg *StepCfg, isDefer bool) (Step, error) {
+func (t *Task) createStep(idx int, stepCfg *step.Cfg, isDefer bool) step.Step {
 	var (
-		err         error
 		stepOrDefer string
 	)
 	if isDefer {
@@ -222,17 +210,12 @@ func (t *Task) createStep(idx int, cfg *StepCfg, isDefer bool) (Step, error) {
 	} else {
 		stepOrDefer = "step"
 	}
-	stepCfg := plugin.CreateCfg(cfg.Type)
-	err = conv.ConvertOrMerge(stepCfg, cfg.Cfg)
-	if err != nil {
-		return nil, errs.Wrapf(err, "invalid %s(%s) cfg", stepOrDefer, cfg.Type)
-	}
 
-	step := plugin.CreateWithCfg(cfg.Type, stepCfg).(Step)
-	step.SetTask(t)
+	step := plugin.CreateWithCfg(stepCfg.Type, stepCfg.Cfg).(step.Step)
 	step.Inherit(t)
+	step.SetParent(t)
 	step.WithLoggerFields(stepOrDefer, idx, stepOrDefer+"_type", step.Type())
-	return step, nil
+	return step
 }
 
 func (t *Task) recoverStepPanic() {

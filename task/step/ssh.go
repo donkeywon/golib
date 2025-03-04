@@ -1,4 +1,4 @@
-package task
+package step
 
 import (
 	"errors"
@@ -16,10 +16,10 @@ import (
 )
 
 func init() {
-	plugin.RegWithCfg(StepTypeSSH, func() any { return NewSSHStep() }, func() any { return NewSSHStepCfg() })
+	plugin.RegWithCfg(TypeSSH, func() any { return NewSSHStep() }, func() any { return NewSSHStepCfg() })
 }
 
-const StepTypeSSH StepType = "ssh"
+const TypeSSH Type = "ssh"
 
 type SSHStepCfg struct {
 	Addr       string `json:"addr"       yaml:"addr" validate:"required"`
@@ -46,7 +46,7 @@ type SSHStep struct {
 
 func NewSSHStep() *SSHStep {
 	return &SSHStep{
-		Step: CreateBaseStep(string(StepTypeSSH)),
+		Step: CreateBase(string(TypeSSH)),
 	}
 }
 
@@ -105,7 +105,7 @@ func (s *SSHStep) Stop() error {
 }
 
 func (s *SSHStep) Type() any {
-	return StepTypeSSH
+	return TypeSSH
 }
 
 func (s *SSHStep) GetCfg() any {

@@ -120,7 +120,7 @@ func (h *httpd) HandleFunc(pattern string, handler http.HandlerFunc) {
 	h.mux.HandleFunc(pattern, h.buildHandlerChain(handler).ServeHTTP)
 }
 
-func HandleREST[P any, R any](pattern string, handler RESTHandler[P, R]) {
+func HandleREST[I any, O any](pattern string, handler RESTHandler[I, O]) {
 	D.Handle(pattern, handler)
 }
 

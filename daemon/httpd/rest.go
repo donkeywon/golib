@@ -28,12 +28,11 @@ func RestRecoverMiddleware(next http.Handler) http.Handler {
 				return
 			}
 
-			err := errs.PanicToErr(e)
 			resp := &Resp{
 				Code: RespCodeFail,
-				Msg:  errs.ErrToStackString(err),
+				Msg:  errs.PanicToErr(e).Error(),
 			}
-			httpu.RespJSONFail(resp, w)
+			httpu.RespJSONFail(w, resp)
 		}()
 
 		next.ServeHTTP(w, r)
