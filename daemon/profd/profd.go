@@ -20,16 +20,16 @@ import (
 const DaemonTypeProfd boot.DaemonType = "profd"
 
 var (
-	_p        = New()
-	D  *Profd = _p
+	_p = New()
+	D  = _p
 )
 
 type Profd struct {
 	runner.Runner
 	*Cfg
 
-	panicparseMu       sync.Mutex
-	panicparseLastTime time.Time
+	prettystackMu       sync.Mutex
+	prettystackLastTime time.Time
 }
 
 func New() *Profd {
@@ -88,7 +88,7 @@ func (p *Profd) Init() error {
 		httpd.D.HandleFunc("/debug/pprof/profile", pprof.Profile)
 		httpd.D.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
 		httpd.D.HandleFunc("/debug/pprof/trace", pprof.Trace)
-		httpd.D.HandleFunc("/debug/panicparse", p.panicparse)
+		httpd.D.HandleFunc("/debug/prettytrace", p.prettystack)
 	}
 
 	if p.Cfg.EnableGoPs {
@@ -152,16 +152,16 @@ func (p *Profd) stopProf(w http.ResponseWriter, r *http.Request) []byte {
 	return []byte("stopped")
 }
 
-func (p *Profd) panicparse(w http.ResponseWriter, req *http.Request) {
-	p.panicparseMu.Lock()
-	defer p.panicparseMu.Unlock()
+func (p *Profd) prettystack(w http.ResponseWriter, req *http.Request) {
+	p.prettystackMu.Lock()
+	defer p.prettystackMu.Unlock()
 
 	// Throttle requests.
-	if time.Since(p.panicparseLastTime) < time.Second {
+	if time.Since(p.prettystackLastTime) < time.Second {
 		http.Error(w, "too many requests", http.StatusTooManyRequests)
 		return
 	}
 
 	webstack.SnapshotHandler(w, req)
-	p.panicparseLastTime = time.Now()
+	p.prettystackLastTime = time.Now()
 }
