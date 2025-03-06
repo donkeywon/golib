@@ -15,25 +15,25 @@ var commonTimeout = 10 * time.Second
 
 func Which(url string) Type {
 	if IsAzblob(url) {
-		return OssTypeBlob
+		return TypeBlob
 	}
 	if IsObs(url) {
-		return OssTypeObs
+		return TypeObs
 	}
 	if IsAmzS3(url) {
-		return OssTypeAmz
+		return TypeAmz
 	}
 	if IsAliOss(url) {
-		return OssTypeAliOss
+		return TypeAliOSS
 	}
-	return OssTypeUnknown
+	return TypeUnknown
 }
 
 func IsSupportAppend(url string) bool {
 	switch Which(url) {
-	case OssTypeBlob, OssTypeObs, OssTypeAliOss:
+	case TypeBlob, TypeObs, TypeAliOSS:
 		return true
-	case OssTypeAmz, OssTypeUnknown:
+	case TypeAmz, TypeUnknown:
 		return false
 	default:
 		return false
