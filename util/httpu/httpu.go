@@ -169,19 +169,24 @@ func ReqToPB(r *http.Request, obj any) error {
 }
 
 func ReqTo(r *http.Request, obj any) error {
+	var err error
 	contentType := r.Header.Get(HeaderContentType)
 	switch contentType {
 	case MIMEJSON, MIMEJSONUTF8:
-		return ReqToJSON(r, obj)
+		err = ReqToJSON(r, obj)
 	case MIMEXML, MIMEXML2:
-		return ReqToXML(r, obj)
+		err = ReqToXML(r, obj)
 	case MIMEYAML, MIMEYAML2:
-		return ReqToYAML(r, obj)
+		err = ReqToYAML(r, obj)
 	case MIMETOML:
-		return ReqToTOML(r, obj)
+		err = ReqToTOML(r, obj)
 	case MIMEPROTOBUF:
-		return ReqToPB(r, obj)
+		err = ReqToPB(r, obj)
 	default:
-		return ReqToJSON(r, obj)
+		err = ReqToJSON(r, obj)
 	}
+	if errors.Is(err, io.EOF) {
+		return nil
+	}
+	return err
 }

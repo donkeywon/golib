@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"net/http/pprof"
 	"strconv"
+	"sync"
+	"time"
 
 	"github.com/arl/statsviz"
 	"github.com/donkeywon/golib/boot"
@@ -12,6 +14,7 @@ import (
 	"github.com/donkeywon/golib/runner"
 	"github.com/donkeywon/golib/util/prof"
 	"github.com/google/gops/agent"
+	"github.com/maruel/panicparse/v2/stack/webstack"
 )
 
 const DaemonTypeProfd boot.DaemonType = "profd"
@@ -24,6 +27,9 @@ var (
 type Profd struct {
 	runner.Runner
 	*Cfg
+
+	panicparseMu       sync.Mutex
+	panicparseLastTime time.Time
 }
 
 func New() *Profd {
@@ -82,6 +88,7 @@ func (p *Profd) Init() error {
 		httpd.D.HandleFunc("/debug/pprof/profile", pprof.Profile)
 		httpd.D.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
 		httpd.D.HandleFunc("/debug/pprof/trace", pprof.Trace)
+		httpd.D.HandleFunc("/debug/panicparse", p.panicparse)
 	}
 
 	if p.Cfg.EnableGoPs {
@@ -143,4 +150,18 @@ func (p *Profd) stopProf(w http.ResponseWriter, r *http.Request) []byte {
 		return []byte(err.Error())
 	}
 	return []byte("stopped")
+}
+
+func (p *Profd) panicparse(w http.ResponseWriter, req *http.Request) {
+	p.panicparseMu.Lock()
+	defer p.panicparseMu.Unlock()
+
+	// Throttle requests.
+	if time.Since(p.panicparseLastTime) < time.Second {
+		http.Error(w, "too many requests", http.StatusTooManyRequests)
+		return
+	}
+
+	webstack.SnapshotHandler(w, req)
+	p.panicparseLastTime = time.Now()
 }

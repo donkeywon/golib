@@ -26,10 +26,10 @@ func Load() {
 		return conv.Bytes2String(bs), nil
 	}
 	jsons.MarshalIndent = json.MarshalIndent
-	jsons.NewEncoder = func(w io.Writer) jsons.JsonEncoder {
+	jsons.NewEncoder = func(w io.Writer) jsons.JSONEncoder {
 		return json.NewEncoder(w)
 	}
-	jsons.NewDecoder = func(r io.Reader) jsons.JsonDecoder {
+	jsons.NewDecoder = func(r io.Reader) jsons.JSONDecoder {
 		return json.NewDecoder(r)
 	}
 }

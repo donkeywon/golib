@@ -19,10 +19,10 @@ func Load() {
 	jsons.UnmarshalString = sonic.UnmarshalString
 	jsons.MarshalString = sonic.MarshalString
 	jsons.MarshalIndent = sonic.MarshalIndent
-	jsons.NewEncoder = func(w io.Writer) jsons.JsonEncoder {
+	jsons.NewEncoder = func(w io.Writer) jsons.JSONEncoder {
 		return encoder.NewStreamEncoder(w)
 	}
-	jsons.NewDecoder = func(r io.Reader) jsons.JsonDecoder {
+	jsons.NewDecoder = func(r io.Reader) jsons.JSONDecoder {
 		return decoder.NewStreamDecoder(r)
 	}
 }
