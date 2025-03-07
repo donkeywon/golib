@@ -14,13 +14,14 @@ import (
 )
 
 type HTTPD interface {
+	runner.Runner
 	Handle(pattern string, handler http.Handler)
 	HandleFunc(pattern string, handler http.HandlerFunc)
 	RegMiddleware(mid ...MiddlewareFunc)
 }
 
 func init() {
-	_h.RegMiddleware(_h.logAndRecoverMiddleware)
+	D.RegMiddleware(logAndRecoverMiddleware)
 }
 
 const DaemonTypeHTTPd boot.DaemonType = "httpd"
@@ -28,8 +29,7 @@ const DaemonTypeHTTPd boot.DaemonType = "httpd"
 type MiddlewareFunc func(http.Handler) http.Handler
 
 var (
-	_h       = New().(*httpd)
-	D  HTTPD = _h
+	D HTTPD = New()
 )
 
 type httpd struct {
@@ -124,11 +124,11 @@ func HandleREST[I any, O any](pattern string, handler RESTHandler[I, O]) {
 	D.Handle(pattern, handler)
 }
 
-func (h *httpd) logAndRecoverMiddleware(next http.Handler) http.Handler {
+func logAndRecoverMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w = newWriteOnceRecordResponseWriter(w)
 
-		h.Debug("begin handle req",
+		D.Debug("begin handle req",
 			"uri", r.RequestURI,
 			"remote", r.RemoteAddr,
 			"req_method", r.Method,
@@ -141,10 +141,10 @@ func (h *httpd) logAndRecoverMiddleware(next http.Handler) http.Handler {
 			e := recover()
 			if e != nil {
 				err := errs.PanicToErr(e)
-				h.Error("handle req failed, panic occurred", err, logFields(r, w.(*recordResponseWriter), start, end)...)
+				D.Error("handle req failed, panic occurred", err, logFields(r, w.(*recordResponseWriter), start, end)...)
 				httpu.RespRaw(w, http.StatusInternalServerError, conv.String2Bytes(err.Error()))
 			} else {
-				h.Debug("end handle req", logFields(r, w.(*recordResponseWriter), start, end)...)
+				D.Debug("end handle req", logFields(r, w.(*recordResponseWriter), start, end)...)
 			}
 		}()
 
