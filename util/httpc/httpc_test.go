@@ -2,8 +2,11 @@ package httpc
 
 import (
 	"bytes"
+	"context"
 	"fmt"
+	"io"
 	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -44,4 +47,59 @@ func TestPostJSON(t *testing.T) {
 
 	require.NoError(t, err)
 	fmt.Println(respBody.String())
+}
+
+var (
+	testAPIResp = []byte("abc")
+)
+
+func testAPI(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(200)
+	w.Write(testAPIResp)
+}
+
+func BenchmarkHttpc(b *testing.B) {
+	s := httptest.NewServer(http.HandlerFunc(testAPI))
+	defer s.Close()
+
+	body := []byte("abcdefqweasdzxc")
+	buf := bytes.NewBuffer(make([]byte, 64))
+	for range b.N {
+		buf.Reset()
+		Post(context.Background(), time.Second, s.URL, WithBody(body), WithHeaders("test", "value"), CheckStatusCode(200), ToWriter(buf))
+	}
+}
+
+func BenchmarkHttp(b *testing.B) {
+	s := httptest.NewServer(http.HandlerFunc(testAPI))
+	defer s.Close()
+
+	body := []byte("abcdefqweasdzxc")
+	buf := bytes.NewBuffer(make([]byte, 64))
+	for range b.N {
+		func() {
+			buf.Reset()
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+			defer cancel()
+
+			req, err := http.NewRequestWithContext(ctx, http.MethodPost, s.URL, bytes.NewReader(body))
+			if err != nil {
+				panic(err)
+			}
+			req.Header.Set("test", "value")
+
+			resp, err := http.DefaultClient.Do(req)
+			if err != nil {
+				panic(err)
+			}
+			if resp.StatusCode == 200 {
+
+			}
+			if resp != nil {
+				defer resp.Body.Close()
+			}
+
+			io.Copy(buf, resp.Body)
+		}()
+	}
 }

@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 
 	"github.com/donkeywon/golib/errs"
@@ -92,10 +93,8 @@ func CheckStatusCode(statusCode ...int) Option {
 		if len(statusCode) == 0 {
 			return nil
 		}
-		for _, code := range statusCode {
-			if resp.StatusCode == code {
-				return nil
-			}
+		if slices.Contains(statusCode, resp.StatusCode) {
+			return nil
 		}
 		return ErrRespStatusCodeNotExpected
 	})
