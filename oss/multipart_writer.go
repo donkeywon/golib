@@ -6,10 +6,11 @@ import (
 	"encoding/base64"
 	"encoding/xml"
 	"fmt"
-	"github.com/donkeywon/golib/util/httpu"
 	"net/http"
 	"sync"
 	"time"
+
+	"github.com/donkeywon/golib/util/httpu"
 
 	"github.com/avast/retry-go/v4"
 	"github.com/donkeywon/golib/errs"
@@ -125,7 +126,7 @@ func (w *MultiPartWriter) Abort() error {
 		return httpc.Delete(nil, time.Second*time.Duration(w.Timeout), w.URL+"?uploadId="+w.uploadID,
 			httpc.ReqOptionFunc(w.addAuth),
 			httpc.CheckStatusCode(http.StatusNoContent),
-			httpc.ToBytesBuffer(respBody))
+			httpc.ToBytesBuffer(nil, respBody))
 	}, retry.Attempts(uint(w.Retry)))
 
 	if err != nil {
@@ -162,7 +163,7 @@ func (w *MultiPartWriter) Complete() error {
 			httpc.ReqOptionFunc(w.addAuth),
 			httpc.WithBodyMarshal(body, contentType, xml.Marshal),
 			httpc.CheckStatusCode(checkStatus),
-			httpc.ToBytesBuffer(respBody),
+			httpc.ToBytesBuffer(nil, respBody),
 		)
 	}, retry.Attempts(uint(w.Retry)))
 
@@ -249,7 +250,7 @@ func (w *MultiPartWriter) upload(partNo int, uploadID string, body []byte) (stri
 		httpc.ReqOptionFunc(w.addAuth),
 		httpc.WithBody(body),
 		httpc.CheckStatusCode(checkStatus),
-		httpc.ToBytesBuffer(respBody),
+		httpc.ToBytesBuffer(nil, respBody),
 	)
 
 	if err != nil {

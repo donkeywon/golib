@@ -94,7 +94,7 @@ func Delete(ctx context.Context, timeout time.Duration, url string, ak string, s
 			return Sign(req, ak, sk, region)
 		}),
 		httpc.CheckStatusCode(checkStatus...),
-		httpc.ToBytesBuffer(respBody),
+		httpc.ToBytesBuffer(nil, respBody),
 	)
 
 	if err != nil {

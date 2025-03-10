@@ -173,14 +173,14 @@ func (w *AppendWriter) doAppend(body []byte) (*bytes.Buffer, *http.Response, err
 			httpc.WithHeaders(oss.HeaderAzblobAppendPositionHeader, strconv.Itoa(w.Pos)),
 			httpc.ReqOptionFunc(w.addAuth),
 			httpc.CheckStatusCode(http.StatusCreated),
-			httpc.ToBytesBuffer(respBody))
+			httpc.ToBytesBuffer(nil, respBody))
 	} else {
 		url := w.URL + appendURLSuffix + fmt.Sprintf("&position=%d", w.Pos)
 		resp, err = httpc.Put(w.ctx, time.Second*time.Duration(w.Timeout), url,
 			httpc.WithBody(body),
 			httpc.ReqOptionFunc(w.addAuth),
 			httpc.CheckStatusCode(http.StatusOK),
-			httpc.ToBytesBuffer(respBody))
+			httpc.ToBytesBuffer(nil, respBody))
 	}
 
 	if err == nil || errors.Is(err, context.Canceled) {

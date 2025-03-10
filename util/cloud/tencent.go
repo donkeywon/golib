@@ -45,7 +45,7 @@ func getTencentMetadata(url string) (*bytes.Buffer, error) {
 	resp := bytes.NewBuffer(nil)
 	_, err := httpc.Get(nil, cloudMetadataReqTimeout, url,
 		httpc.CheckStatusCode(http.StatusOK),
-		httpc.ToBytesBuffer(resp),
+		httpc.ToBytesBuffer(nil, resp),
 	)
 	return resp, err
 }
