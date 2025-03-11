@@ -30,6 +30,12 @@ func StartPos(pos int64) ReaderOption {
 	}
 }
 
+func PartSize(s int64) ReaderOption {
+	return func(r *Reader) {
+		r.partSize = s
+	}
+}
+
 func WithReqOptions(opts ...Option) ReaderOption {
 	return func(r *Reader) {
 		r.reqOptions = append(r.reqOptions, opts...)
@@ -42,6 +48,18 @@ func Retry(retry int) ReaderOption {
 	}
 }
 
+type noCloseRespBody struct {
+	respBody io.ReadCloser
+}
+
+func (b *noCloseRespBody) Read(p []byte) (int, error) {
+	return b.respBody.Read(p)
+}
+
+func (b *noCloseRespBody) Close() error {
+	return nil
+}
+
 type Reader struct {
 	url     string
 	timeout time.Duration
@@ -52,10 +70,12 @@ type Reader struct {
 	headOnce  sync.Once
 	closeOnce sync.Once
 
-	total        int64
-	supportRange bool // TODO
+	total           int64
+	supportRange    bool
+	noRangeRespBody io.ReadCloser
 
 	pos        int64
+	partSize   int64
 	reqOptions []Option
 	retry      int
 }
@@ -76,6 +96,10 @@ func NewReader(ctx context.Context, timeout time.Duration, url string, opts ...R
 		o.apply(r)
 	}
 
+	if r.retry <= 0 {
+		r.retry = 1
+	}
+
 	return r
 }
 
@@ -90,59 +114,104 @@ func (r *Reader) Read(p []byte) (int, error) {
 		return 0, nil
 	}
 
-	var headErr error
-	r.headOnce.Do(func() {
-		headErr = r.retryHead()
-	})
-	if headErr != nil {
-		return 0, headErr
+	err := r.doHeadOnce()
+	if err != nil {
+		return 0, err
 	}
 
-	var nr int
-	_, err := r.get(r.pos, int64(len(p)), ToBytes(&nr, p))
-	r.pos += int64(nr)
-	return nr, err
+	if r.supportRange {
+		var nr int
+		_, err := r.getPart(r.pos, int64(len(p)), ToBytes(&nr, p))
+		r.pos += int64(nr)
+		if err != nil {
+			return nr, err
+		}
+		if r.pos == r.total {
+			return nr, io.EOF
+		}
+		return nr, nil
+	}
+
+	if r.noRangeRespBody == nil {
+		r.noRangeRespBody, err = r.retryGetNoRange()
+		if err != nil {
+			return 0, err
+		}
+	}
+
+	return r.noRangeRespBody.Read(p)
 }
 
 func (r *Reader) Close() error {
+	var err error
 	r.closeOnce.Do(func() {
 		r.cancel()
+		if r.noRangeRespBody != nil {
+			err = r.noRangeRespBody.Close()
+		}
 	})
-	return nil
+	return err
 }
 
 func (r *Reader) WriteTo(w io.Writer) (int64, error) {
 	var (
 		total int64
-		nr    int64
+		nw    int64
 		err   error
 	)
-	for {
-		nr = 0
-		_, er := retry.DoWithData(
+
+	err = r.doHeadOnce()
+	if err != nil {
+		return 0, err
+	}
+
+	if !r.supportRange {
+		_, err := retry.DoWithData(
 			func() (*http.Response, error) {
-				return r.get(r.pos, 8*1024*1024, ToWriter(&nr, w))
+				return r.get(ToWriter(&nw, w))
 			},
 			retry.Attempts(uint(r.retry)),
 			retry.RetryIf(func(err error) bool {
-				return err != nil && !errors.Is(err, io.EOF) && nr == 0
-			}))
-		if nr > 0 {
-			r.pos += nr
-		}
+				return err != nil && nw == 0
+			}),
+		)
+		return nw, err
+	}
 
-		if er != nil {
-			if !errors.Is(er, io.EOF) {
-				err = er
-			}
+	for {
+		nw = 0
+		_, err = retry.DoWithData(
+			func() (*http.Response, error) {
+				partSize := r.partSize
+				if partSize == 0 {
+					partSize = 8 * 1024 * 1024
+				}
+				return r.getPart(r.pos, partSize, ToWriter(&nw, w))
+			},
+			retry.Attempts(uint(r.retry)),
+			retry.RetryIf(func(err error) bool {
+				return err != nil && nw == 0
+			}),
+		)
+		r.pos += nw
+		total += nw
+		if err != nil {
 			break
 		}
-
-		total += nr
-		r.pos += nr
+		if r.pos == r.total {
+			break
+		}
 	}
 
 	return total, err
+}
+
+func (r *Reader) doHeadOnce() error {
+	var headErr error
+	r.headOnce.Do(func() {
+		headErr = r.retryHead()
+	})
+	return headErr
 }
 
 func (r *Reader) retryHead() error {
@@ -152,31 +221,55 @@ func (r *Reader) retryHead() error {
 }
 
 func (r *Reader) head() error {
-	resp, err := Head(r.ctx, r.timeout, r.url, append(r.reqOptions, CheckStatusCode(http.StatusOK))...)
+	resp, err := Head(r.ctx, r.timeout, r.url, r.reqOptions...)
 	if err != nil {
 		return errs.Errorf("head failed, resp: %+v", resp)
 	}
+	if resp.StatusCode >= 500 {
+		return errs.Errorf("head response failed, resp: %+v", resp)
+	}
 
-	r.total = resp.ContentLength
 	if resp.Header.Get(httpu.HeaderAcceptRanges) == "bytes" && resp.ContentLength >= 0 {
+		r.total = resp.ContentLength
 		r.supportRange = true
 	}
 
 	return nil
 }
 
-func (r *Reader) get(start int64, n int64, opts ...Option) (*http.Response, error) {
-	end := start + n - 1
-	if end > r.total-1 {
-		end = r.total - 1
-	}
+func (r *Reader) getPart(start int64, n int64, opts ...Option) (*http.Response, error) {
+	end := min(start+n-1, r.total-1)
 	ranges := fmt.Sprintf("bytes=%d-%d", start, end)
 
-	resp, err := Get(r.ctx, r.timeout, r.url,
-		append(opts, WithHeaders("Range", ranges)),
+	allOpts := make([]Option, 0, len(r.reqOptions)+len(opts)+2)
+	allOpts = append(allOpts, WithHeaders("Range", ranges), CheckStatusCode(http.StatusOK, http.StatusPartialContent))
+	allOpts = append(allOpts, opts...)
+	allOpts = append(allOpts, r.reqOptions...)
+
+	return Get(r.ctx, r.timeout, r.url, allOpts...)
+}
+
+func (r *Reader) retryGetNoRange() (io.ReadCloser, error) {
+	var respBody io.ReadCloser
+	_, err := retry.DoWithData(
+		func() (*http.Response, error) {
+			return r.get(RespOptionFunc(func(resp *http.Response) error {
+				respBody = resp.Body
+				resp.Body = &noCloseRespBody{
+					respBody: resp.Body,
+				}
+				return nil
+			}))
+		},
+		retry.Attempts(uint(r.retry)),
 	)
-	if err == nil && end == r.total-1 {
-		err = io.EOF
-	}
-	return resp, err
+	return respBody, err
+}
+
+func (r *Reader) get(opts ...Option) (*http.Response, error) {
+	allOpts := make([]Option, 0, len(r.reqOptions)+len(opts)+1)
+	allOpts = append(allOpts, CheckStatusCode(http.StatusOK))
+	allOpts = append(allOpts, opts...)
+	allOpts = append(allOpts, r.reqOptions...)
+	return Get(r.ctx, r.timeout, r.url, allOpts...)
 }

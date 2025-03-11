@@ -108,10 +108,10 @@ func ToBytes(n *int, b []byte) Option {
 		} else {
 			*n, err = r.Body.Read(b)
 		}
-		if err != nil {
+		if err != nil && !errors.Is(err, io.EOF) {
 			return errs.Wrap(err, "read response body failed")
 		}
-		return err
+		return nil
 	})
 }
 

@@ -23,11 +23,14 @@ var D Profd = New()
 
 type Profd interface {
 	runner.Runner
+	SetHTTPD(d httpd.HTTPD)
 }
 
 type profd struct {
 	runner.Runner
 	*Cfg
+
+	httpd httpd.HTTPD
 
 	prettystackMu       sync.Mutex
 	prettystackLastTime time.Time
@@ -40,6 +43,10 @@ func New() Profd {
 }
 
 func (p *profd) Init() error {
+	if p.httpd == nil {
+		p.httpd = httpd.D
+	}
+
 	if p.Cfg.EnableStartupProfiling {
 		filepath, done, err := prof.Start(p.Cfg.StartupProfilingMode, p.Cfg.ProfOutputDir, p.Cfg.StartupProfilingSec)
 		if err != nil {
@@ -73,23 +80,23 @@ func (p *profd) Init() error {
 		if err != nil {
 			p.Error("init statsviz failed", err)
 		} else {
-			httpd.D.Handle("/debug/statsviz/", srv.Index())
-			httpd.D.HandleFunc("/debug/statsviz/ws", srv.Ws())
+			p.httpd.Handle("/debug/statsviz/", srv.Index())
+			p.httpd.HandleFunc("/debug/statsviz/ws", srv.Ws())
 		}
 	}
 
 	if p.Cfg.EnableHTTPProf {
-		httpd.D.Handle("/debug/prof/start/{mode}", httpd.RawHandler(p.startProf))
-		httpd.D.Handle("/debug/prof/stop", httpd.RawHandler(p.stopProf))
+		p.httpd.Handle("/debug/prof/start/{mode}", httpd.RawHandler(p.startProf))
+		p.httpd.Handle("/debug/prof/stop", httpd.RawHandler(p.stopProf))
 	}
 
 	if p.Cfg.EnableWebProf {
-		httpd.D.HandleFunc("/debug/pprof/", pprof.Index)
-		httpd.D.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
-		httpd.D.HandleFunc("/debug/pprof/profile", pprof.Profile)
-		httpd.D.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
-		httpd.D.HandleFunc("/debug/pprof/trace", pprof.Trace)
-		httpd.D.HandleFunc("/debug/prettytrace", p.prettystack)
+		p.httpd.HandleFunc("/debug/pprof/", pprof.Index)
+		p.httpd.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
+		p.httpd.HandleFunc("/debug/pprof/profile", pprof.Profile)
+		p.httpd.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
+		p.httpd.HandleFunc("/debug/pprof/trace", pprof.Trace)
+		p.httpd.HandleFunc("/debug/prettytrace", p.prettystack)
 	}
 
 	if p.Cfg.EnableGoPs {
@@ -118,6 +125,10 @@ func (p *profd) Type() any {
 
 func (p *profd) GetCfg() any {
 	return p.Cfg
+}
+
+func (p *profd) SetHTTPD(d httpd.HTTPD) {
+	p.httpd = d
 }
 
 func (p *profd) startProf(w http.ResponseWriter, r *http.Request) []byte {
