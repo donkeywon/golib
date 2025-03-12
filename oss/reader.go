@@ -15,19 +15,24 @@ type Reader struct {
 	*reader.Reader
 }
 
-func NewReader(ctx context.Context, cfg *Cfg) *Reader {
+func NewReader(ctx context.Context, cfg *Cfg, opts ...reader.Option) *Reader {
 	r := &Reader{
 		Cfg: cfg,
 	}
-	r.Reader = reader.New(ctx,
-		time.Second*time.Duration(cfg.Timeout),
-		cfg.URL,
+	allOpts := make([]reader.Option, 0, 2+len(opts))
+	allOpts = append(allOpts,
 		reader.Retry(cfg.Retry),
 		reader.WithReqOptions(
 			httpc.ReqOptionFunc(func(r *http.Request) error {
 				return oss.Sign(r, cfg.Ak, cfg.Sk, cfg.Region)
 			}),
-		),
+		))
+	allOpts = append(allOpts, opts...)
+
+	r.Reader = reader.New(ctx,
+		time.Second*time.Duration(cfg.Timeout),
+		cfg.URL,
+		allOpts...,
 	)
 	return r
 }
