@@ -23,7 +23,7 @@ func Which(url string) Type {
 	if IsAmzS3(url) {
 		return TypeAmz
 	}
-	if IsAliOss(url) {
+	if IsAliOSS(url) {
 		return TypeAliOSS
 	}
 	return TypeUnknown
@@ -45,12 +45,12 @@ func GetNextPositionFromResponse(resp *http.Response) (int, bool, error) {
 		return 0, false, nil
 	}
 
-	nextPositionHeader := resp.Header.Get(HeaderOssAppendNextPositionHeader)
+	nextPositionHeader := resp.Header.Get(HeaderOSSAppendNextPositionHeader)
 	if nextPositionHeader == "" {
 		nextPositionHeader = resp.Header.Get(HeaderObsAppendNextPositionHeader)
 	}
 	if nextPositionHeader == "" {
-		nextPositionHeader = resp.Header.Get(HeaderAliOssAppendNextPositionHeader)
+		nextPositionHeader = resp.Header.Get(HeaderAliOSSAppendNextPositionHeader)
 	}
 	if nextPositionHeader == "" {
 		return 0, false, nil
@@ -69,7 +69,7 @@ func Sign(req *http.Request, ak string, sk string, region string) error {
 	if IsAzblob(req.URL.String()) {
 		return AzblobSign(req, ak, sk)
 	}
-	if IsAliOss(req.URL.String()) {
+	if IsAliOSS(req.URL.String()) {
 		return AliSign(req, ak, sk, region)
 	}
 	if IsAmzS3(req.URL.String()) {

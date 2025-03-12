@@ -85,23 +85,24 @@ func TestFtp(t *testing.T) {
 
 func TestOSS(t *testing.T) {
 	cfg := NewRWGroupCfg().SetStarter(rw.TypeCopy, &rw.CopyCfg{BufSize: 1024 * 1024}, nil).
-		FromReader(rw.TypeFile, &rw.FileCfg{Path: "/root/test.file.zst"}, nil).
-		ToWriter(rw.TypeOss, &rw.OSSCfg{
+		ToWriter(rw.TypeFile, &rw.FileCfg{Path: "/tmp/test.file"}, nil).
+		FromReader(rw.TypeOSS, &rw.OSSCfg{
 			Ak:      "",
 			Sk:      "",
 			Append:  false,
 			URL:     "",
 			Retry:   1,
 			Timeout: 10,
+			Region:  "local",
 		}, &rw.ExtraCfg{
 			BufSize:          1024 * 1024,
 			AsyncChanBufSize: 5,
-			EnableAsync:      true,
+			EnableAsync:      false,
 		})
 
 	g := NewRWGroup()
 	g.RWGroupCfg = cfg
-	tests.DebugInit(g)
+	tests.Init(g)
 
 	require.NoError(t, runner.Init(g))
 

@@ -19,16 +19,16 @@ const (
 	HeaderXmsRequestID = "X-Ms-Request-Id"
 	HeaderXmsBlobType  = "X-Ms-Blob-Type"
 
-	HeaderOssAppendNextPositionHeader    = "X-Rgw-Next-Append-Position"
+	HeaderOSSAppendNextPositionHeader    = "X-Rgw-Next-Append-Position"
 	HeaderObsAppendNextPositionHeader    = "X-Obs-Next-Append-Position"
-	HeaderAliOssAppendNextPositionHeader = "X-Oss-Next-Append-Position"
+	HeaderAliOSSAppendNextPositionHeader = "X-Oss-Next-Append-Position"
 	HeaderAzblobAppendOffsetHeader       = "X-Ms-Blob-Append-Offset"
 	HeaderAzblobAppendPositionHeader     = "X-Ms-Blob-Condition-Appendpos"
 
 	HeaderAmzDate          = "X-Amz-Date"
 	HeaderAmzContentSHA256 = "X-Amz-Content-Sha256"
 
-	HeaderAliOssPrefix     = "x-oss-"
+	HeaderAliOSSPrefix     = "x-oss-"
 	HeaderAliContentSHA256 = "X-Oss-Content-Sha256"
 	HeaderAliDate          = "X-Oss-Date"
 

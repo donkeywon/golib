@@ -104,15 +104,25 @@ func ToBytes(n *int, b []byte) Option {
 	return RespOptionFunc(func(r *http.Response) error {
 		var err error
 		if n == nil {
-			_, err = r.Body.Read(b)
+			_, err = readFull(r.Body, b)
 		} else {
-			*n, err = r.Body.Read(b)
+			*n, err = readFull(r.Body, b)
 		}
 		if err != nil && !errors.Is(err, io.EOF) {
 			return errs.Wrap(err, "read response body failed")
 		}
 		return nil
 	})
+}
+
+func readFull(r io.Reader, buf []byte) (n int, err error) {
+	l := len(buf)
+	for n < l && err == nil {
+		var nn int
+		nn, err = r.Read(buf[n:])
+		n += nn
+	}
+	return
 }
 
 func ToBytesBuffer(n *int64, buf *bytes.Buffer) Option {
