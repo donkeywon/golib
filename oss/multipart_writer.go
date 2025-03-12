@@ -144,6 +144,7 @@ func (w *MultiPartWriter) Complete() error {
 		resp        *http.Response
 		respBody    = bytes.NewBuffer(nil)
 		contentType string
+		method      string
 	)
 
 	if oss.IsAzblob(w.URL) {
@@ -151,15 +152,17 @@ func (w *MultiPartWriter) Complete() error {
 		checkStatus = http.StatusCreated
 		body = &BlockList{Latest: w.blockList}
 		contentType = httpu.MIMEPlainUTF8
+		method = http.MethodPut
 	} else {
 		url = w.URL + "?uploadId=" + w.uploadID
 		checkStatus = http.StatusOK
 		body = &CompleteMultipartUpload{Parts: w.parts}
 		contentType = httpu.MIMEXML
+		method = http.MethodPost
 	}
 
 	resp, err = retry.DoWithData(func() (*http.Response, error) {
-		return httpc.Put(nil, time.Second*time.Duration(w.Timeout), url,
+		return httpc.Do(nil, time.Second*time.Duration(w.Timeout), method, url,
 			httpc.ReqOptionFunc(w.addAuth),
 			httpc.WithBodyMarshal(body, contentType, xml.Marshal),
 			httpc.CheckStatusCode(checkStatus),
