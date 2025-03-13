@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/donkeywon/golib/errs"
@@ -50,23 +51,65 @@ func WithBody(body []byte) Option {
 	return WithBodyReader(bytes.NewReader(body))
 }
 
+type hasLen interface {
+	Len() int
+}
+
+type hasLen2 interface {
+	Len() int64
+}
+
+type hasSize interface {
+	Size() int
+}
+
+type hasSize2 interface {
+	Size() int64
+}
+
+func guessContentLength(r any) (int64, error) {
+	var (
+		l   int64
+		err error
+	)
+	switch rt := r.(type) {
+	case hasLen:
+		l = int64(rt.Len())
+	case hasLen2:
+		l = rt.Len()
+	case hasSize:
+		l = int64(rt.Size())
+	case hasSize2:
+		l = rt.Size()
+	case io.Seeker:
+		l, err = rt.Seek(0, io.SeekEnd)
+		if err == nil {
+			_, err = rt.Seek(0, io.SeekStart)
+		}
+	default:
+	}
+
+	return l, err
+}
+
 func WithBodyReader(reader io.Reader) Option {
 	return ReqOptionFunc(func(r *http.Request) error {
-		switch rt := reader.(type) {
-		case io.Seeker:
-			size, err := rt.Seek(0, io.SeekEnd)
-			if err != nil {
-				return errs.Wrap(err, "get size by seek failed")
-			}
-			r.ContentLength = size
-			_, err = rt.Seek(0, io.SeekStart)
-			if err != nil {
-				return errs.Wrap(err, "get size by seek failed")
-			}
-		default:
+		if rc, ok := reader.(io.ReadCloser); ok {
+			r.Body = rc
+		} else {
+			r.Body = io.NopCloser(reader)
 		}
 
-		r.Body = io.NopCloser(reader)
+		l, err := guessContentLength(reader)
+		if err != nil {
+			return errs.Wrap(err, "guess content length failed")
+		}
+
+		if l > 0 {
+			r.ContentLength = l
+			r.Header.Set(httpu.HeaderContentLength, strconv.FormatInt(l, 10))
+		}
+
 		return nil
 	})
 }
@@ -82,8 +125,8 @@ func WithBodyMarshal(v any, contentType string, marshal func(v any) ([]byte, err
 			return errs.Wrap(err, "marshal request body failed")
 		}
 		r.Header.Set(httpu.HeaderContentType, contentType)
-		r.Body = io.NopCloser(bytes.NewReader(bs))
 		r.ContentLength = int64(len(bs))
+		r.Body = io.NopCloser(bytes.NewReader(bs))
 		return nil
 	})
 }
@@ -94,8 +137,8 @@ func WithBodyForm(form url.Values) Option {
 			return nil
 		}
 		s := form.Encode()
-		r.Body = io.NopCloser(strings.NewReader(s))
 		r.ContentLength = int64(len(s))
+		r.Body = io.NopCloser(strings.NewReader(s))
 		r.Header.Set(httpu.HeaderContentType, httpu.MIMEPOSTForm)
 		return nil
 	})
@@ -107,7 +150,7 @@ func CheckStatusCode(statusCode ...int) Option {
 			return nil
 		}
 		if !slices.Contains(statusCode, resp.StatusCode) {
-			return errs.Errorf("response status code not expected: %d", resp.StatusCode)
+			return errs.Errorf("response status code not expected: %s", resp.Status)
 		}
 		return nil
 	})

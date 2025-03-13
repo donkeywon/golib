@@ -19,18 +19,6 @@ var (
 	ErrAlreadyClosed = errors.New("already closed")
 )
 
-type noCloseRespBody struct {
-	respBody io.ReadCloser
-}
-
-func (b *noCloseRespBody) Read(p []byte) (int, error) {
-	return b.respBody.Read(p)
-}
-
-func (b *noCloseRespBody) Close() error {
-	return nil
-}
-
 type reader struct {
 	url     string
 	timeout time.Duration
@@ -228,9 +216,7 @@ func (r *reader) retryGetNoRange() (io.ReadCloser, error) {
 		func() (*http.Response, error) {
 			return r.get(httpc.RespOptionFunc(func(resp *http.Response) error {
 				respBody = resp.Body
-				resp.Body = &noCloseRespBody{
-					respBody: resp.Body,
-				}
+				resp.Body = io.NopCloser(resp.Body)
 				return nil
 			}))
 		},

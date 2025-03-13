@@ -163,6 +163,7 @@ func (w *MultiPartWriter) Complete() error {
 	resp, err = retry.DoWithData(func() (*http.Response, error) {
 		return httpc.Do(nil, time.Second*time.Duration(w.Timeout), method, url,
 			httpc.WithBodyMarshal(body, contentType, xml.Marshal),
+			httpc.WithGuessContentLength(),
 			httpc.ReqOptionFunc(w.addAuth),
 			httpc.CheckStatusCode(checkStatus),
 			httpc.ToBytesBuffer(nil, respBody),
@@ -250,6 +251,7 @@ func (w *MultiPartWriter) upload(partNo int, uploadID string, body []byte) (stri
 
 	resp, err := httpc.Put(w.ctx, time.Second*time.Duration(w.Timeout), url,
 		httpc.WithBody(body),
+		httpc.WithGuessContentLength(),
 		httpc.ReqOptionFunc(w.addAuth),
 		httpc.CheckStatusCode(checkStatus),
 		httpc.ToBytesBuffer(nil, respBody),
