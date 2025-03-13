@@ -51,12 +51,13 @@ func WithHeaders(headerKvs ...string) Option {
 }
 
 func WithBody(body []byte) Option {
-	return WithBodyReader(bytes.NewReader(body))
+	return WithBodyReader(bytes.NewReader(body), int64(len(body)))
 }
 
-func WithBodyReader(reader io.Reader) Option {
+func WithBodyReader(reader io.Reader, size int64) Option {
 	return ReqOptionFunc(func(r *http.Request) error {
 		r.Body = io.NopCloser(reader)
+		r.ContentLength = size
 		return nil
 	})
 }
@@ -73,6 +74,7 @@ func WithBodyMarshal(v any, contentType string, marshal func(v any) ([]byte, err
 		}
 		r.Header.Set(httpu.HeaderContentType, contentType)
 		r.Body = io.NopCloser(bytes.NewReader(bs))
+		r.ContentLength = int64(len(bs))
 		return nil
 	})
 }
@@ -82,7 +84,9 @@ func WithBodyForm(form url.Values) Option {
 		if r == nil {
 			return nil
 		}
-		r.Body = io.NopCloser(strings.NewReader(form.Encode()))
+		s := form.Encode()
+		r.Body = io.NopCloser(strings.NewReader(s))
+		r.ContentLength = int64(len(s))
 		r.Header.Set(httpu.HeaderContentType, httpu.MIMEPOSTForm)
 		return nil
 	})
