@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"github.com/donkeywon/golib/util/httpu"
 	"io"
 	"net/http"
 	"regexp"
@@ -43,7 +44,7 @@ func AliSign(req *http.Request, ak, sk, region string) error {
 
 	headers.Set(HeaderAliDate, nowFormat)
 	headers.Set(HeaderAliContentSHA256, UnsignedPayloadHash)
-	headers.Set(HeaderDate, now.Format(http.TimeFormat))
+	headers.Set(httpu.HeaderDate, now.Format(http.TimeFormat))
 
 	for key := range query {
 		sort.Strings(query[key])

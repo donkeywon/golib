@@ -5,6 +5,7 @@ import (
 	"crypto/sha1"
 	"encoding/base64"
 	"fmt"
+	"github.com/donkeywon/golib/util/httpu"
 	"net/http"
 	"regexp"
 	"strings"
@@ -34,10 +35,15 @@ func ParseObsURL(url string) (bool, string, string) {
 func ObsSign(req *http.Request, ak string, sk string, bucket string, obj string) error {
 	date := time.Now().UTC().Format(time.RFC1123)
 	date = date[:strings.LastIndex(date, "UTC")] + "GMT"
+	contentType := req.Header.Get(httpu.HeaderContentType)
 
 	stringToSign := req.Method + "\n"
 	stringToSign += "\n"
-	stringToSign += "\n"
+	if contentType == "" {
+		stringToSign += "\n"
+	} else {
+		stringToSign += contentType + "\n"
+	}
 	stringToSign += date + "\n"
 	stringToSign += "/" + bucket + obj
 
@@ -48,7 +54,7 @@ func ObsSign(req *http.Request, ak string, sk string, bucket string, obj string)
 	}
 
 	sign := base64.StdEncoding.EncodeToString(mac.Sum(nil))
-	req.Header.Set(HeaderAuthorization, fmt.Sprintf("%s %s:%s", "OBS", ak, sign))
-	req.Header.Set(HeaderDate, date)
+	req.Header.Set(httpu.HeaderAuthorization, fmt.Sprintf("%s %s:%s", "OBS", ak, sign))
+	req.Header.Set(httpu.HeaderDate, date)
 	return nil
 }

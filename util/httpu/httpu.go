@@ -15,9 +15,19 @@ import (
 )
 
 const (
-	HeaderContentType   = "Content-Type"
-	HeaderContentLength = "Content-Length"
-	HeaderAcceptRanges  = "Accept-Ranges"
+	HeaderContentType       = "Content-Type"
+	HeaderContentLength     = "Content-Length"
+	HeaderAcceptRanges      = "Accept-Ranges"
+	HeaderAuthorization     = "Authorization"
+	HeaderDate              = "Date"
+	HeaderContentEncoding   = "Content-Encoding"
+	HeaderContentLanguage   = "Content-Language"
+	HeaderContentMD5        = "Content-MD5"
+	HeaderIfModifiedSince   = "If-Modified-Since"
+	HeaderIfMatch           = "If-Match"
+	HeaderIfNoneMatch       = "If-None-Match"
+	HeaderIfUnmodifiedSince = "If-Unmodified-Since"
+	HeaderRange             = "Range"
 
 	MIMEHTML              = "text/html"
 	MIMEHTMLUTF8          = "text/html; charset=utf-8"
