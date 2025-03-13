@@ -447,7 +447,7 @@ func (b *baseRW) Cancel() {
 }
 
 func (b *baseRW) Close() error {
-	b.Cancel()
+	defer b.Cancel()
 	return errors.Join(b.closeReader(), b.closeWriter())
 }
 
