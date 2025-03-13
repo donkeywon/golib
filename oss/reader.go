@@ -2,6 +2,7 @@ package oss
 
 import (
 	"context"
+	"io"
 	"net/http"
 	"time"
 
@@ -12,30 +13,29 @@ import (
 
 type Reader struct {
 	*Cfg
-	*httpio.Reader
+	io.Reader
 }
 
 func NewReader(ctx context.Context, cfg *Cfg, opts ...httpc.Option) *Reader {
 	r := &Reader{
 		Cfg: cfg,
 	}
-	rc := &httpio.Cfg{
-		Retry:    cfg.Retry,
-		BeginPos: cfg.BeginPos,
-	}
-	allOpts := make([]httpc.Option, 0, 1+len(opts))
+	allOpts := make([]httpc.Option, 0, 3+len(opts))
 	allOpts = append(allOpts, opts...)
 	allOpts = append(allOpts,
-		httpc.ReqOptionFunc(func(r *http.Request) error {
+		httpio.BeginPos(cfg.BeginPos),
+		httpio.Retry(cfg.Retry),
+		httpio.WithHTTPOptions(httpc.ReqOptionFunc(func(r *http.Request) error {
 			return oss.Sign(r, cfg.Ak, cfg.Sk, cfg.Region)
-		}),
+		})),
 	)
 
-	r.Reader = httpio.New(ctx,
+	r.Reader = httpio.NewReader(ctx,
 		time.Second*time.Duration(cfg.Timeout),
 		cfg.URL,
-		rc,
-		allOpts...,
+		httpio.BeginPos(cfg.BeginPos),
+		httpio.Retry(cfg.Retry),
+		httpio.WithHTTPOptions(allOpts...),
 	)
 	return r
 }
