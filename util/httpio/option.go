@@ -1,10 +1,12 @@
 package httpio
 
-import "github.com/donkeywon/golib/util/httpc"
+import (
+	"github.com/donkeywon/golib/util/httpc"
+)
 
 type option struct {
-	beginPos    int64
-	endPos      int64
+	offset      int64
+	n           int64
 	partSize    int64
 	retry       int
 	httpOptions []httpc.Option
@@ -23,15 +25,15 @@ func (o Option) apply(r *option) {
 	o(r)
 }
 
-func BeginPos(pos int64) Option {
+func Offset(offset int64) Option {
 	return func(r *option) {
-		r.beginPos = pos
+		r.offset = offset
 	}
 }
 
-func EndPos(pos int64) Option {
+func N(n int64) Option {
 	return func(r *option) {
-		r.endPos = pos
+		r.n = n
 	}
 }
 

@@ -2,7 +2,6 @@ package httpc
 
 import (
 	"context"
-	"errors"
 	"net/http"
 	"time"
 
@@ -57,24 +56,16 @@ func Do(ctx context.Context, timeout time.Duration, method string, url string, o
 	if err != nil {
 		return nil, errs.Wrap(err, "create http request failed")
 	}
-	var ers []error
 	for _, opt := range opts {
+		if opt == nil {
+			continue
+		}
 		if h, ok := opt.(reqOption); ok {
 			err = h.HandleReq(r)
 			if err != nil {
-				ers = append(ers, err)
+				return nil, errs.Wrap(err, "handle http request failed")
 			}
 		}
-	}
-	if len(ers) == 0 {
-		err = nil
-	} else if len(ers) == 1 {
-		err = ers[0]
-	} else {
-		err = errors.Join(ers...)
-	}
-	if err != nil {
-		return nil, errs.Wrap(err, "handle http request failed")
 	}
 
 	var resp *http.Response
@@ -83,28 +74,17 @@ func Do(ctx context.Context, timeout time.Duration, method string, url string, o
 		return resp, errs.Wrap(err, "do http request failed")
 	}
 	defer func() {
-		// if someone want replace resp.Body, replace not work when defer resp.Body.Close()
+		// in case resp.Body was replaced, do not defer resp.Body.Close() directly
 		resp.Body.Close()
 	}()
 
-	ers = ers[:0]
 	for _, opt := range opts {
 		if h, ok := opt.(respOption); ok {
 			err = h.HandleResp(resp)
 			if err != nil {
-				ers = append(ers, err)
+				return resp, errs.Wrap(err, "handle http response failed")
 			}
 		}
-	}
-	if len(ers) == 0 {
-		err = nil
-	} else if len(ers) == 1 {
-		err = ers[0]
-	} else {
-		err = errors.Join(ers...)
-	}
-	if err != nil {
-		return resp, errs.Wrap(err, "handle http response failed")
 	}
 
 	return resp, nil

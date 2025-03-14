@@ -2,6 +2,7 @@ package httpio
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"io"
 	"net/http"
@@ -89,15 +90,15 @@ func TestNoRangeRead(t *testing.T) {
 }
 
 func testRead(t *testing.T, s *httptest.Server) {
-	r := NewReader(nil, time.Second, s.URL, PartSize(4))
+	r := NewReader(context.TODO(), time.Second, s.URL)
 	defer r.Close()
 	bs := make([]byte, 4)
 	nr, err := r.Read(bs)
-	require.Equal(t, nr, 4)
 	require.NoError(t, err)
+	require.Equal(t, 4, nr)
 	nr, err = r.Read(bs)
-	require.Equal(t, nr, 2)
 	require.ErrorIs(t, err, io.EOF)
+	require.Equal(t, 2, nr)
 }
 
 func TestRangeWriteTo(t *testing.T) {
@@ -109,10 +110,10 @@ func TestNoRangeWriteTo(t *testing.T) {
 }
 
 func testWriteTo(t *testing.T, s *httptest.Server) {
-	r := NewReader(nil, time.Second, s.URL, PartSize(4))
+	r := NewReader(context.TODO(), time.Second, s.URL, PartSize(4))
 	defer r.Close()
 	buf := bytes.NewBuffer(nil)
 	nr, err := io.Copy(buf, r)
-	require.Equal(t, nr, int64(6))
+	require.Equal(t, int64(6), nr)
 	require.NoError(t, err)
 }

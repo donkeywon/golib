@@ -29,7 +29,7 @@ func NewReader(ctx context.Context, cfg *Cfg, opts ...httpc.Option) *Reader {
 	r.ReadCloser = httpio.NewReader(ctx,
 		time.Second*time.Duration(cfg.Timeout),
 		cfg.URL,
-		httpio.BeginPos(cfg.BeginPos),
+		httpio.Offset(cfg.Offset),
 		httpio.Retry(cfg.Retry),
 		httpio.WithHTTPOptions(allOpts...),
 	)
