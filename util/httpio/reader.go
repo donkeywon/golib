@@ -19,7 +19,7 @@ var (
 	ErrAlreadyClosed = errors.New("already closed")
 )
 
-type reader struct {
+type Reader struct {
 	url     string
 	timeout time.Duration
 
@@ -36,12 +36,12 @@ type reader struct {
 	opt *option
 }
 
-func NewReader(ctx context.Context, timeout time.Duration, url string, opts ...Option) io.ReadCloser {
+func NewReader(ctx context.Context, timeout time.Duration, url string, opts ...Option) *Reader {
 	if ctx == nil {
 		ctx = context.Background()
 	}
 
-	r := &reader{
+	r := &Reader{
 		url:     url,
 		timeout: timeout,
 		opt:     newOption(),
@@ -60,7 +60,7 @@ func NewReader(ctx context.Context, timeout time.Duration, url string, opts ...O
 	return r
 }
 
-func (r *reader) Read(p []byte) (int, error) {
+func (r *Reader) Read(p []byte) (int, error) {
 	nr, err := r.read(p, r.opt.offset)
 	r.opt.offset += int64(nr)
 	if err != nil {
@@ -72,15 +72,15 @@ func (r *reader) Read(p []byte) (int, error) {
 	return nr, nil
 }
 
-func (r *reader) ReadAt(p []byte, offset int64) (int, error) {
+func (r *Reader) ReadAt(p []byte, offset int64) (int, error) {
 	return r.read(p, offset)
 }
 
-func (r *reader) reachLimit() bool {
+func (r *Reader) reachLimit() bool {
 	return r.supportRange && r.opt.offset >= r.limit
 }
 
-func (r *reader) read(p []byte, offset int64) (int, error) {
+func (r *Reader) read(p []byte, offset int64) (int, error) {
 	select {
 	case <-r.ctx.Done():
 		return 0, ErrAlreadyClosed
@@ -115,7 +115,7 @@ func (r *reader) read(p []byte, offset int64) (int, error) {
 	return nr, nil
 }
 
-func (r *reader) Close() error {
+func (r *Reader) Close() error {
 	var err error
 	r.closeOnce.Do(func() {
 		r.cancel()
@@ -126,7 +126,7 @@ func (r *reader) Close() error {
 	return err
 }
 
-func (r *reader) WriteTo(w io.Writer) (int64, error) {
+func (r *Reader) WriteTo(w io.Writer) (int64, error) {
 	var (
 		total int64
 		nw    int64
@@ -179,7 +179,7 @@ func (r *reader) WriteTo(w io.Writer) (int64, error) {
 	return total, err
 }
 
-func (r *reader) doHeadOnce() error {
+func (r *Reader) doHeadOnce() error {
 	var headErr error
 	r.headOnce.Do(func() {
 		headErr = r.retryHead()
@@ -187,13 +187,13 @@ func (r *reader) doHeadOnce() error {
 	return headErr
 }
 
-func (r *reader) retryHead() error {
+func (r *Reader) retryHead() error {
 	return retry.Do(func() error {
 		return r.head()
 	}, retry.Attempts(uint(r.opt.retry)))
 }
 
-func (r *reader) head() error {
+func (r *Reader) head() error {
 	resp, err := httpc.Head(r.ctx, r.timeout, r.url, r.opt.httpOptions...)
 	if err != nil {
 		return errs.Wrap(err, "head failed")
@@ -212,7 +212,7 @@ func (r *reader) head() error {
 	return nil
 }
 
-func (r *reader) getPart(offset int64, n int64, opts ...httpc.Option) (*http.Response, error) {
+func (r *Reader) getPart(offset int64, n int64, opts ...httpc.Option) (*http.Response, error) {
 	end := min(offset+n-1, r.limit-1)
 	ranges := fmt.Sprintf("bytes=%d-%d", offset, end)
 
@@ -224,7 +224,7 @@ func (r *reader) getPart(offset int64, n int64, opts ...httpc.Option) (*http.Res
 	return httpc.Get(r.ctx, r.timeout, r.url, allOpts...)
 }
 
-func (r *reader) retryGetNoRange() (io.ReadCloser, error) {
+func (r *Reader) retryGetNoRange() (io.ReadCloser, error) {
 	var respBody io.ReadCloser
 	_, err := retry.DoWithData(
 		func() (*http.Response, error) {
@@ -239,7 +239,7 @@ func (r *reader) retryGetNoRange() (io.ReadCloser, error) {
 	return respBody, err
 }
 
-func (r *reader) get(opts ...httpc.Option) (*http.Response, error) {
+func (r *Reader) get(opts ...httpc.Option) (*http.Response, error) {
 	allOpts := make([]httpc.Option, 0, len(r.opt.httpOptions)+len(opts)+1)
 	allOpts = append(allOpts, httpc.CheckStatusCode(http.StatusOK))
 	allOpts = append(allOpts, opts...)
@@ -247,6 +247,6 @@ func (r *reader) get(opts ...httpc.Option) (*http.Response, error) {
 	return httpc.Get(r.ctx, r.timeout, r.url, allOpts...)
 }
 
-func (r *reader) Offset() int64 {
+func (r *Reader) Offset() int64 {
 	return r.opt.offset
 }
