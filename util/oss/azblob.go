@@ -26,7 +26,7 @@ func CreateAppendBlob(ctx context.Context, url string, ak string, sk string) err
 		httpc.WithHeaders(HeaderXmsBlobType, "AppendBlob"),
 		azblobSignOption(ak, sk),
 		httpc.CheckStatusCode(http.StatusCreated),
-		httpc.ToBytesBuffer(nil, respBody))
+		httpc.ToBytesBuffer(respBody))
 
 	if err != nil {
 		return errs.Wrapf(err, "do http request create append blob fail: %v, body: %s", resp, respBody.String())

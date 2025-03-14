@@ -20,7 +20,7 @@ func GetAliEcsMetadataToken() (*bytes.Buffer, error) {
 
 	_, err := httpc.Put(nil, cloudMetadataReqTimeout, "http://100.100.100.200/latest/api/token",
 		httpc.WithHeaders("X-aliyun-ecs-metadata-token-ttl-seconds", "30"),
-		httpc.ToBytesBuffer(nil, respBody))
+		httpc.ToBytesBuffer(respBody))
 
 	return respBody, err
 }
@@ -59,7 +59,7 @@ func getAliEcsInstanceMetadata(typ string) (*bytes.Buffer, error) {
 	respBody := bytes.NewBuffer(nil)
 	_, err = httpc.Get(nil, cloudMetadataReqTimeout, "http://100.100.100.200/latest/meta-data/instance/"+typ,
 		httpc.WithHeaders("X-aliyun-ecs-metadata-token", token.String()),
-		httpc.ToBytesBuffer(nil, respBody))
+		httpc.ToBytesBuffer(respBody))
 
 	return respBody, err
 }

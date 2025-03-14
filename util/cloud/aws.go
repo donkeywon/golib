@@ -237,7 +237,7 @@ func GetEC2InstanceType() (*bytes.Buffer, error) {
 	_, err = httpc.Get(nil, cloudMetadataReqTimeout, "http://169.254.169.254/latest/meta-data/instance-type",
 		httpc.WithHeaders("X-aws-ec2-metadata-token", token.String()),
 		httpc.CheckStatusCode(http.StatusOK),
-		httpc.ToBytesBuffer(nil, body),
+		httpc.ToBytesBuffer(body),
 	)
 	return body, err
 }
@@ -262,7 +262,7 @@ func GetEC2IMDSv2Token() (*bytes.Buffer, error) {
 	_, err := httpc.Put(nil, cloudMetadataReqTimeout, "http://169.254.169.254/latest/api/token",
 		httpc.WithHeaders("X-aws-ec2-metadata-token-ttl-seconds", "30"),
 		httpc.CheckStatusCode(http.StatusOK),
-		httpc.ToBytesBuffer(nil, body),
+		httpc.ToBytesBuffer(body),
 	)
 	return body, err
 }

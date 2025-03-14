@@ -19,6 +19,6 @@ func (c *Cfg) setDefaults() {
 		c.Timeout = 60
 	}
 	if c.PartSize <= 0 {
-		c.PartSize = 1024 * 1024
+		c.PartSize = 8 * 1024 * 1024
 	}
 }

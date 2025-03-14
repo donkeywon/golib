@@ -1,6 +1,7 @@
 package oss
 
 import (
+	"context"
 	"io"
 	"os"
 	"testing"
@@ -8,20 +9,20 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestReader(t *testing.T) {
-	r := NewReader(nil, &Cfg{
-		URL:     "",
-		Retry:   3,
-		Timeout: 10,
+func TestMultiPartWriter(t *testing.T) {
+	w := NewMultiPartWriter(context.TODO(), &Cfg{
 		Ak:      "",
 		Sk:      "",
+		URL:     "",
+		Retry:   1,
+		Timeout: 1000,
 		Region:  "",
 	})
 
 	f, _ := os.OpenFile("/tmp/test.file", os.O_CREATE|os.O_RDWR, 0644)
 	defer f.Close()
 
-	nw, err := io.Copy(f, r)
+	_, err := io.Copy(w, f)
 	require.NoError(t, err)
-	require.Equal(t, 1, int(nw))
+	require.NoError(t, w.Close())
 }
