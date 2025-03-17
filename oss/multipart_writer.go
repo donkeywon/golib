@@ -22,6 +22,8 @@ import (
 	"github.com/google/uuid"
 )
 
+// TODO always head first to detect server type
+
 type InitiateMultipartUploadResult struct {
 	UploadID string `xml:"UploadId"`
 }
@@ -40,9 +42,10 @@ type BlockList struct {
 }
 
 type MultiPartWriter struct {
-	cfg  *Cfg
-	w    *multiPartWriter
-	bufw *bufio.Writer
+	cfg               *Cfg
+	w                 *multiPartWriter
+	bufw              *bufio.Writer
+	needContentLength bool
 }
 
 func NewMultiPartWriter(ctx context.Context, cfg *Cfg) *MultiPartWriter {
@@ -54,18 +57,21 @@ func NewMultiPartWriter(ctx context.Context, cfg *Cfg) *MultiPartWriter {
 	w.ctx, w.cancel = context.WithCancel(ctx)
 
 	return &MultiPartWriter{
-		cfg:  cfg,
-		w:    w,
-		bufw: bufio.NewWriterSize(w, int(w.cfg.PartSize)),
+		cfg:               cfg,
+		w:                 w,
+		needContentLength: oss.NeedContentLength(cfg.URL),
 	}
 }
 
 func (w *MultiPartWriter) Write(p []byte) (int, error) {
-	return w.bufw.Write(p)
+	return w.w.Write(p)
 }
 
 func (w *MultiPartWriter) Close() error {
-	return errors.Join(w.bufw.Flush(), w.w.Close())
+	if w.bufw != nil {
+		return errors.Join(w.bufw.Flush(), w.w.Close())
+	}
+	return w.w.Close()
 }
 
 func (w *MultiPartWriter) ReadFrom(r io.Reader) (int64, error) {
@@ -75,12 +81,44 @@ func (w *MultiPartWriter) ReadFrom(r io.Reader) (int64, error) {
 	default:
 	}
 
-	err := w.w.init()
+	if oss.NeedContentLength(w.cfg.URL) {
+		w.bufw = bufio.NewWriterSize(w.w, int(w.cfg.PartSize))
+		return io.Copy(w.bufw, r)
+	}
+
+	var (
+		err error
+		rr  = &readerWrapper{Reader: r}
+	)
+	err = w.w.init()
 	if err != nil {
 		return 0, err
 	}
+	for {
+		lr := io.LimitReader(rr, w.cfg.PartSize)
+		err = w.w.uploadPart(httpc.WithBodyReader(lr))
+		if err != nil {
+			break
+		}
+		if rr.eof {
+			break
+		}
+	}
 
-	return io.Copy(w.bufw, r)
+	return rr.nr, err
+}
+
+type readerWrapper struct {
+	io.Reader
+	eof bool
+	nr  int64
+}
+
+func (r *readerWrapper) Read(p []byte) (int, error) {
+	nr, err := r.Reader.Read(p)
+	r.nr += int64(nr)
+	r.eof = errors.Is(err, io.EOF)
+	return nr, err
 }
 
 type multiPartWriter struct {
