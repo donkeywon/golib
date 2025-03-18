@@ -5,13 +5,13 @@ import (
 	"crypto/sha1"
 	"encoding/base64"
 	"fmt"
-	"github.com/donkeywon/golib/util/httpu"
 	"net/http"
 	"regexp"
 	"strings"
 	"time"
 
 	"github.com/donkeywon/golib/errs"
+	"github.com/donkeywon/golib/util/httpu"
 )
 
 var obsURLRegex = regexp.MustCompile(`([a-z0-9\-\.]{3,63})\.obs\..+\.com(\/.*)`)

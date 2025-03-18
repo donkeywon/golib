@@ -153,7 +153,7 @@ func CheckStatusCode(statusCode ...int) Option {
 			return nil
 		}
 		if !slices.Contains(statusCode, resp.StatusCode) {
-			return errs.Errorf("response status code not expected: %s", resp.Status)
+			return errs.Errorf("not expected response status code: %s", resp.Status)
 		}
 		return nil
 	})
