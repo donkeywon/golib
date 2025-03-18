@@ -29,6 +29,7 @@ const (
 	HeaderIfUnmodifiedSince = "If-Unmodified-Since"
 	HeaderRange             = "Range"
 	HeaderTransferEncoding  = "Transfer-Encoding"
+	HeaderServer            = "Server"
 
 	MIMEHTML              = "text/html"
 	MIMEHTMLUTF8          = "text/html; charset=utf-8"

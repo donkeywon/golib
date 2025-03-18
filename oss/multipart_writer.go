@@ -22,8 +22,6 @@ import (
 	"github.com/google/uuid"
 )
 
-// TODO always head first to detect server type
-
 type InitiateMultipartUploadResult struct {
 	UploadID string `xml:"UploadId"`
 }
@@ -81,19 +79,17 @@ func (w *MultiPartWriter) ReadFrom(r io.Reader) (int64, error) {
 	default:
 	}
 
-	if oss.NeedContentLength(w.cfg.URL) {
+	err := w.w.init()
+	if err != nil {
+		return 0, err
+	}
+
+	if w.needContentLength {
 		w.bufw = bufio.NewWriterSize(w.w, int(w.cfg.PartSize))
 		return io.Copy(w.bufw, r)
 	}
 
-	var (
-		err error
-		rr  = &readerWrapper{Reader: r}
-	)
-	err = w.w.init()
-	if err != nil {
-		return 0, err
-	}
+	rr := &readerWrapper{Reader: r}
 	for {
 		lr := io.LimitReader(rr, w.cfg.PartSize)
 		err = w.w.uploadPart(httpc.WithBodyReader(lr))
@@ -137,7 +133,8 @@ type multiPartWriter struct {
 
 	uploadErr error
 
-	initialized bool
+	initialized       bool
+	needContentLength bool
 }
 
 func (w *multiPartWriter) Write(p []byte) (int, error) {
@@ -185,6 +182,9 @@ func (w *multiPartWriter) init() error {
 	if w.initialized {
 		return nil
 	}
+
+	w.needContentLength = oss.NeedContentLength(w.cfg.URL)
+
 	if oss.IsAzblob(w.cfg.URL) {
 		w.initialized = true
 		return nil
@@ -223,7 +223,7 @@ func (w *multiPartWriter) Abort() error {
 	)
 
 	if err != nil {
-		return errs.Wrapf(err, "abort multipart fail, resp status: %s, body: %s", respStatus, respBody.String())
+		return errs.Wrapf(err, "abort multipart fail, respStatus: %s, respBody: %s", respStatus, respBody.String())
 	}
 	return nil
 }
@@ -270,7 +270,7 @@ func (w *multiPartWriter) Complete() error {
 	)
 
 	if err != nil {
-		return errs.Wrapf(err, "retry do complete multipart request fail, resp status: %s, body: %s", respStatus, respBody.String())
+		return errs.Wrapf(err, "retry do complete multipart request fail, respStatus: %s, respBody: %s", respStatus, respBody.String())
 	}
 	return nil
 }
@@ -282,6 +282,7 @@ func (w *multiPartWriter) addAuth(req *http.Request) error {
 func (w *multiPartWriter) initMultiPart() (string, error) {
 	var (
 		respStatus string
+		respBody   = bytes.NewBuffer(nil)
 		err        error
 	)
 	result := &InitiateMultipartUploadResult{}
@@ -290,8 +291,8 @@ func (w *multiPartWriter) initMultiPart() (string, error) {
 			_, err = httpc.Post(w.ctx, w.timeout, w.cfg.URL+"?uploads",
 				httpc.ReqOptionFunc(w.addAuth),
 				httpc.ToStatus(&respStatus),
+				httpc.ToBytesBuffer(respBody),
 				httpc.CheckStatusCode(http.StatusOK),
-				httpc.ToAnyUnmarshal(result, xml.Unmarshal),
 			)
 			return err
 		},
@@ -299,7 +300,12 @@ func (w *multiPartWriter) initMultiPart() (string, error) {
 	)
 
 	if err != nil {
-		return "", errs.Wrapf(err, "retry do init multipart request fail, resp status: %s", respStatus)
+		return "", errs.Wrapf(err, "retry do init multipart request fail, respStatus: %s", respStatus)
+	}
+
+	err = xml.Unmarshal(respBody.Bytes(), result)
+	if err != nil {
+		return "", errs.Wrap(err, "xml unmarshal fail")
 	}
 
 	return result.UploadID, nil
@@ -341,7 +347,7 @@ func (w *multiPartWriter) uploadPart(opts ...httpc.Option) error {
 		}),
 	)
 	if err != nil {
-		return errs.Wrapf(err, "upload failed with max retry, resp status: %s, resp: %s", respStatus, respBody.String())
+		return errs.Wrapf(err, "upload failed with max retry, respStatus: %s, respBody: %s", respStatus, respBody.String())
 	}
 
 	if !oss.IsAzblob(w.cfg.URL) {
@@ -350,7 +356,7 @@ func (w *multiPartWriter) uploadPart(opts ...httpc.Option) error {
 			etag = resp.Header.Get("ETag")
 		}
 		if etag == "" {
-			return errs.Errorf("etag not exists in resp header, resp status: %s, respBody: %s", respStatus, respBody.String())
+			return errs.Errorf("etag not exists in resp header, respStatus: %s, respBody: %s", respStatus, respBody.String())
 		}
 
 		w.parts = append(w.parts, &Part{

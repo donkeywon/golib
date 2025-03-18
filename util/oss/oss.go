@@ -5,37 +5,63 @@ import (
 	"context"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/donkeywon/golib/errs"
 	"github.com/donkeywon/golib/util/httpc"
+	"github.com/donkeywon/golib/util/httpu"
 )
 
 var commonTimeout = 10 * time.Second
-
-// TODO extensible
 
 func Which(url string) Type {
 	if IsAzblob(url) {
 		return TypeBlob
 	}
 	if IsObs(url) {
-		return TypeObs
+		return TypeOBS
 	}
 	if IsAmzS3(url) {
-		return TypeAmz
+		return TypeAmazonS3
 	}
 	if IsAliOSS(url) {
-		return TypeAliOSS
+		return TypeAliyunOSS
 	}
-	return TypeUnknown
+	return whichByHead(url)
+}
+
+func whichByHead(url string) Type {
+	resp, err := httpc.Head(context.Background(), time.Second*5, url)
+	if err != nil {
+		return TypeUnknown
+	}
+	serverHeader := resp.Header.Get(httpu.HeaderServer)
+	if serverHeader == "" {
+		return TypeUnknown
+	}
+	switch serverHeader {
+	case string(TypeOBS):
+		return TypeOBS
+	case string(TypeAliyunOSS):
+		return TypeAliyunOSS
+	case string(TypeAmazonS3):
+		return TypeAmazonS3
+	case string(TypeMinIO):
+		return TypeMinIO
+	default:
+		if strings.Contains(serverHeader, "Blob") {
+			return TypeBlob
+		}
+		return TypeUnknown
+	}
 }
 
 func NeedContentLength(url string) bool {
 	switch Which(url) {
-	case TypeBlob, TypeObs, TypeAliOSS:
+	case TypeBlob, TypeOBS, TypeAliyunOSS:
 		return false
-	case TypeAmz, TypeUnknown:
+	case TypeAmazonS3, TypeMinIO, TypeUnknown:
 		return true
 	default:
 		return true
@@ -44,9 +70,9 @@ func NeedContentLength(url string) bool {
 
 func IsSupportAppend(url string) bool {
 	switch Which(url) {
-	case TypeBlob, TypeObs, TypeAliOSS:
+	case TypeBlob, TypeOBS, TypeAliyunOSS:
 		return true
-	case TypeAmz, TypeUnknown:
+	case TypeAmazonS3, TypeMinIO, TypeUnknown:
 		return false
 	default:
 		return false

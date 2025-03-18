@@ -37,6 +37,33 @@ var (
 	NewDecoder = func(r io.Reader) YAMLDecoder {
 		return yaml.NewDecoder(r)
 	}
+
+	MustMarshal = func(v any) []byte {
+		bs, err := Marshal(v)
+		if err != nil {
+			panic(err)
+		}
+		return bs
+	}
+	MustUnmarshal = func(bs []byte, v any) {
+		err := Unmarshal(bs, v)
+		if err != nil {
+			panic(err)
+		}
+	}
+	MustMarshalString = func(v any) string {
+		bs, err := Marshal(v)
+		if err != nil {
+			panic(err)
+		}
+		return bytes2String(bs)
+	}
+	MustUnmarshalString = func(s string, v any) {
+		err := Unmarshal(string2Bytes(s), v)
+		if err != nil {
+			panic(err)
+		}
+	}
 )
 
 func bytes2String(bs []byte) string {
