@@ -1,6 +1,7 @@
 package oss
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"errors"
@@ -29,20 +30,24 @@ type AppendWriter struct {
 	cancel    context.CancelFunc
 	closeOnce sync.Once
 
-	supportAppend bool
-	isBlob        bool
-	blobCreated   bool
+	needContentLength bool
+	supportAppend     bool
+	isBlob            bool
+	blobCreated       bool
+
+	bufw *bufio.Writer
 }
 
 func NewAppendWriter(ctx context.Context, cfg *Cfg) *AppendWriter {
 	cfg.setDefaults()
 	w := &AppendWriter{
-		cfg:     cfg,
-		timeout: time.Second * time.Duration(cfg.Timeout),
+		cfg:               cfg,
+		timeout:           time.Second * time.Duration(cfg.Timeout),
+		needContentLength: oss.NeedContentLength(cfg.URL),
+		isBlob:            oss.IsAzblob(cfg.URL),
+		supportAppend:     oss.IsSupportAppend(cfg.URL),
 	}
 	w.ctx, w.cancel = context.WithCancel(ctx)
-	w.isBlob = oss.IsAzblob(cfg.URL)
-	w.supportAppend = oss.IsSupportAppend(cfg.URL)
 	return w
 }
 
@@ -61,25 +66,9 @@ func (w *AppendWriter) Write(p []byte) (int, error) {
 		return 0, nil
 	}
 
-	var err error
-
-	if w.isBlob && !w.blobCreated {
-		err = retry.Do(
-			func() error { return oss.CreateAppendBlob(w.ctx, w.cfg.URL, w.cfg.Ak, w.cfg.Sk) },
-			retry.Attempts(uint(w.cfg.Retry)),
-			retry.RetryIf(func(err error) bool {
-				select {
-				case <-w.ctx.Done():
-					return false
-				default:
-					return err != nil
-				}
-			}),
-		)
-		if err != nil {
-			return 0, errs.Wrap(err, "create append blob failed")
-		}
-		w.blobCreated = true
+	err := w.init()
+	if err != nil {
+		return 0, err
 	}
 
 	err = w.appendPart(httpc.WithBody(p))
@@ -87,14 +76,28 @@ func (w *AppendWriter) Write(p []byte) (int, error) {
 		return 0, errs.Wrap(err, "append part failed")
 	}
 
+	if w.isBlob {
+		w.cfg.Offset += int64(len(p))
+	}
+
 	return len(p), nil
 }
 
 func (w *AppendWriter) Close() error {
+	var err error
 	w.closeOnce.Do(func() {
+		if w.bufw != nil {
+			err = w.bufw.Flush()
+		}
+		err = errors.Join(err, w.sealBlob())
 		w.cancel()
 	})
-	return nil
+	return err
+}
+
+type apwWithoutReadFrom struct {
+	noReadFrom
+	*AppendWriter
 }
 
 func (w *AppendWriter) ReadFrom(r io.Reader) (int64, error) {
@@ -108,7 +111,16 @@ func (w *AppendWriter) ReadFrom(r io.Reader) (int64, error) {
 		return 0, ErrAppendNotSupported
 	}
 
-	var err error
+	err := w.init()
+	if err != nil {
+		return 0, err
+	}
+
+	if w.needContentLength {
+		w.bufw = bufio.NewWriterSize(apwWithoutReadFrom{AppendWriter: w}, int(w.cfg.PartSize))
+		return io.Copy(w.bufw, r)
+	}
+
 	rr := &readerWrapper{Reader: r}
 	for {
 		lr := io.LimitReader(rr, w.cfg.PartSize)
@@ -122,6 +134,49 @@ func (w *AppendWriter) ReadFrom(r io.Reader) (int64, error) {
 	}
 
 	return rr.nr, err
+}
+
+func (w *AppendWriter) sealBlob() error {
+	if !w.isBlob {
+		return nil
+	}
+	return retry.Do(
+		func() error {
+			return oss.SealAppendBlob(w.ctx, w.cfg.URL, w.cfg.Ak, w.cfg.Sk)
+		},
+		retry.Attempts(uint(w.cfg.Retry)),
+		retry.RetryIf(func(err error) bool {
+			select {
+			case <-w.ctx.Done():
+				return false
+			default:
+				return err != nil
+			}
+		}),
+	)
+}
+
+func (w *AppendWriter) init() error {
+	if !w.isBlob || w.blobCreated {
+		return nil
+	}
+	err := retry.Do(
+		func() error { return oss.CreateAppendBlob(w.ctx, w.cfg.URL, w.cfg.Ak, w.cfg.Sk) },
+		retry.Attempts(uint(w.cfg.Retry)),
+		retry.RetryIf(func(err error) bool {
+			select {
+			case <-w.ctx.Done():
+				return false
+			default:
+				return err != nil
+			}
+		}),
+	)
+	if err != nil {
+		return errs.Wrap(err, "create append blob failed")
+	}
+	w.blobCreated = true
+	return nil
 }
 
 func (w *AppendWriter) addAuth(req *http.Request) error {

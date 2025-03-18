@@ -59,9 +59,9 @@ func whichByHead(url string) Type {
 
 func NeedContentLength(url string) bool {
 	switch Which(url) {
-	case TypeBlob, TypeOBS, TypeAliyunOSS:
+	case TypeOBS, TypeAliyunOSS:
 		return false
-	case TypeAmazonS3, TypeMinIO, TypeUnknown:
+	case TypeBlob, TypeAmazonS3, TypeMinIO, TypeUnknown:
 		return true
 	default:
 		return true

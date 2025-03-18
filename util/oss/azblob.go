@@ -21,15 +21,39 @@ import (
 var azblobURLSuffix = "core.windows.net"
 
 func CreateAppendBlob(ctx context.Context, url string, ak string, sk string) error {
-	var respBody = bytes.NewBuffer(nil)
-	resp, err := httpc.Put(ctx, commonTimeout, url,
+	var (
+		respBody   = bytes.NewBuffer(nil)
+		respStatus string
+	)
+	_, err := httpc.Put(ctx, commonTimeout, url,
 		httpc.WithHeaders(HeaderXmsBlobType, "AppendBlob"),
 		azblobSignOption(ak, sk),
+		httpc.ToStatus(&respStatus),
+		httpc.ToBytesBuffer(respBody),
 		httpc.CheckStatusCode(http.StatusCreated),
-		httpc.ToBytesBuffer(respBody))
+	)
 
 	if err != nil {
-		return errs.Wrapf(err, "do http request create append blob fail: %v, body: %s", resp, respBody.String())
+		return errs.Wrapf(err, "failed to request create append blob, respStatus: %s, respBody: %s", respStatus, respBody.String())
+	}
+
+	return nil
+}
+
+func SealAppendBlob(ctx context.Context, url string, ak string, sk string) error {
+	var (
+		respBody   = bytes.NewBuffer(nil)
+		respStatus string
+	)
+	url += "?comp=seal"
+	_, err := httpc.Put(ctx, commonTimeout, url,
+		azblobSignOption(ak, sk),
+		httpc.ToStatus(&respStatus),
+		httpc.ToBytesBuffer(respBody),
+		httpc.CheckStatusCode(http.StatusOK),
+	)
+	if err != nil {
+		return errs.Wrapf(err, "failed to request seal append blob, respStatus: %s, respBody: %s", respStatus, respBody.String())
 	}
 
 	return nil
