@@ -47,11 +47,15 @@ func (b *buf) bytes() []byte {
 	return b.b.B()[b.offset:b.l]
 }
 
-func (b *buf) isFull() bool {
+func (b *buf) isNotWritten() bool {
+	return b.l == 0
+}
+
+func (b *buf) isWriteFull() bool {
 	return b.l == b.b.Len()
 }
 
-func (b *buf) isEmpty() bool {
+func (b *buf) isReadCompletely() bool {
 	return b.offset == b.b.Len()
 }
 

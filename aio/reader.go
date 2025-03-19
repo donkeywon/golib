@@ -22,8 +22,9 @@ type AsyncReader struct {
 
 func NewAsyncReader(r io.Reader, opts ...Option) *AsyncReader {
 	ar := &AsyncReader{
-		r:   r,
-		opt: newOption(),
+		r:      r,
+		opt:    newOption(),
+		closed: make(chan struct{}),
 	}
 	for _, o := range opts {
 		o.apply(ar.opt)
@@ -103,7 +104,7 @@ func (ar *AsyncReader) WriteTo(w io.Writer) (n int64, err error) {
 }
 
 func (ar *AsyncReader) prepareBuf() error {
-	if ar.buf != nil && !ar.buf.isEmpty() {
+	if ar.buf != nil && !ar.buf.isReadCompletely() {
 		return nil
 	}
 

@@ -3,7 +3,10 @@ package aio
 import (
 	"io"
 	"sync"
+	"time"
 )
+
+// TODO lock
 
 type AsyncWriter struct {
 	w   io.Writer
@@ -15,14 +18,19 @@ type AsyncWriter struct {
 	asyncWriteOnce sync.Once
 	closeOnce      sync.Once
 	closed         chan struct{}
+	asyncDone      chan struct{}
+
+	deadlineTimer *time.Timer
 
 	err error
 }
 
 func NewAsyncWriter(w io.Writer, opts ...Option) *AsyncWriter {
 	aw := &AsyncWriter{
-		w:   w,
-		opt: newOption(),
+		w:         w,
+		opt:       newOption(),
+		closed:    make(chan struct{}),
+		asyncDone: make(chan struct{}),
 	}
 	for _, o := range opts {
 		o.apply(aw.opt)
@@ -44,6 +52,10 @@ func (aw *AsyncWriter) Write(p []byte) (n int, err error) {
 
 	aw.asyncWriteOnce.Do(func() {
 		go aw.asyncWrite()
+		if aw.opt.deadline > 0 {
+			aw.deadlineTimer = time.NewTimer(aw.opt.deadline)
+			go aw.deadline()
+		}
 	})
 
 	var nn int
@@ -52,7 +64,7 @@ func (aw *AsyncWriter) Write(p []byte) (n int, err error) {
 		nn = aw.buf.readFrom(p)
 		p = p[nn:]
 
-		if aw.buf.isFull() {
+		if aw.buf.isWriteFull() {
 			err = aw.Flush()
 			if err != nil {
 				break
@@ -78,12 +90,20 @@ func (aw *AsyncWriter) Flush() error {
 		return aw.err
 	}
 
-	// TODO flush
+	if aw.buf == nil || aw.buf.isNotWritten() {
+		return nil
+	}
+
+	aw.queue <- aw.buf
+	aw.buf = nil
+	if aw.deadlineTimer != nil {
+		aw.deadlineTimer.Reset(aw.opt.deadline)
+	}
 	return nil
 }
 
 func (aw *AsyncWriter) prepareBuf() {
-	if aw.buf != nil && !aw.buf.isFull() {
+	if aw.buf != nil && !aw.buf.isWriteFull() {
 		return
 	}
 
@@ -91,9 +111,39 @@ func (aw *AsyncWriter) prepareBuf() {
 }
 
 func (aw *AsyncWriter) asyncWrite() {
+	var err error
+	for {
+		b, ok := <-aw.queue
+		if !ok {
+			return
+		}
 
+		if aw.err != nil {
+			b.free()
+			continue
+		}
+
+		for !b.isReadCompletely() && err == nil {
+			_, err = b.writeTo(aw.w)
+		}
+	}
 }
 
 func (aw *AsyncWriter) deadline() {
+	for {
+		select {
+		case <-aw.closed:
+			return
+		case <-aw.deadlineTimer.C:
+			if aw.err != nil {
+				return
+			}
 
+			err := aw.Flush()
+			if err != nil {
+				aw.err = err
+				return
+			}
+		}
+	}
 }
