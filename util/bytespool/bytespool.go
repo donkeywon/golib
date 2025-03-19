@@ -31,8 +31,6 @@ func (b *Bytes) Free() {
 	b.p.Put(b)
 }
 
-func (b *Bytes) JustFree() {}
-
 func (b *Bytes) Len() int {
 	return len(b.b)
 }
@@ -58,7 +56,7 @@ func (b *Bytes) Shrink(n int) {
 		return
 	}
 
-	if n <= 0 {
+	if n < 0 {
 		n = 0
 	}
 
