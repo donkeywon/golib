@@ -4,16 +4,17 @@ import (
 	"io"
 	"sync"
 	"time"
-)
 
-// TODO lock
+	"github.com/donkeywon/golib/util/buffer"
+)
 
 type AsyncWriter struct {
 	w   io.Writer
 	opt *option
 
-	buf   *buf
-	queue chan *buf
+	mu    sync.Mutex
+	buf   *buffer.FixedBuffer
+	queue chan *buffer.FixedBuffer
 
 	asyncWriteOnce sync.Once
 	closeOnce      sync.Once
@@ -35,7 +36,7 @@ func NewAsyncWriter(w io.Writer, opts ...Option) *AsyncWriter {
 	for _, o := range opts {
 		o.apply(aw.opt)
 	}
-	aw.queue = make(chan *buf, aw.opt.queueSize)
+	aw.queue = make(chan *buffer.FixedBuffer, aw.opt.queueSize)
 	return aw
 }
 
@@ -50,21 +51,16 @@ func (aw *AsyncWriter) Write(p []byte) (n int, err error) {
 		return 0, aw.err
 	}
 
-	aw.asyncWriteOnce.Do(func() {
-		go aw.asyncWrite()
-		if aw.opt.deadline > 0 {
-			aw.deadlineTimer = time.NewTimer(aw.opt.deadline)
-			go aw.deadline()
-		}
-	})
+	aw.initOnce()
 
 	var nn int
 	for len(p) > 0 {
 		aw.prepareBuf()
-		nn = aw.buf.readFrom(p)
+		nn, err = aw.bufWrite(p)
 		p = p[nn:]
 
-		if aw.buf.isWriteFull() {
+		// buf full
+		if err == io.ErrShortWrite {
 			err = aw.Flush()
 			if err != nil {
 				break
@@ -76,21 +72,62 @@ func (aw *AsyncWriter) Write(p []byte) (n int, err error) {
 }
 
 func (aw *AsyncWriter) Close() error {
-	// TODO
-	return nil
+	var err error
+	aw.closeOnce.Do(func() {
+		close(aw.closed)
+
+		err = aw.Flush()
+		close(aw.queue)
+		<-aw.asyncDone
+
+		if err == nil {
+			err = aw.err
+		}
+	})
+	return err
 }
 
 func (aw *AsyncWriter) ReadFrom(r io.Reader) (n int64, err error) {
-	// TODO
-	return
+	select {
+	case <-aw.closed:
+		return 0, aw.err
+	default:
+	}
+
+	if aw.err != nil {
+		return 0, aw.err
+	}
+
+	aw.initOnce()
+
+	var nn int64
+	for {
+		aw.prepareBuf()
+		nn, err = aw.bufReadFrom(r)
+		n += nn
+		// buf full
+		if err == io.ErrShortWrite {
+			err = aw.Flush()
+			if err != nil {
+				return
+			}
+		}
+
+		if err != nil {
+			return
+		}
+	}
 }
 
 func (aw *AsyncWriter) Flush() error {
+	aw.mu.Lock()
+	defer aw.mu.Unlock()
+
 	if aw.err != nil {
 		return aw.err
 	}
 
-	if aw.buf == nil || aw.buf.isNotWritten() {
+	if aw.buf == nil || aw.buf.Len() == 0 {
 		return nil
 	}
 
@@ -103,28 +140,56 @@ func (aw *AsyncWriter) Flush() error {
 }
 
 func (aw *AsyncWriter) prepareBuf() {
-	if aw.buf != nil && !aw.buf.isWriteFull() {
+	aw.mu.Lock()
+	defer aw.mu.Unlock()
+
+	if aw.buf != nil && aw.buf.Len() < aw.buf.Cap() {
+		// not full
 		return
 	}
 
-	aw.buf = newBuf(aw.opt.bufSize)
+	aw.buf = buffer.NewFixedBuffer(aw.opt.bufSize)
+}
+
+func (aw *AsyncWriter) bufWrite(p []byte) (int, error) {
+	aw.mu.Lock()
+	defer aw.mu.Unlock()
+	return aw.buf.Write(p)
+}
+
+func (aw *AsyncWriter) bufReadFrom(r io.Reader) (n int64, err error) {
+	aw.mu.Lock()
+	defer aw.mu.Unlock()
+	return aw.buf.ReadFrom(r)
+}
+
+func (aw *AsyncWriter) initOnce() {
+	aw.asyncWriteOnce.Do(func() {
+		go aw.asyncWrite()
+		if aw.opt.deadline > 0 {
+			aw.deadlineTimer = time.NewTimer(aw.opt.deadline)
+			go aw.deadline()
+		}
+	})
 }
 
 func (aw *AsyncWriter) asyncWrite() {
-	var err error
 	for {
 		b, ok := <-aw.queue
 		if !ok {
+			close(aw.asyncDone)
 			return
 		}
 
 		if aw.err != nil {
-			b.free()
+			b.Free()
 			continue
 		}
 
-		for !b.isReadCompletely() && err == nil {
-			_, err = b.writeTo(aw.w)
+		_, aw.err = b.WriteTo(aw.w)
+		b.Free()
+		if aw.err != nil {
+			continue
 		}
 	}
 }
@@ -141,7 +206,6 @@ func (aw *AsyncWriter) deadline() {
 
 			err := aw.Flush()
 			if err != nil {
-				aw.err = err
 				return
 			}
 		}
