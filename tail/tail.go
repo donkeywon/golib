@@ -24,7 +24,7 @@ type Reader struct {
 	watcher  *fsnotify.Watcher
 	closed   chan struct{}
 	filepath string
-	pos      int64
+	offset   int64
 	once     sync.Once
 }
 
@@ -33,7 +33,7 @@ func NewReader(filepath string, pos int64) (*Reader, error) {
 
 	r := &Reader{
 		filepath: filepath,
-		pos:      pos,
+		offset:   pos,
 		closed:   make(chan struct{}),
 	}
 
@@ -42,8 +42,8 @@ func NewReader(filepath string, pos int64) (*Reader, error) {
 		return nil, err
 	}
 
-	if r.pos > 0 {
-		_, err = r.file.Seek(r.pos, io.SeekStart)
+	if r.offset > 0 {
+		_, err = r.file.Seek(r.offset, io.SeekStart)
 		if err != nil {
 			return nil, r.close(errs.Wrap(err, "file seek failed"))
 		}
@@ -86,7 +86,7 @@ func (r *Reader) Read(p []byte) (int, error) {
 
 func (r *Reader) read(p []byte) (int, error) {
 	nr, err := r.file.Read(p)
-	atomic.AddInt64(&r.pos, int64(nr))
+	atomic.AddInt64(&r.offset, int64(nr))
 	if err == nil || errors.Is(err, io.EOF) {
 		return nr, nil
 	}
@@ -98,12 +98,13 @@ func (r *Reader) Close() error {
 	return r.close(nil)
 }
 
-func (r *Reader) Tell() int64 {
-	return atomic.LoadInt64(&r.pos)
+func (r *Reader) Offset() int64 {
+	return atomic.LoadInt64(&r.offset)
 }
 
-func (r *Reader) Pos() int64 {
-	return r.Tell()
+func (r *Reader) Len() int64 {
+	// file size is growing
+	return -1
 }
 
 func (r *Reader) File() *os.File {
