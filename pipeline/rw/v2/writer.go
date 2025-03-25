@@ -14,8 +14,8 @@ type Writer interface {
 	runner.Runner
 	plugin.Plugin
 
-	MultiWrite(w ...io.Writer)
-	Wrap(func(io.WriteCloser) io.WriteCloser)
+	Wrap(io.WriteCloser)
+	WithOptions(opts ...Option)
 }
 
 type nopWriteCloser struct {
@@ -29,31 +29,42 @@ type BaseWriter struct {
 	io.WriteCloser
 
 	originWriter io.WriteCloser
-	mw           []io.Writer
+	opt          *option
 }
 
-func NewBaseWriter(name string) Writer {
-	return &BaseWriter{
+func NewBaseWriter(name string, opts ...Option) Writer {
+	w := &BaseWriter{
 		Runner: runner.Create(name),
+		opt:    newOption(),
 	}
+	for _, opt := range opts {
+		opt(w.opt)
+	}
+	return w
 }
 
 func (b *BaseWriter) Init() error {
-	if len(b.mw) > 0 {
+	if len(b.opt.ws) > 0 {
 		b.originWriter = b.WriteCloser
-		ws := make([]io.Writer, 0, 1+len(b.mw))
+		ws := make([]io.Writer, 0, 1+len(b.opt.ws))
 		ws = append(ws, b.WriteCloser)
-		ws = append(ws, b.mw...)
+		ws = append(ws, b.opt.ws...)
 		b.WriteCloser = nopWriteCloser{io.MultiWriter(ws...)}
 	}
 
 	return b.Runner.Init()
 }
 
-func (b *BaseWriter) MultiWrite(w ...io.Writer) {
-	b.mw = append(b.mw, w...)
+func (b *BaseWriter) Wrap(w io.WriteCloser) {
+	if w == nil {
+		panic(ErrWrapNil)
+	}
+	if b.WriteCloser != nil {
+		panic(ErrWrapTwice)
+	}
+	b.WriteCloser = w
 }
 
-func (b *BaseWriter) Wrap(f func(io.WriteCloser) io.WriteCloser) {
-	b.WriteCloser = f(b.WriteCloser)
+func (b *BaseWriter) WithOptions(opts ...Option) {
+	b.opt.with(opts...)
 }
