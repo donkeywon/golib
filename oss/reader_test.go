@@ -9,16 +9,11 @@ import (
 )
 
 func TestReader(t *testing.T) {
-	r := NewReader(nil, &Cfg{
-		URL:     "",
-		Retry:   3,
-		Timeout: 10,
-		Ak:      "",
-		Sk:      "",
-		Region:  "",
-	})
+	r := NewReader(nil, testCfg())
 
-	f, _ := os.OpenFile("/tmp/test.file", os.O_CREATE|os.O_RDWR, 0644)
+	fp := "/tmp/test.file1"
+	os.Remove(fp)
+	f, _ := os.OpenFile(fp, os.O_CREATE|os.O_RDWR, 0644)
 	defer f.Close()
 
 	nw, err := io.Copy(f, r)

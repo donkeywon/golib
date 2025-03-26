@@ -17,8 +17,8 @@ import (
 )
 
 var (
-	ErrAlreadyClosed     = errors.New("already closed")
-	ErrRangeNotSupported = errors.New("range not supported")
+	ErrAlreadyClosed    = errors.New("already closed")
+	ErrRangeUnsupported = errors.New("range unsupported")
 )
 
 type respBodyReader struct {
@@ -121,7 +121,7 @@ func (r *Reader) ReadAt(p []byte, offset int64) (int, error) {
 		return 0, err
 	}
 	if !r.supportRange {
-		return 0, ErrRangeNotSupported
+		return 0, ErrRangeUnsupported
 	}
 
 	var nr int
