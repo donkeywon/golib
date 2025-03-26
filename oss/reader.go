@@ -20,19 +20,27 @@ func NewReader(ctx context.Context, cfg *Cfg, opts ...httpc.Option) *Reader {
 		cfg: cfg,
 	}
 	cfg.setDefaults()
-	allOpts := make([]httpc.Option, 0, 1+len(opts))
-	allOpts = append(allOpts, httpc.ReqOptionFunc(func(r *http.Request) error {
+	allHttpcOptions := make([]httpc.Option, 0, 1+len(opts))
+	allHttpcOptions = append(allHttpcOptions, httpc.ReqOptionFunc(func(r *http.Request) error {
 		return oss.Sign(r, cfg.Ak, cfg.Sk, cfg.Region)
 	}))
-	allOpts = append(allOpts, opts...)
+	allHttpcOptions = append(allHttpcOptions, opts...)
+
+	allOptions := make([]httpio.Option, 0, 5)
+	allOptions = append(allOptions,
+		httpio.Offset(cfg.Offset),
+		httpio.PartSize(cfg.PartSize),
+		httpio.Retry(cfg.Retry),
+		httpio.WithHTTPOptions(allHttpcOptions...),
+	)
+	if cfg.NoRange {
+		allOptions = append(allOptions, httpio.NoRange())
+	}
 
 	r.Reader = httpio.NewReader(ctx,
 		time.Second*time.Duration(cfg.Timeout),
 		cfg.URL,
-		httpio.Offset(cfg.Offset),
-		httpio.PartSize(cfg.PartSize),
-		httpio.Retry(cfg.Retry),
-		httpio.WithHTTPOptions(allOpts...),
+		allOptions...,
 	)
 	return r
 }
