@@ -9,7 +9,6 @@ type Cfg struct {
 	Region   string `json:"region"         yaml:"region"`
 	Offset   int64  `json:"offset"         yaml:"offset"`
 	PartSize int64  `json:"partSize"       yaml:"partSize"`
-	NoRange  bool   `json:"noRange"        yaml:"noRange"`
 }
 
 func (c *Cfg) setDefaults() {

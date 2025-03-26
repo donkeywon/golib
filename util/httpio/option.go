@@ -7,16 +7,13 @@ import (
 type option struct {
 	offset      int64
 	limit       int64
-	partSize    int64
 	retry       int
-	noRange     bool
 	httpOptions []httpc.Option
 }
 
 func newOption() *option {
 	return &option{
-		retry:    1,
-		partSize: 1024 * 1024,
+		retry: 1,
 	}
 }
 
@@ -38,25 +35,11 @@ func Limit(n int64) Option {
 	}
 }
 
-func PartSize(s int64) Option {
-	return func(o *option) {
-		if s > 0 {
-			o.partSize = s
-		}
-	}
-}
-
 func Retry(retry int) Option {
 	return func(o *option) {
 		if retry > 0 {
 			o.retry = retry
 		}
-	}
-}
-
-func NoRange() Option {
-	return func(o *option) {
-		o.noRange = true
 	}
 }
 
