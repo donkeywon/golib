@@ -17,7 +17,6 @@ import (
 )
 
 var (
-	ErrAlreadyClosed    = errors.New("already closed")
 	ErrRangeUnsupported = errors.New("range unsupported")
 )
 
@@ -78,7 +77,7 @@ func NewReader(ctx context.Context, timeout time.Duration, url string, opts ...O
 func (r *Reader) Read(p []byte) (int, error) {
 	select {
 	case <-r.ctx.Done():
-		return 0, ErrAlreadyClosed
+		return 0, r.ctx.Err()
 	default:
 	}
 
@@ -108,7 +107,7 @@ func (r *Reader) Read(p []byte) (int, error) {
 func (r *Reader) ReadAt(p []byte, offset int64) (int, error) {
 	select {
 	case <-r.ctx.Done():
-		return 0, ErrAlreadyClosed
+		return 0, r.ctx.Err()
 	default:
 	}
 
@@ -143,7 +142,7 @@ func (r *Reader) Close() error {
 func (r *Reader) WriteTo(w io.Writer) (int64, error) {
 	select {
 	case <-r.ctx.Done():
-		return 0, ErrAlreadyClosed
+		return 0, r.ctx.Err()
 	default:
 	}
 

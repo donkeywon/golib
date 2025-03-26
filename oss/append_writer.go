@@ -52,7 +52,7 @@ func NewAppendWriter(ctx context.Context, cfg *Cfg) *AppendWriter {
 func (w *AppendWriter) Write(p []byte) (int, error) {
 	select {
 	case <-w.ctx.Done():
-		return 0, ErrAlreadyClosed
+		return 0, w.ctx.Err()
 	default:
 	}
 
@@ -97,7 +97,7 @@ type apwWithoutReadFrom struct {
 func (w *AppendWriter) ReadFrom(r io.Reader) (int64, error) {
 	select {
 	case <-w.ctx.Done():
-		return 0, ErrAlreadyClosed
+		return 0, w.ctx.Err()
 	default:
 	}
 

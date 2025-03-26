@@ -16,7 +16,6 @@ import (
 	"github.com/avast/retry-go/v4"
 	"github.com/donkeywon/golib/errs"
 	"github.com/donkeywon/golib/util/httpc"
-	"github.com/donkeywon/golib/util/httpio"
 	"github.com/donkeywon/golib/util/httpu"
 	"github.com/donkeywon/golib/util/oss"
 	"github.com/google/uuid"
@@ -85,7 +84,7 @@ type mpwWithoutReadFrom struct {
 func (w *MultiPartWriter) ReadFrom(r io.Reader) (int64, error) {
 	select {
 	case <-w.ctx.Done():
-		return 0, httpio.ErrAlreadyClosed
+		return 0, w.ctx.Err()
 	default:
 	}
 
@@ -130,7 +129,7 @@ func (r *readerWrapper) Read(p []byte) (int, error) {
 func (w *MultiPartWriter) Write(p []byte) (int, error) {
 	select {
 	case <-w.ctx.Done():
-		return 0, httpio.ErrAlreadyClosed
+		return 0, w.ctx.Err()
 	default:
 	}
 

@@ -1,11 +1,21 @@
 package v2
 
 import (
+	"bufio"
+	"errors"
 	"io"
+	"time"
 
+	"github.com/donkeywon/golib/aio"
 	"github.com/donkeywon/golib/plugin"
 	"github.com/donkeywon/golib/runner"
 )
+
+var CreateWriter = newBaseWriter
+
+type WriterWrapper interface {
+	Wrap(io.WriteCloser)
+}
 
 type WriterType string
 
@@ -15,7 +25,6 @@ type Writer interface {
 	plugin.Plugin
 
 	Wrap(io.WriteCloser)
-	WithOptions(opts ...Option)
 }
 
 type nopWriteCloser struct {
@@ -29,30 +38,48 @@ type BaseWriter struct {
 	io.WriteCloser
 
 	originWriter io.WriteCloser
-	opt          *option
+
+	ws          []io.Writer
+	bufSize     int
+	queueSize   int
+	enableBuf   bool
+	enableAsync bool
+	deadline    time.Duration
 }
 
-func NewBaseWriter(name string, opts ...Option) Writer {
-	w := &BaseWriter{
+func newBaseWriter(name string) Writer {
+	return &BaseWriter{
 		Runner: runner.Create(name),
-		opt:    newOption(),
 	}
-	for _, opt := range opts {
-		opt(w.opt)
-	}
-	return w
 }
 
 func (b *BaseWriter) Init() error {
-	if len(b.opt.ws) > 0 {
+	b.originWriter = b.WriteCloser
+	if len(b.ws) > 0 {
 		b.originWriter = b.WriteCloser
-		ws := make([]io.Writer, 0, 1+len(b.opt.ws))
+		ws := make([]io.Writer, 0, 1+len(b.ws))
 		ws = append(ws, b.WriteCloser)
-		ws = append(ws, b.opt.ws...)
+		ws = append(ws, b.ws...)
 		b.WriteCloser = nopWriteCloser{io.MultiWriter(ws...)}
 	}
 
+	if b.enableBuf {
+		b.WriteCloser = nopWriteCloser{bufio.NewWriterSize(b.WriteCloser, b.bufSize)}
+	} else if b.enableAsync {
+		b.WriteCloser = nopWriteCloser{aio.NewAsyncWriter(b.WriteCloser, aio.BufSize(b.bufSize), aio.QueueSize(b.queueSize), aio.Deadline(b.deadline))}
+	}
+
 	return b.Runner.Init()
+}
+
+func (b *BaseWriter) Close() error {
+	if b.originWriter != nil && b.originWriter != b.WriteCloser {
+		return errors.Join(b.WriteCloser.Close(), b.originWriter.Close())
+	}
+	if b.WriteCloser != nil {
+		return b.WriteCloser.Close()
+	}
+	return nil
 }
 
 func (b *BaseWriter) Wrap(w io.WriteCloser) {
@@ -65,6 +92,18 @@ func (b *BaseWriter) Wrap(w io.WriteCloser) {
 	b.WriteCloser = w
 }
 
-func (b *BaseWriter) WithOptions(opts ...Option) {
-	b.opt.with(opts...)
+func (b *BaseWriter) MultiWrite(w ...io.Writer) {
+	b.ws = append(b.ws, w...)
+}
+
+func (b *BaseWriter) EnableBuf(bufSize int) {
+	b.enableBuf = true
+	b.bufSize = bufSize
+}
+
+func (b *BaseWriter) EnableAsync(bufSize int, queueSize int, deadline time.Duration) {
+	b.enableAsync = true
+	b.bufSize = bufSize
+	b.queueSize = queueSize
+	b.deadline = deadline
 }
