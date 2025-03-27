@@ -68,12 +68,8 @@ func (h *httpd) Stop() error {
 	return h.s.Close()
 }
 
-func (h *httpd) Type() any {
+func (h *httpd) Type() boot.DaemonType {
 	return DaemonTypeHTTPd
-}
-
-func (h *httpd) GetCfg() any {
-	return h.Cfg
 }
 
 func (h *httpd) AppendError(err ...error) {

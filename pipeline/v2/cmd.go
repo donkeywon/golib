@@ -14,7 +14,7 @@ func init() {
 	plugin.RegWithCfg(WorkerCmd, func() any { return NewCmd() }, func() any { return &cmd.Cfg{} })
 }
 
-const WorkerCmd WorkerType = "cmd"
+const WorkerCmd Type = "cmd"
 
 type Cmd struct {
 	Worker
@@ -83,10 +83,10 @@ func (c *Cmd) Stop() error {
 	return c.c.Process.Kill()
 }
 
-func (c *Cmd) Type() any {
+func (c *Cmd) Type() Type {
 	return WorkerCmd
 }
 
-func (c *Cmd) GetCfg() any {
+func (c *Cmd) GetCfg() *cmd.Cfg {
 	return c.Cfg
 }

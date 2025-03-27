@@ -119,12 +119,8 @@ func (p *profd) Stop() error {
 	return nil
 }
 
-func (p *profd) Type() any {
+func (p *profd) Type() boot.DaemonType {
 	return DaemonTypeProfd
-}
-
-func (p *profd) GetCfg() any {
-	return p.Cfg
 }
 
 func (p *profd) SetHTTPD(d httpd.HTTPD) {

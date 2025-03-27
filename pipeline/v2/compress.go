@@ -16,8 +16,8 @@ func init() {
 }
 
 const (
-	ReaderCompress ReaderType = "compress"
-	WriterCompress WriterType = "compress"
+	ReaderCompress Type = "compressReader"
+	WriterCompress Type = "compressWriter"
 
 	CompressTypeNop    CompressType = "nop"
 	CompressTypeGzip   CompressType = "gzip"
@@ -91,11 +91,11 @@ func (c *CompressReader) Close() error {
 	return c.Reader.Close()
 }
 
-func (c *CompressReader) Type() any {
+func (c *CompressReader) Type() Type {
 	return ReaderCompress
 }
 
-func (c *CompressReader) GetCfg() any {
+func (c *CompressReader) GetCfg() *CompressCfg {
 	return c.CompressCfg
 }
 

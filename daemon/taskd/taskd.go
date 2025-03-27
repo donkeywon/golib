@@ -102,12 +102,8 @@ func (td *taskd) Stop() error {
 	return nil
 }
 
-func (td *taskd) Type() any {
+func (td *taskd) Type() boot.DaemonType {
 	return DaemonTypeTaskd
-}
-
-func (td *taskd) GetCfg() any {
-	return td.Cfg
 }
 
 func (td *taskd) SubmitTask(taskCfg *task.Cfg) (*task.Task, error) {

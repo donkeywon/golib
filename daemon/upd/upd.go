@@ -53,12 +53,8 @@ func (u *upd) Stop() error {
 	return u.Runner.Stop()
 }
 
-func (u *upd) Type() any {
+func (u *upd) Type() boot.DaemonType {
 	return DaemonTypeUpd
-}
-
-func (u *upd) GetCfg() any {
-	return u.Cfg
 }
 
 func (u *upd) markUpgrading() bool {

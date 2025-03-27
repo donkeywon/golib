@@ -12,8 +12,8 @@ func init() {
 }
 
 const (
-	ReaderFtp ReaderType = "ftp"
-	WriterFtp ReaderType = "ftp"
+	ReaderFtp Type = "ftpReader"
+	WriterFtp Type = "ftpWriter"
 )
 
 type FtpCfg struct {
@@ -49,11 +49,11 @@ func (f *FtpReader) Init() error {
 	return f.Reader.Init()
 }
 
-func (f *FtpReader) Type() any {
+func (f *FtpReader) Type() Type {
 	return ReaderFtp
 }
 
-func (f *FtpReader) GetCfg() any {
+func (f *FtpReader) GetCfg() *FtpCfg {
 	return f.FtpCfg
 }
 
@@ -78,11 +78,11 @@ func (f *FtpWriter) Init() error {
 	return f.Writer.Init()
 }
 
-func (f *FtpWriter) Type() any {
+func (f *FtpWriter) Type() Type {
 	return WriterFtp
 }
 
-func (f *FtpWriter) GetCfg() any {
+func (f *FtpWriter) GetCfg() *FtpCfg {
 	return f.FtpCfg
 }
 

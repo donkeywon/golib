@@ -14,8 +14,8 @@ func init() {
 }
 
 const (
-	ReaderOSS ReaderType = "oss"
-	WriterOSS WriterType = "oss"
+	ReaderOSS Type = "ossReader"
+	WriterOSS Type = "ossWriter"
 )
 
 type OSSCfg struct {
@@ -50,12 +50,12 @@ func (o *OSSReader) Wrap(io.ReadCloser) {
 	panic(ErrInvalidWrap)
 }
 
-func (o *OSSReader) Type() any {
+func (o *OSSReader) Type() Type {
 	return ReaderOSS
 }
 
-func (o *OSSReader) GetCfg() any {
-	return o.Cfg
+func (o *OSSReader) GetCfg() *OSSCfg {
+	return o.OSSCfg
 }
 
 type OSSWriter struct {
@@ -83,11 +83,11 @@ func (o *OSSWriter) Wrap(io.WriteCloser) {
 	panic(ErrInvalidWrap)
 }
 
-func (o *OSSWriter) Type() any {
+func (o *OSSWriter) Type() Type {
 	return WriterOSS
 }
 
-func (o *OSSWriter) GetCfg() any {
+func (o *OSSWriter) GetCfg() *OSSCfg {
 	return o.OSSCfg
 }
 

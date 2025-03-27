@@ -12,11 +12,9 @@ import (
 
 var CreateWorker = newBaseWorker
 
-type WorkerType string
-
 type Worker interface {
 	runner.Runner
-	plugin.Plugin
+	plugin.Plugin[Type]
 	io.Closer
 
 	WriteTo(...io.WriteCloser)
@@ -95,9 +93,7 @@ func (b *BaseWorker) Stop() error {
 	panic("not implemented")
 }
 
-func (b *BaseWorker) Type() any { panic("not implemented") }
-
-func (b *BaseWorker) GetCfg() any { panic("not implemented") }
+func (b *BaseWorker) Type() Type { panic("not implemented") }
 
 func (b *BaseWorker) WriteTo(w ...io.WriteCloser) {
 	b.ws = append(b.ws, w...)

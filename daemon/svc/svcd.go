@@ -70,7 +70,8 @@ func (s *svcd) Init() error {
 
 		if cfg, hasCfg := s.svcCfgMap[fqn]; hasCfg {
 			s.Debug("apply cfg to svc", "fqn", fqn, "cfg", cfg)
-			if cs, ok := ins.(plugin.CfgSetter); ok {
+			// TODO generic
+			if cs, ok := ins.(plugin.CfgSetter[any]); ok {
 				cs.SetCfg(cfg)
 			} else {
 				success = reflects.SetFirstMatchedField(ins, cfg)
@@ -114,12 +115,8 @@ func (s *svcd) Get(ns Namespace, m Module, n Name) Svc {
 	return ins.(Svc)
 }
 
-func (s *svcd) Type() any {
+func (s *svcd) Type() boot.DaemonType {
 	return DaemonTypeSvc
-}
-
-func (s *svcd) GetCfg() any {
-	return s.Cfg
 }
 
 func buildFQN(ns Namespace, m Module, n Name) string {

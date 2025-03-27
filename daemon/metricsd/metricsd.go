@@ -67,12 +67,8 @@ func (p *metricsd) Init() error {
 	return p.Runner.Init()
 }
 
-func (p *metricsd) Type() any {
+func (p *metricsd) Type() boot.DaemonType {
 	return DaemonTypeMetricsd
-}
-
-func (p *metricsd) GetCfg() any {
-	return p.Cfg
 }
 
 func (p *metricsd) registerHTTPHandler() {

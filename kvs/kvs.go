@@ -2,7 +2,6 @@ package kvs
 
 import (
 	"github.com/donkeywon/golib/errs"
-	"github.com/donkeywon/golib/plugin"
 	"github.com/donkeywon/golib/util/conv"
 )
 
@@ -14,8 +13,6 @@ type Cfg struct {
 }
 
 type KVS interface {
-	plugin.Plugin
-
 	Open() error
 	Close() error
 

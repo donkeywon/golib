@@ -1,14 +1,11 @@
 package kvs
 
 import (
-	"github.com/donkeywon/golib/plugin"
 	"github.com/donkeywon/golib/util/conv"
 )
 
 // NoErrKVS ignore KVS method returned error.
 type NoErrKVS interface {
-	plugin.Plugin
-
 	Store(k string, v any)
 	StoreAsString(k string, v any)
 	Load(k string) (any, bool)

@@ -3,15 +3,19 @@ package v2
 import (
 	"bufio"
 	"errors"
+	"github.com/donkeywon/golib/plugin"
 	"io"
 
 	"github.com/donkeywon/golib/aio"
-	"github.com/donkeywon/golib/plugin"
 	"github.com/donkeywon/golib/runner"
 )
 
 type canceler interface {
 	Cancel()
+}
+
+type optionApplier interface {
+	WithOptions(...Option)
 }
 
 var CreateReader = newBaseReader
@@ -20,16 +24,14 @@ type ReaderWrapper interface {
 	Wrap(io.ReadCloser)
 }
 
-type ReaderType string
-
 type Reader interface {
 	io.ReadCloser
 	io.WriterTo
 	runner.Runner
-	plugin.Plugin
+	plugin.Plugin[Type]
+	optionApplier
 
 	Wrap(io.ReadCloser)
-	WithOptions(...Option)
 }
 
 type BaseReader struct {
@@ -85,9 +87,7 @@ func (b *BaseReader) Wrap(r io.ReadCloser) {
 	b.ReadCloser = r
 }
 
-func (b *BaseReader) Type() any { panic("not implemented") }
-
-func (b *BaseReader) GetCfg() any { panic("not implemented") }
+func (b *BaseReader) Type() Type { panic("not implemented") }
 
 func (b *BaseReader) WriteTo(w io.Writer) (int64, error) {
 	if wt, ok := b.ReadCloser.(io.WriterTo); ok {
