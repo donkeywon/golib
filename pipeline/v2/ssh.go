@@ -3,24 +3,30 @@ package v2
 import (
 	"errors"
 	"fmt"
-	"github.com/donkeywon/golib/errs"
-	"github.com/donkeywon/golib/util/bufferpool"
-	"github.com/donkeywon/golib/util/sshs"
-	"golang.org/x/crypto/ssh"
 	"io"
 	"path/filepath"
 	"time"
+
+	"github.com/donkeywon/golib/errs"
+	"github.com/donkeywon/golib/plugin"
+	"github.com/donkeywon/golib/util/bufferpool"
+	"github.com/donkeywon/golib/util/sshs"
+	"golang.org/x/crypto/ssh"
 )
 
-const TypeSSH WorkerType = "ssh"
+func init() {
+	plugin.RegWithCfg(WorkerSSH, func() any { return NewSSH() }, func() any { return NewSSHCfg() })
+}
+
+const WorkerSSH WorkerType = "ssh"
 
 type SSHCfg struct {
 	Addr       string `json:"addr"       yaml:"addr" validate:"required"`
 	User       string `json:"user"       yaml:"user" validate:"required"`
 	Pwd        string `json:"pwd"        yaml:"pwd"`
 	PrivateKey string `json:"privateKey" yaml:"privateKey"`
-	Timeout    int    `json:"timeout"    yaml:"timeout"`
 	Path       string `json:"path"       yaml:"path" validate:"required"`
+	Timeout    int    `json:"timeout"    yaml:"timeout"`
 }
 
 func NewSSHCfg() *SSHCfg {
@@ -30,16 +36,15 @@ func NewSSHCfg() *SSHCfg {
 type SSH struct {
 	Worker
 	*SSHCfg
-
-	sshCmd       string
 	sshCli       *ssh.Client
 	sshSess      *ssh.Session
 	sshStderrBuf *bufferpool.Buffer
+	sshCmd       string
 }
 
 func NewSSH() *SSH {
 	return &SSH{
-		Worker: CreateWorker(string(TypeSSH)),
+		Worker: CreateWorker(string(WorkerSSH)),
 		SSHCfg: NewSSHCfg(),
 	}
 }
@@ -95,7 +100,7 @@ func (s *SSH) Close() error {
 }
 
 func (s *SSH) Type() any {
-	return TypeSSH
+	return WorkerSSH
 }
 
 func (s *SSH) GetCfg() any {

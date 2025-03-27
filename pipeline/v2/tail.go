@@ -4,10 +4,15 @@ import (
 	"io"
 
 	"github.com/donkeywon/golib/errs"
+	"github.com/donkeywon/golib/plugin"
 	"github.com/donkeywon/golib/tail"
 )
 
-const TypeTail ReaderType = "tail"
+func init() {
+	plugin.RegWithCfg(ReaderTail, func() any { return NewTail() }, func() any { return NewTailCfg() })
+}
+
+const ReaderTail ReaderType = "tail"
 
 type TailCfg struct {
 	Path   string `json:"path" yaml:"path"`
@@ -27,7 +32,7 @@ type Tail struct {
 
 func NewTail() *Tail {
 	return &Tail{
-		Reader:  CreateReader(string(TypeTail)),
+		Reader:  CreateReader(string(ReaderTail)),
 		TailCfg: NewTailCfg(),
 	}
 }
@@ -48,7 +53,7 @@ func (t *Tail) Wrap(io.ReadCloser) {
 }
 
 func (t *Tail) Type() any {
-	return TypeTail
+	return ReaderTail
 }
 
 func (t *Tail) GetCfg() any {

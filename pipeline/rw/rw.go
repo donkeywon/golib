@@ -310,7 +310,7 @@ func (b *baseRW) Stop() error {
 }
 
 func (b *baseRW) Type() any {
-	panic("method RW.Type not implemented")
+	panic("method RW.Kind not implemented")
 }
 
 func (b *baseRW) GetCfg() any {
