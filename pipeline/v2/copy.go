@@ -1,10 +1,10 @@
 package v2
 
 import (
-	"github.com/donkeywon/golib/errs"
-	"github.com/donkeywon/golib/runner"
-	"github.com/donkeywon/golib/util/bytespool"
 	"io"
+
+	"github.com/donkeywon/golib/errs"
+	"github.com/donkeywon/golib/util/bytespool"
 )
 
 const TypeCopy WorkerType = "copy"
@@ -34,6 +34,8 @@ func (c *Copy) Init() error {
 }
 
 func (c *Copy) Start() error {
+	defer c.Close()
+
 	bufSize := c.CopyCfg.BufSize
 	if bufSize <= 0 {
 		bufSize = 32 * 1024
@@ -50,8 +52,8 @@ func (c *Copy) Start() error {
 }
 
 func (c *Copy) Stop() error {
-	if rr, ok := c.Reader().(runner.Runner); ok {
-		rr.Cancel()
+	if rc, ok := c.Reader().(canceler); ok {
+		rc.Cancel()
 		return nil
 	}
 	return c.Reader().Close()

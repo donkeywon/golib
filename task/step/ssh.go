@@ -62,7 +62,7 @@ func (s *SSHStep) Init() error {
 
 func (s *SSHStep) Start() error {
 	var err error
-	s.cli, s.sess, err = sshs.NewClient(s.SSHStepCfg.Addr, s.SSHStepCfg.User, s.SSHStepCfg.Pwd, []byte(s.SSHStepCfg.PrivateKey), s.SSHStepCfg.Timeout)
+	s.cli, s.sess, err = sshs.NewClient(s.SSHStepCfg.Addr, s.SSHStepCfg.User, s.SSHStepCfg.Pwd, []byte(s.SSHStepCfg.PrivateKey), time.Second*time.Duration(s.SSHStepCfg.Timeout))
 	if err != nil {
 		return errs.Wrap(err, "create ssh client failed")
 	}

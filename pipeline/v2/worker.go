@@ -1,6 +1,7 @@
 package v2
 
 import (
+	"errors"
 	"io"
 	"reflect"
 
@@ -16,6 +17,10 @@ type WorkerType string
 type Worker interface {
 	runner.Runner
 	plugin.Plugin
+	io.Closer
+
+	WriteTo(...io.WriteCloser)
+	ReadFrom(...io.ReadCloser)
 
 	Reader() io.ReadCloser
 	Writer() io.WriteCloser
@@ -44,11 +49,11 @@ func (b *BaseWorker) Init() error {
 			panic(ErrNotWrapper)
 		} else {
 			ww.Wrap(b.ws[i+1])
-			b.w = b.ws[i]
 		}
 	}
+	b.w = b.ws[0]
 
-	for i := len(b.rs) - 1; i >= 0; i-- {
+	for i := len(b.rs) - 2; i >= 0; i-- {
 		if rr, ok := b.rs[i].(ReaderWrapper); !ok {
 			b.Error("reader is not ReaderWrapper", nil, "reader", reflect.TypeOf(b.rs[i]))
 			panic(ErrNotWrapper)
@@ -57,10 +62,11 @@ func (b *BaseWorker) Init() error {
 			b.r = b.rs[i]
 		}
 	}
+	b.r = b.rs[0]
 
 	var err error
 	for i := len(b.ws) - 1; i >= 0; i-- {
-		if ww, ok := b.ws[i].(runner.Runner); !ok {
+		if ww, ok := b.ws[i].(runner.Runner); ok {
 			err = runner.Init(ww)
 			if err != nil {
 				return errs.Wrapf(err, "init writer failed: %s", reflect.TypeOf(b.ws[i]).String())
@@ -68,7 +74,7 @@ func (b *BaseWorker) Init() error {
 		}
 	}
 	for i := len(b.rs) - 1; i >= 0; i-- {
-		if rr, ok := b.rs[i].(runner.Runner); !ok {
+		if rr, ok := b.rs[i].(runner.Runner); ok {
 			err = runner.Init(rr)
 			if err != nil {
 				return errs.Wrapf(err, "init reader failed: %s", reflect.TypeOf(b.rs[i]).String())
@@ -105,4 +111,25 @@ func (b *BaseWorker) Reader() io.ReadCloser {
 
 func (b *BaseWorker) Writer() io.WriteCloser {
 	return b.w
+}
+
+func (b *BaseWorker) Close() error {
+	defer b.Cancel()
+	defer func() {
+		err := recover()
+		if err != nil {
+			b.AppendError(errs.PanicToErrWithMsg(err, "panic on closing"))
+		}
+	}()
+	var err error
+	if b.Reader() != nil {
+		err = b.Reader().Close()
+	}
+	if b.Writer() != nil {
+		err = errors.Join(err, b.Writer().Close())
+	}
+	if err != nil {
+		b.AppendError(errs.Wrap(err, "close failed"))
+	}
+	return nil
 }

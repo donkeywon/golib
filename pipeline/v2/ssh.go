@@ -1,46 +1,34 @@
-package rw
+package v2
 
 import (
 	"errors"
 	"fmt"
-	"io"
-	"path/filepath"
-	"time"
-
 	"github.com/donkeywon/golib/errs"
-	"github.com/donkeywon/golib/plugin"
 	"github.com/donkeywon/golib/util/bufferpool"
 	"github.com/donkeywon/golib/util/sshs"
 	"golang.org/x/crypto/ssh"
+	"io"
+	"path/filepath"
+	"time"
 )
 
-func init() {
-	plugin.RegWithCfg(TypeSSH, func() any { return NewSSH() }, func() any { return NewSSHCfg() })
-}
-
-const (
-	TypeSSH Type = "ssh"
-
-	defaultSSHTimeout = 60
-)
+const TypeSSH WorkerType = "ssh"
 
 type SSHCfg struct {
-	Addr       string `json:"addr"       validate:"required"  yaml:"addr"`
-	User       string `json:"user"       validate:"required"  yaml:"user"`
+	Addr       string `json:"addr"       yaml:"addr" validate:"required"`
+	User       string `json:"user"       yaml:"user" validate:"required"`
 	Pwd        string `json:"pwd"        yaml:"pwd"`
 	PrivateKey string `json:"privateKey" yaml:"privateKey"`
 	Timeout    int    `json:"timeout"    yaml:"timeout"`
-	Path       string `json:"path"       validate:"required"  yaml:"path"`
+	Path       string `json:"path"       yaml:"path" validate:"required"`
 }
 
 func NewSSHCfg() *SSHCfg {
-	return &SSHCfg{
-		Timeout: defaultSSHTimeout,
-	}
+	return &SSHCfg{}
 }
 
 type SSH struct {
-	RW
+	Worker
 	*SSHCfg
 
 	sshCmd       string
@@ -49,42 +37,42 @@ type SSH struct {
 	sshStderrBuf *bufferpool.Buffer
 }
 
-func NewSSH() RW {
+func NewSSH() *SSH {
 	return &SSH{
-		RW: CreateBase(string(TypeSSH)),
+		Worker: CreateWorker(string(TypeSSH)),
+		SSHCfg: NewSSHCfg(),
 	}
 }
 
 func (s *SSH) Init() error {
-	if !s.IsStarter() {
-		return errs.New("ssh rw must be Starter")
-	}
-
 	var err error
 	s.sshCli, s.sshSess, err = sshs.NewClient(s.SSHCfg.Addr, s.SSHCfg.User, s.SSHCfg.Pwd, []byte(s.SSHCfg.PrivateKey), time.Second*time.Duration(s.SSHCfg.Timeout))
 	if err != nil {
-		return errs.Wrap(err, "create ssh cli and session failed")
+		return errs.Wrap(err, "failed to create ssh client and session")
 	}
+
 	if s.Reader() != nil {
 		s.sshCmd = sshWriteCmd(s.SSHCfg.Path)
-		s.sshSess.Stdin = s
+		s.sshSess.Stdin = s.Reader()
 	} else if s.Writer() != nil {
 		s.sshCmd = sshReadCmd(s.SSHCfg.Path)
-		s.sshSess.Stdout = s
+		s.sshSess.Stdout = s.Writer()
 	} else {
-		return errs.Errorf("ssh rw must has Reader or Writer")
+		return errs.Errorf("ssh must has Reader or Writer")
 	}
-	s.sshStderrBuf = bufferpool.Get()
-	s.sshSess.Stderr = s.sshStderrBuf
 
-	return s.RW.Init()
+	return s.Worker.Init()
 }
 
 func (s *SSH) Start() error {
+	s.sshStderrBuf = bufferpool.Get()
+	defer s.sshStderrBuf.Free()
+	s.sshSess.Stderr = s.sshStderrBuf
+
 	err := s.sshSess.Run(s.sshCmd)
 	exitError := &ssh.ExitError{}
 	if errors.As(err, &exitError) {
-		s.Info("exit signaled", "signal", exitError.Signal)
+		s.Info("ssh exit signaled", "signal", exitError.Signal)
 		err = nil
 	}
 
@@ -94,16 +82,16 @@ func (s *SSH) Start() error {
 	return nil
 }
 
-func (s *SSH) Close() error {
-	return errors.Join(sshs.Close(s.sshCli, s.sshSess), s.RW.Close())
-}
-
 func (s *SSH) Stop() error {
 	err := s.sshSess.Signal(ssh.SIGKILL)
 	if err == io.EOF {
 		return nil
 	}
 	return errs.Wrap(err, "ssh signal kill failed")
+}
+
+func (s *SSH) Close() error {
+	return errors.Join(sshs.Close(s.sshCli, s.sshSess), s.Worker.Close())
 }
 
 func (s *SSH) Type() any {
@@ -120,5 +108,5 @@ func sshReadCmd(path string) string {
 
 func sshWriteCmd(path string) string {
 	dir := filepath.Dir(path)
-	return fmt.Sprintf("rm -f %s; mkdir -p %s; cat > %s", path, dir, path)
+	return fmt.Sprintf("mkdir -p %s; cat > %s", dir, path)
 }

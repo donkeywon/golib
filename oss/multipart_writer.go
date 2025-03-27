@@ -220,6 +220,10 @@ func (w *MultiPartWriter) abort() error {
 }
 
 func (w *MultiPartWriter) complete() error {
+	if len(w.blockList) == 0 && len(w.parts) == 0 {
+		return nil
+	}
+
 	var (
 		url         string
 		err         error

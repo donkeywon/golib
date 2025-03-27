@@ -2,6 +2,7 @@ package ftp
 
 import (
 	"errors"
+	"io"
 	"net"
 
 	"github.com/avast/retry-go/v4"
@@ -55,4 +56,8 @@ func (r *Reader) Read(b []byte) (int, error) {
 
 func (r *Reader) Close() error {
 	return errors.Join(r.dataConn.Close(), r.Client.checkDataShut(), r.Client.Close())
+}
+
+func (r *Reader) WriteTo(w io.Writer) (n int64, err error) {
+	return io.Copy(w, r.dataConn)
 }

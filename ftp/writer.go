@@ -2,6 +2,7 @@ package ftp
 
 import (
 	"errors"
+	"io"
 	"net"
 	"path/filepath"
 
@@ -51,4 +52,8 @@ func (w *Writer) Write(b []byte) (int, error) {
 
 func (w *Writer) Close() error {
 	return errors.Join(w.dataConn.Close(), w.Client.Close())
+}
+
+func (w *Writer) ReadFrom(r io.Reader) (int64, error) {
+	return io.Copy(w.dataConn, r)
 }
