@@ -15,7 +15,7 @@ import (
 )
 
 func init() {
-	plugin.RegWithCfg(WorkerSSH, func() any { return NewSSH() }, func() any { return NewSSHCfg() })
+	plugin.RegWithCfg(WorkerSSH, NewSSH, NewSSHCfg)
 }
 
 const WorkerSSH Type = "ssh"
@@ -99,7 +99,7 @@ func (s *SSH) Close() error {
 	return errors.Join(sshs.Close(s.sshCli, s.sshSess), s.Worker.Close())
 }
 
-func (s *SSH) Type() any {
+func (s *SSH) Type() Type {
 	return WorkerSSH
 }
 

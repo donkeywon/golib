@@ -67,6 +67,7 @@ func (b *BaseWorker) Init() error {
 	var err error
 	for i := len(b.ws) - 1; i >= 0; i-- {
 		if ww, ok := b.ws[i].(runner.Runner); ok {
+			ww.Inherit(b)
 			err = runner.Init(ww)
 			if err != nil {
 				return errs.Wrapf(err, "init writer failed: %s", reflect.TypeOf(b.ws[i]).String())
@@ -75,6 +76,7 @@ func (b *BaseWorker) Init() error {
 	}
 	for i := len(b.rs) - 1; i >= 0; i-- {
 		if rr, ok := b.rs[i].(runner.Runner); ok {
+			rr.Inherit(b)
 			err = runner.Init(rr)
 			if err != nil {
 				return errs.Wrapf(err, "init reader failed: %s", reflect.TypeOf(b.rs[i]).String())

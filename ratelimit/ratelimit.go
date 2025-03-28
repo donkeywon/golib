@@ -13,6 +13,7 @@ type RateLimiterType string
 
 type RxTxRateLimiter interface {
 	runner.Runner
+	plugin.Plugin[RateLimiterType]
 	RxWaitN(n int, timeout int) error
 	TxWaitN(n int, timeout int) error
 }

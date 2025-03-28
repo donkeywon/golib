@@ -11,7 +11,7 @@ import (
 )
 
 func init() {
-	plugin.Reg(PluginTypeRWGroup, func() any { return NewRWGroup() })
+	plugin.Reg(PluginTypeRWGroup, func() plugin.Plugin[plugin.Type] { return NewRWGroup() })
 	plugin.RegCfg(PluginTypeRWGroup, func() any { return NewRWGroupCfg() })
 }
 
@@ -165,6 +165,10 @@ func (g *RWGroup) Readers() []rw.RW {
 
 func (g *RWGroup) Writers() []rw.RW {
 	return g.writers
+}
+
+func (g *RWGroup) Type() plugin.Type {
+	return PluginTypeRWGroup
 }
 
 func (g *RWGroup) LastWriter() rw.RW {
