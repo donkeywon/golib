@@ -9,8 +9,8 @@ import (
 )
 
 func init() {
-	plugin.RegWithCfg(ReaderFtp, func() Common { return NewFtpReader() }, NewFtpCfg)
-	plugin.RegWithCfg(WriterFtp, func() Common { return NewFtpWriter() }, NewFtpCfg)
+	plugin.RegWithCfg(ReaderFtp, func() Common { return NewFtpReader() }, func() any { return NewFtpCfg() })
+	plugin.RegWithCfg(WriterFtp, func() Common { return NewFtpWriter() }, func() any { return NewFtpCfg() })
 }
 
 const (
