@@ -13,24 +13,3 @@ type Common interface {
 	plugin.Plugin[Type]
 	optionApplier
 }
-
-type CommonReader interface {
-	Common
-	Reader
-}
-
-type CommonWriter interface {
-	Common
-	Writer
-}
-
-type CommonReadWriter interface {
-	Common
-	Reader
-	Writer
-}
-
-type ReadWriter interface {
-	Reader
-	Writer
-}

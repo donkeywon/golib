@@ -16,6 +16,7 @@ type WriterWrapper interface {
 }
 
 type Writer interface {
+	Common
 	io.Writer
 	io.ReaderFrom
 
@@ -53,7 +54,7 @@ type BaseWriter struct {
 	opt *option
 }
 
-func newBaseWriter(name string) CommonWriter {
+func newBaseWriter(name string) Writer {
 	return &BaseWriter{
 		Runner: runner.Create(name),
 		opt:    newOption(),

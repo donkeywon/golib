@@ -15,7 +15,7 @@ import (
 )
 
 func init() {
-	plugin.RegWithCfg(WorkerSSH, NewSSH, NewSSHCfg)
+	plugin.RegWithCfg(WorkerSSH, func() Common { return NewSSH() }, NewSSHCfg)
 }
 
 const WorkerSSH Type = "ssh"
@@ -104,8 +104,8 @@ func (s *SSH) Type() Type {
 	return WorkerSSH
 }
 
-func (s *SSH) SetCfg(c *SSHCfg) {
-	s.c = c
+func (s *SSH) SetCfg(c any) {
+	s.c = c.(*SSHCfg)
 }
 
 func sshReadCmd(path string) string {

@@ -9,7 +9,7 @@ import (
 )
 
 func init() {
-	plugin.RegWithCfg(ReaderTail, NewTail, NewTailCfg)
+	plugin.RegWithCfg(ReaderTail, func() Common { return NewTail() }, NewTailCfg)
 }
 
 const ReaderTail Type = "tail"
@@ -24,7 +24,7 @@ func NewTailCfg() *TailCfg {
 }
 
 type Tail struct {
-	CommonReader
+	Reader
 
 	c *TailCfg
 	t *tail.Reader
@@ -32,8 +32,8 @@ type Tail struct {
 
 func NewTail() *Tail {
 	return &Tail{
-		CommonReader: CreateReader(string(ReaderTail)),
-		c:            NewTailCfg(),
+		Reader: CreateReader(string(ReaderTail)),
+		c:      NewTailCfg(),
 	}
 }
 
@@ -45,7 +45,7 @@ func (t *Tail) Init() error {
 	}
 
 	t.WrapReader(t.t)
-	return t.CommonReader.Init()
+	return t.Reader.Init()
 }
 
 func (t *Tail) WrapReader(io.ReadCloser) {
@@ -56,6 +56,6 @@ func (t *Tail) Type() Type {
 	return ReaderTail
 }
 
-func (t *Tail) SetCfg(c *TailCfg) {
-	t.c = c
+func (t *Tail) SetCfg(c any) {
+	t.c = c.(*TailCfg)
 }

@@ -24,6 +24,7 @@ type ReaderWrapper interface {
 }
 
 type Reader interface {
+	Common
 	io.Reader
 	io.WriterTo
 
@@ -39,7 +40,7 @@ type BaseReader struct {
 	opt *option
 }
 
-func newBaseReader(name string) CommonReader {
+func newBaseReader(name string) Reader {
 	return &BaseReader{
 		Runner: runner.Create(name),
 		opt:    newOption(),

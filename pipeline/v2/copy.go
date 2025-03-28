@@ -9,7 +9,7 @@ import (
 )
 
 func init() {
-	plugin.RegWithCfg(WorkerCopy, NewCopy, NewCopyCfg)
+	plugin.RegWithCfg(WorkerCopy, func() Common { return NewCopy() }, NewCopyCfg)
 }
 
 const WorkerCopy Type = "copy"
@@ -69,6 +69,6 @@ func (c *Copy) Type() Type {
 	return WorkerCopy
 }
 
-func (c *Copy) SetCfg(cfg *CopyCfg) {
-	c.c = cfg
+func (c *Copy) SetCfg(cfg any) {
+	c.c = cfg.(*CopyCfg)
 }
