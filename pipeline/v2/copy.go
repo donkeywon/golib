@@ -24,13 +24,14 @@ func NewCopyCfg() *CopyCfg {
 
 type Copy struct {
 	Worker
-	*CopyCfg
+
+	c *CopyCfg
 }
 
 func NewCopy() *Copy {
 	return &Copy{
-		Worker:  CreateWorker(string(WorkerCopy)),
-		CopyCfg: NewCopyCfg(),
+		Worker: CreateWorker(string(WorkerCopy)),
+		c:      NewCopyCfg(),
 	}
 }
 
@@ -41,7 +42,7 @@ func (c *Copy) Init() error {
 func (c *Copy) Start() error {
 	defer c.Close()
 
-	bufSize := c.CopyCfg.BufSize
+	bufSize := c.c.BufSize
 	if bufSize <= 0 {
 		bufSize = 32 * 1024
 	}
@@ -68,6 +69,6 @@ func (c *Copy) Type() Type {
 	return WorkerCopy
 }
 
-func (c *Copy) GetCfg() *CopyCfg {
-	return c.CopyCfg
+func (c *Copy) SetCfg(cfg *CopyCfg) {
+	c.c = cfg
 }

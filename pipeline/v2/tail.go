@@ -24,31 +24,31 @@ func NewTailCfg() *TailCfg {
 }
 
 type Tail struct {
-	Reader
-	*TailCfg
+	CommonReader
 
+	c *TailCfg
 	t *tail.Reader
 }
 
 func NewTail() *Tail {
 	return &Tail{
-		Reader:  CreateReader(string(ReaderTail)),
-		TailCfg: NewTailCfg(),
+		CommonReader: CreateReader(string(ReaderTail)),
+		c:            NewTailCfg(),
 	}
 }
 
 func (t *Tail) Init() error {
 	var err error
-	t.t, err = tail.NewReader(t.TailCfg.Path, t.Offset)
+	t.t, err = tail.NewReader(t.c.Path, t.c.Offset)
 	if err != nil {
-		return errs.Wrapf(err, "create tail reader failed: %s:%d", t.TailCfg.Path, t.Offset)
+		return errs.Wrapf(err, "create tail reader failed: %s:%d", t.c.Path, t.c.Offset)
 	}
 
-	t.Wrap(t.t)
-	return t.Reader.Init()
+	t.WrapReader(t.t)
+	return t.CommonReader.Init()
 }
 
-func (t *Tail) Wrap(io.ReadCloser) {
+func (t *Tail) WrapReader(io.ReadCloser) {
 	panic(ErrInvalidWrap)
 }
 
@@ -56,6 +56,6 @@ func (t *Tail) Type() Type {
 	return ReaderTail
 }
 
-func (t *Tail) GetCfg() *TailCfg {
-	return t.TailCfg
+func (t *Tail) SetCfg(c *TailCfg) {
+	t.c = c
 }

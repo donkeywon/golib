@@ -3,7 +3,6 @@ package v2
 import (
 	"bufio"
 	"errors"
-	"github.com/donkeywon/golib/plugin"
 	"io"
 
 	"github.com/donkeywon/golib/aio"
@@ -17,13 +16,10 @@ type WriterWrapper interface {
 }
 
 type Writer interface {
-	io.WriteCloser
+	io.Writer
 	io.ReaderFrom
-	runner.Runner
-	plugin.Plugin[Type]
-	optionApplier
 
-	Wrap(io.WriteCloser)
+	WrapWriter(io.WriteCloser)
 }
 
 type nopWriteCloser struct {
@@ -57,7 +53,7 @@ type BaseWriter struct {
 	opt *option
 }
 
-func newBaseWriter(name string) Writer {
+func newBaseWriter(name string) CommonWriter {
 	return &BaseWriter{
 		Runner: runner.Create(name),
 		opt:    newOption(),
@@ -94,7 +90,7 @@ func (b *BaseWriter) Close() error {
 	return nil
 }
 
-func (b *BaseWriter) Wrap(w io.WriteCloser) {
+func (b *BaseWriter) WrapWriter(w io.WriteCloser) {
 	if w == nil {
 		panic(ErrWrapNil)
 	}

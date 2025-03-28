@@ -66,7 +66,7 @@ func SetLoggerLevel(lvl string) {
 }
 
 // RegDaemon register a Daemon creator and its config creator.
-func RegDaemon(typ DaemonType, creator plugin.Creator, cfgCreator plugin.CfgCreator) {
+func RegDaemon(typ DaemonType, creator plugin.Creator[DaemonType, plugin.Plugin[DaemonType]], cfgCreator plugin.CfgCreator[any]) {
 	if slices.Contains(_daemons, typ) {
 		panic("duplicate register daemon: " + typ)
 	}
@@ -166,10 +166,7 @@ func (b *Booter) Init() error {
 	}
 
 	for _, daemonType := range _daemons {
-		daemon, isDaemon := plugin.CreateWithCfg(daemonType, b.cfgMap[string(daemonType)]).(Daemon)
-		if !isDaemon {
-			return errs.Errorf("plugin %+v is not a Daemon", daemonType)
-		}
+		daemon := plugin.CreateWithCfg[DaemonType, Daemon](daemonType, b.cfgMap[string(daemonType)])
 		b.AppendRunner(daemon)
 	}
 

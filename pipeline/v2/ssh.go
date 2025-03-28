@@ -35,7 +35,8 @@ func NewSSHCfg() *SSHCfg {
 
 type SSH struct {
 	Worker
-	*SSHCfg
+
+	c            *SSHCfg
 	sshCli       *ssh.Client
 	sshSess      *ssh.Session
 	sshStderrBuf *bufferpool.Buffer
@@ -45,22 +46,22 @@ type SSH struct {
 func NewSSH() *SSH {
 	return &SSH{
 		Worker: CreateWorker(string(WorkerSSH)),
-		SSHCfg: NewSSHCfg(),
+		c:      NewSSHCfg(),
 	}
 }
 
 func (s *SSH) Init() error {
 	var err error
-	s.sshCli, s.sshSess, err = sshs.NewClient(s.SSHCfg.Addr, s.SSHCfg.User, s.SSHCfg.Pwd, []byte(s.SSHCfg.PrivateKey), time.Second*time.Duration(s.SSHCfg.Timeout))
+	s.sshCli, s.sshSess, err = sshs.NewClient(s.c.Addr, s.c.User, s.c.Pwd, []byte(s.c.PrivateKey), time.Second*time.Duration(s.c.Timeout))
 	if err != nil {
 		return errs.Wrap(err, "failed to create ssh client and session")
 	}
 
 	if s.Reader() != nil {
-		s.sshCmd = sshWriteCmd(s.SSHCfg.Path)
+		s.sshCmd = sshWriteCmd(s.c.Path)
 		s.sshSess.Stdin = s.Reader()
 	} else if s.Writer() != nil {
-		s.sshCmd = sshReadCmd(s.SSHCfg.Path)
+		s.sshCmd = sshReadCmd(s.c.Path)
 		s.sshSess.Stdout = s.Writer()
 	} else {
 		return errs.Errorf("ssh must has Reader or Writer")
@@ -103,8 +104,8 @@ func (s *SSH) Type() Type {
 	return WorkerSSH
 }
 
-func (s *SSH) GetCfg() any {
-	return s.SSHCfg
+func (s *SSH) SetCfg(c *SSHCfg) {
+	s.c = c
 }
 
 func sshReadCmd(path string) string {

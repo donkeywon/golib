@@ -11,7 +11,7 @@ import (
 )
 
 func init() {
-	plugin.RegWithCfg(TypeCmd, func() any { return NewCmd() }, func() any { return NewCmdCfg() })
+	plugin.RegWithCfg(TypeCmd, NewCmd, NewCmdCfg)
 }
 
 const TypeCmd Type = "cmd"
@@ -87,10 +87,6 @@ func (c *Cmd) Stop() error {
 	return c.cmd.Process.Kill()
 }
 
-func (c *Cmd) Type() any {
+func (c *Cmd) Type() Type {
 	return TypeCmd
-}
-
-func (c *Cmd) GetCfg() any {
-	return c.Cfg
 }

@@ -16,8 +16,7 @@ import (
 )
 
 func init() {
-	plugin.RegCfg(RateLimiterTypeHost, func() any { return NewHostRateLimiterCfg() })
-	plugin.Reg(RateLimiterTypeHost, func() any { return NewHostRateLimiter() })
+	plugin.RegWithCfg(RateLimiterTypeHost, NewHostRateLimiter, NewHostRateLimiterCfg)
 }
 
 const RateLimiterTypeHost RateLimiterType = "host"
@@ -106,6 +105,10 @@ func (h *HostRateLimiter) Init() error {
 	}
 
 	return h.Runner.Init()
+}
+
+func (h *HostRateLimiter) Type() RateLimiterType {
+	return RateLimiterTypeHost
 }
 
 func (h *HostRateLimiter) RxWaitN(n int, timeout int) error {
