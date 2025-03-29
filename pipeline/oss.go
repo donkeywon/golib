@@ -32,6 +32,8 @@ func NewOSSCfg() *OSSCfg {
 type OSSReader struct {
 	Reader
 	*OSSCfg
+
+	r *oss.Reader
 }
 
 func NewOSSReader() *OSSReader {
@@ -42,7 +44,8 @@ func NewOSSReader() *OSSReader {
 }
 
 func (o *OSSReader) Init() error {
-	o.Reader.WrapReader(createOSSReader(o.Ctx(), o.OSSCfg))
+	o.r = createOSSReader(o.Ctx(), o.OSSCfg)
+	o.Reader.WrapReader(o.r)
 	return o.Reader.Init()
 }
 
@@ -56,6 +59,10 @@ func (o *OSSReader) Type() Type {
 
 func (o *OSSReader) SetCfg(c any) {
 	o.OSSCfg = c.(*OSSCfg)
+}
+
+func (o *OSSReader) Size() int64 {
+	return o.r.Size()
 }
 
 type OSSWriter struct {

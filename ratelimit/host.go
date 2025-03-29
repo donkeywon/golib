@@ -16,10 +16,10 @@ import (
 )
 
 func init() {
-	plugin.RegWithCfg(RateLimiterTypeHost, NewHostRateLimiter, func() any { return NewHostRateLimiterCfg() })
+	plugin.RegWithCfg(TypeHost, func() RxTxRateLimiter { return NewHostRateLimiter() }, func() any { return NewHostRateLimiterCfg() })
 }
 
-const RateLimiterTypeHost RateLimiterType = "host"
+const TypeHost Type = "host"
 
 type HostRateLimiterCfg struct {
 	Nic             string `json:"nic"             validate:"required"    yaml:"nic"`
@@ -107,8 +107,8 @@ func (h *HostRateLimiter) Init() error {
 	return h.Runner.Init()
 }
 
-func (h *HostRateLimiter) Type() RateLimiterType {
-	return RateLimiterTypeHost
+func (h *HostRateLimiter) Type() Type {
+	return TypeHost
 }
 
 func (h *HostRateLimiter) RxWaitN(n int, timeout int) error {
@@ -173,15 +173,15 @@ func (h *HostRateLimiter) monitorCurSpeed() {
 	rxPass := atomic.LoadUint64(&h.rxPass)
 	txPass := atomic.LoadUint64(&h.txPass)
 	h.Info("speed",
-		"rx_speed", f2MBPS(float64(rxPass-h.lastRxPass)/1024/1024/float64(h.MonitorInterval)),
-		"tx_speed", f2MBPS(float64(txPass-h.lastTxPass)/1024/1024/float64(h.MonitorInterval)))
+		"rx_speed", f2MBPS(float64(rxPass-h.lastRxPass)/1048576/float64(h.MonitorInterval)),
+		"tx_speed", f2MBPS(float64(txPass-h.lastTxPass)/1048576/float64(h.MonitorInterval)))
 	h.lastRxPass = rxPass
 	h.lastTxPass = txPass
 }
 
 func (h *HostRateLimiter) setRxTxLimit(rxL float64, txL float64) {
-	h.rxRL.SetLimit(rate.Limit(rxL * 1024 * 1024))
-	h.txRL.SetLimit(rate.Limit(txL * 1024 * 1024))
+	h.rxRL.SetLimit(rate.Limit(rxL * 1048576))
+	h.txRL.SetLimit(rate.Limit(txL * 1048576))
 }
 
 func (h *HostRateLimiter) handleNetDevStats(stat *eth.NetDevStats) {

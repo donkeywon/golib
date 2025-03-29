@@ -66,10 +66,10 @@ func (b *BaseReader) Close() error {
 	defer b.Cancel()
 
 	if b.originReader != nil && b.originReader != b.ReadCloser {
-		return errors.Join(b.ReadCloser.Close(), b.originReader.Close())
+		return errors.Join(b.ReadCloser.Close(), b.originReader.Close(), b.opt.onclose())
 	}
 	if b.ReadCloser != nil {
-		return b.ReadCloser.Close()
+		return errors.Join(b.ReadCloser.Close(), b.opt.onclose())
 	}
 	return nil
 }
@@ -96,4 +96,15 @@ func (b *BaseReader) WriteTo(w io.Writer) (int64, error) {
 
 func (b *BaseReader) WithOptions(opts ...Option) {
 	b.opt.with(opts...)
+}
+
+func (b *BaseReader) Size() int64 {
+	switch t := b.originReader.(type) {
+	case hasSize:
+		return t.Size()
+	case hasSize2:
+		return int64(t.Size())
+	default:
+		return 0
+	}
 }

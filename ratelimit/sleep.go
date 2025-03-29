@@ -9,10 +9,10 @@ import (
 )
 
 func init() {
-	plugin.RegWithCfg(RateLimiterTypeSleep, NewSleepRateLimiter, func() any { return NewSleepRateLimiterCfg() })
+	plugin.RegWithCfg(TypeSleep, func() RxTxRateLimiter { return NewSleepRateLimiter() }, func() any { return NewSleepRateLimiterCfg() })
 }
 
-const RateLimiterTypeSleep RateLimiterType = "sleep"
+const TypeSleep Type = "sleep"
 
 type SleepRateLimiterCfg struct {
 	Millisecond int
@@ -62,6 +62,6 @@ func (srl *SleepRateLimiter) TxWaitN(n int, timeout int) error {
 	return srl.waitN(n, timeout)
 }
 
-func (srl *SleepRateLimiter) Type() RateLimiterType {
-	return RateLimiterTypeSleep
+func (srl *SleepRateLimiter) Type() Type {
+	return TypeSleep
 }
