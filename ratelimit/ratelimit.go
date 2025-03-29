@@ -46,7 +46,7 @@ func (c *RateLimiterCfg) customUnmarshal(data []byte, unmarshaler func([]byte, a
 	c.Type = RateLimiterType(typ.Str)
 
 	cv := rateLimiterCfgOnlyCfg{}
-	cv.Cfg = plugin.CreateCfg[RateLimiterType, any](c.Type)
+	cv.Cfg = plugin.CreateCfg(c.Type)
 	if cv.Cfg == nil {
 		return errs.Errorf("created rw cfg is nil: %s", c.Type)
 	}

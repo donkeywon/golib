@@ -16,7 +16,7 @@ import (
 )
 
 func init() {
-	plugin.RegWithCfg(TypeSSH, func() any { return NewSSHStep() }, func() any { return NewSSHStepCfg() })
+	plugin.RegWithCfg(TypeSSH, func() Step { return NewSSHStep() }, func() any { return NewSSHStepCfg() })
 }
 
 const TypeSSH Type = "ssh"
@@ -104,10 +104,6 @@ func (s *SSHStep) Stop() error {
 	return nil
 }
 
-func (s *SSHStep) Type() any {
+func (s *SSHStep) Type() Type {
 	return TypeSSH
-}
-
-func (s *SSHStep) GetCfg() any {
-	return s.SSHStepCfg
 }

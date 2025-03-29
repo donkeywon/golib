@@ -3,7 +3,7 @@ package rw
 import "github.com/donkeywon/golib/plugin"
 
 func init() {
-	plugin.RegWithCfg(TypeNop, func() any { return NewNop() }, func() any { return NewNopCfg() })
+	plugin.RegWithCfg(TypeNop, func() RW { return NewNop() }, func() any { return NewNopCfg() })
 }
 
 const TypeNop Type = "nop"
@@ -25,10 +25,6 @@ func NewNop() *Nop {
 	}
 }
 
-func (n *Nop) Type() any {
+func (n *Nop) Type() Type {
 	return TypeNop
-}
-
-func (n *Nop) GetCfg() any {
-	return n.NopCfg
 }

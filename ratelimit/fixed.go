@@ -11,7 +11,7 @@ import (
 )
 
 func init() {
-	plugin.RegWithCfg(RateLimiterTypeFixed, NewFixedRateLimiter, NewFixedRateLimiterCfg)
+	plugin.RegWithCfg(RateLimiterTypeFixed, NewFixedRateLimiter, func() any { return NewFixedRateLimiterCfg() })
 }
 
 const RateLimiterTypeFixed RateLimiterType = "fixed"

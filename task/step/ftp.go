@@ -9,7 +9,7 @@ import (
 )
 
 func init() {
-	plugin.RegWithCfg(TypeFtp, func() any { return NewFtpStep() }, func() any { return NewFtpStepCfg })
+	plugin.RegWithCfg(TypeFtp, func() Step { return NewFtpStep() }, func() any { return NewFtpStepCfg })
 }
 
 const TypeFtp Type = "ftp"
@@ -99,10 +99,6 @@ func (f *FtpStep) Stop() error {
 	return f.cli.Close()
 }
 
-func (f *FtpStep) Type() any {
+func (f *FtpStep) Type() Type {
 	return TypeFtp
-}
-
-func (f *FtpStep) GetCfg() any {
-	return f.FtpStepCfg
 }

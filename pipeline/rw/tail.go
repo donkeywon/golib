@@ -7,7 +7,7 @@ import (
 )
 
 func init() {
-	plugin.RegWithCfg(TypeTail, func() any { return NewTail() }, func() any { return NewTailCfg() })
+	plugin.RegWithCfg(TypeTail, func() RW { return NewTail() }, func() any { return NewTailCfg() })
 }
 
 const TypeTail Type = "tail"
@@ -54,10 +54,6 @@ func (t *Tail) Stop() error {
 	return t.t.Close()
 }
 
-func (t *Tail) Type() any {
+func (t *Tail) Type() Type {
 	return TypeTail
-}
-
-func (t *Tail) GetCfg() any {
-	return t.TailCfg
 }

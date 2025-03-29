@@ -202,7 +202,7 @@ func combineReaderAndWriterToWorker(groups [][]any) []Worker {
 			}
 		}
 		if len(writers) > 0 {
-			for i := 0; i < len(writers); i++ {
+			for i := range writers {
 				worker.WriteTo(writers[i])
 			}
 		}

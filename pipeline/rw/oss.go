@@ -9,7 +9,7 @@ import (
 )
 
 func init() {
-	plugin.RegWithCfg(TypeOSS, func() any { return NewOSS() }, func() any { return NewOSSCfg() })
+	plugin.RegWithCfg(TypeOSS, func() RW { return NewOSS() }, func() any { return NewOSSCfg() })
 }
 
 const (
@@ -66,12 +66,8 @@ func (o *OSS) Init() error {
 	return o.RW.Init()
 }
 
-func (o *OSS) Type() any {
+func (o *OSS) Type() Type {
 	return TypeOSS
-}
-
-func (o *OSS) GetCfg() any {
-	return o.OSSCfg
 }
 
 func createOSSCfg(ossCfg *OSSCfg) *oss.Cfg {

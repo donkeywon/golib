@@ -12,7 +12,7 @@ import (
 )
 
 func init() {
-	plugin.RegWithCfg(TypeCmd, func() any { return NewCmdStep() }, func() any { return NewCmdStepCfg() })
+	plugin.RegWithCfg(TypeCmd, func() Step { return NewCmdStep() }, func() any { return NewCmdStepCfg() })
 }
 
 const TypeCmd Type = "cmd"
@@ -83,10 +83,6 @@ func (c *CmdStep) Stop() error {
 	return cmd.MustStop(context.Background(), c.cmd)
 }
 
-func (c *CmdStep) Type() any {
+func (c *CmdStep) Type() Type {
 	return TypeCmd
-}
-
-func (c *CmdStep) GetCfg() any {
-	return c.Cfg
 }

@@ -2,6 +2,7 @@ package v2
 
 import (
 	"testing"
+	"time"
 
 	"github.com/donkeywon/golib/oss"
 	"github.com/donkeywon/golib/runner"
@@ -31,6 +32,10 @@ func TestPipelineWithCfg(t *testing.T) {
 	ppl := New()
 	ppl.SetCfg(c)
 	tests.Init(ppl)
+	go func() {
+		time.Sleep(time.Millisecond * 500)
+		runner.Stop(ppl)
+	}()
 	require.NoError(t, runner.Init(ppl))
 	runner.Start(ppl)
 	require.NoError(t, ppl.Err())

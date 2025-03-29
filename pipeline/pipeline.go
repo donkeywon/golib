@@ -137,10 +137,6 @@ func (p *Pipeline) Type() plugin.Type {
 	return PluginTypePipeline
 }
 
-func (p *Pipeline) GetCfg() any {
-	return p.Cfg
-}
-
 func (p *Pipeline) RWGroups() []*RWGroup {
 	return p.rwGroups
 }

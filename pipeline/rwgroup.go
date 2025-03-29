@@ -11,7 +11,7 @@ import (
 )
 
 func init() {
-	plugin.RegWithCfg(PluginTypeRWGroup, NewRWGroup, NewRWGroupCfg)
+	plugin.RegWithCfg(PluginTypeRWGroup, NewRWGroup, func() any { return NewRWGroupCfg() })
 }
 
 const PluginTypeRWGroup plugin.Type = "rwg"
