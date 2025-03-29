@@ -1,4 +1,4 @@
-package v2
+package pipeline
 
 import (
 	"bufio"
@@ -109,10 +109,8 @@ func (b *BaseWriter) ReadFrom(r io.Reader) (int64, error) {
 	return io.Copy(b.WriteCloser, r)
 }
 
-func (b *BaseWriter) WithOptions(options ...Option) {
-	for _, opt := range options {
-		opt(b.opt)
-	}
+func (b *BaseWriter) WithOptions(opts ...Option) {
+	b.opt.with(opts...)
 }
 
 func (b *BaseWriter) Type() Type {

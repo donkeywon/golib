@@ -1,4 +1,4 @@
-package v2
+package pipeline
 
 import (
 	"errors"

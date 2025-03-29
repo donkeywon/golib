@@ -1,7 +1,6 @@
 package step
 
 import (
-	"github.com/donkeywon/golib/consts"
 	"github.com/donkeywon/golib/errs"
 	"github.com/donkeywon/golib/pipeline"
 	"github.com/donkeywon/golib/plugin"
@@ -39,7 +38,7 @@ func (p *PipelineStep) Init() error {
 	}
 
 	p.p = pipeline.New()
-	p.p.Cfg = p.Cfg
+	p.p.SetCfg(p.Cfg)
 
 	err = runner.Init(p.p)
 	if err != nil {
@@ -51,7 +50,6 @@ func (p *PipelineStep) Init() error {
 
 func (p *PipelineStep) Start() error {
 	runner.Start(p.p)
-	p.Store(consts.FieldPipelineResult, p.p.Result())
 	return p.p.Err()
 }
 
