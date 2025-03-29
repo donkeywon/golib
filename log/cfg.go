@@ -7,6 +7,7 @@ const (
 	DefaultMaxBackups     = 30
 	DefaultMaxAge         = 30
 	DefaultEnableCompress = false
+	DefaultCompression    = "zstd"
 )
 
 // Cfg is logger cfg include level, rotate, etc.
@@ -18,6 +19,7 @@ type Cfg struct {
 	MaxAge         int    `env:"MAX_AGE"          long:"max-age"          yaml:"maxAge"          description:"maximum number of days to retain old log files based on the timestamp encoded in their filename"`
 	Level          string `env:"LEVEL"            long:"level"            yaml:"level"           description:"minimum enabled logging level"`
 	EnableCompress bool   `env:"ENABLE_COMPRESS"  long:"enable-compress"  yaml:"enableCompress"  description:"enable compress using gzip after log rotate"`
+	Compression    string `env:"COMPRESSION"      long:"compression"      yaml:"compression"     description:"gzip or zstd"`
 }
 
 func NewCfg() *Cfg {
@@ -29,6 +31,7 @@ func NewCfg() *Cfg {
 		MaxAge:         DefaultMaxAge,
 		EnableCompress: DefaultEnableCompress,
 		Format:         DefaultFormat,
+		Compression:    DefaultCompression,
 	}
 }
 

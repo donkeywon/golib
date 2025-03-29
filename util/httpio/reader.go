@@ -182,16 +182,13 @@ func (r *Reader) init() error {
 func (r *Reader) retryHead() error {
 	return retry.Do(func() error {
 		return r.head()
-	}, retry.Attempts(uint(r.opt.retry)))
+	}, retry.Attempts(uint(r.opt.retry)), retry.LastErrorOnly(true))
 }
 
 func (r *Reader) head() error {
-	resp, err := httpc.Head(r.ctx, r.timeout, r.url, r.opt.httpOptions...)
+	resp, err := httpc.Head(r.ctx, r.timeout, r.url, append(r.opt.httpOptions, httpc.CheckStatusCode(http.StatusOK))...)
 	if err != nil {
 		return errs.Wrap(err, "head failed")
-	}
-	if resp.StatusCode >= 500 {
-		return errs.Errorf("head response failed: %s", resp.Status)
 	}
 
 	if resp.Header.Get(httpu.HeaderAcceptRanges) == "bytes" && resp.ContentLength >= 0 {

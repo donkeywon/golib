@@ -25,15 +25,15 @@ func (ls *lumberjackSink) Sync() error {
 }
 
 func NewLumberJackSinkFromURL(u *url.URL) (zap.Sink, error) {
-	l, err := pathToLogger(u.Path, u.RawQuery)
+	l, err := pathToLumberJackLogger(u.Path, u.RawQuery)
 	if err != nil {
-		return nil, errs.Wrap(err, "lumberjack sink config invalid")
+		return nil, errs.Wrap(err, "invalid lumberjack sink config")
 	}
 
 	return &lumberjackSink{l}, nil
 }
 
-func pathToLogger(path string, cfg string) (*lumberjack.Logger, error) {
+func pathToLumberJackLogger(path string, cfg string) (*lumberjack.Logger, error) {
 	l := &lumberjack.Logger{
 		Filename:   "",
 		MaxSize:    DefaultMaxFileSize,

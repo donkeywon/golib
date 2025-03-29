@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/DeRuina/timberjack"
 	"github.com/donkeywon/golib/errs"
 	"github.com/donkeywon/golib/log/core"
 	"github.com/donkeywon/golib/log/encoder"
@@ -18,12 +19,14 @@ import (
 	"github.com/petermattis/goid"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
-	"gopkg.in/natefinch/lumberjack.v2"
 )
 
 func init() {
 	// lumberjack:///var/log/xxx.log?{"maxsize":100,"maxage":30,"maxbackups":30,"compress":true,"localtime":false}
 	_ = zap.RegisterSink("lumberjack", sink.NewLumberJackSinkFromURL)
+
+	// timberjack:///var/log/xxx.log?{"maxsize":100,"maxage":30,"maxbackups":30,"compress":true,"localtime":false,"compression":"zstd"}
+	_ = zap.RegisterSink("timberjack", sink.NewTimberJackSinkFromURL)
 
 	_ = zap.RegisterEncoder("consolelite", encoder.NewConsoleLiteEncoder)
 }
@@ -239,19 +242,20 @@ func buildOutputs(c *Cfg) ([]string, error) {
 			if !paths.DirExist(filepath.Dir(fp)) {
 				return nil, errors.New("log dir not exists: " + fp)
 			}
-			lj := &lumberjack.Logger{
-				Filename:   fp,
-				MaxSize:    c.MaxFileSize,
-				MaxBackups: c.MaxBackups,
-				MaxAge:     c.MaxAge,
-				Compress:   c.EnableCompress,
-				LocalTime:  true,
+			tj := &timberjack.Logger{
+				Filename:    fp,
+				MaxSize:     c.MaxFileSize,
+				MaxBackups:  c.MaxBackups,
+				MaxAge:      c.MaxAge,
+				Compress:    c.EnableCompress,
+				Compression: c.Compression,
+				LocalTime:   true,
 			}
-			bs, err := json.Marshal(lj)
+			bs, err := json.Marshal(tj)
 			if err != nil {
-				return nil, errors.New("lumberjack config invalid")
+				return nil, errors.New("timberjack config invalid")
 			}
-			outputs = append(outputs, "lumberjack://"+fp+"?"+string(bs))
+			outputs = append(outputs, "timberjack://"+fp+"?"+string(bs))
 		}
 	}
 	return outputs, nil
