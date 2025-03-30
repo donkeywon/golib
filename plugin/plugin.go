@@ -69,7 +69,9 @@ func CreateWithCfg[T any, P Plugin[T]](typ T, cfg any) P {
 	// 即使plugin不是Runner类型，也应该有一个统一的类似Init的阶段用来做一些初始化工作
 
 	p := f.(Creator[T, P])()
-	SetCfg(p, cfg)
+	if cfg != nil {
+		SetCfg(p, cfg)
+	}
 
 	return p
 }

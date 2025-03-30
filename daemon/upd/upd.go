@@ -9,7 +9,6 @@ import (
 	"github.com/donkeywon/golib/buildinfo"
 	"github.com/donkeywon/golib/errs"
 	"github.com/donkeywon/golib/pipeline"
-	"github.com/donkeywon/golib/pipeline/rw"
 	"github.com/donkeywon/golib/runner"
 	"github.com/donkeywon/golib/util/cmd"
 	"github.com/donkeywon/golib/util/paths"
@@ -176,24 +175,25 @@ func (u *upd) upgrade(vi *VerInfo) bool {
 	return true
 }
 
-func downloadPackage(downloadDstPath string, storeCfg *rw.Cfg) error {
+func downloadPackage(downloadDstPath string, storeCfg *pipeline.ReaderCfg) error {
 	cfg := pipeline.NewCfg().
-		AddCfg(storeCfg).
-		Add(
-			rw.RoleStarter,
-			rw.TypeCopy,
-			&rw.CopyCfg{BufSize: 64 * 1024},
-			nil,
-		).
-		Add(
-			rw.RoleWriter,
-			rw.TypeFile,
-			&rw.FileCfg{Path: downloadDstPath},
-			nil,
-		)
+		Add(&pipeline.WorkerCfg{
+			Type:    pipeline.WorkerCopy,
+			Readers: []*pipeline.ReaderCfg{storeCfg},
+			Writers: []*pipeline.WriterCfg{
+				{
+					CommonCfg: pipeline.CommonCfg{
+						Type: pipeline.WriterFile,
+						Cfg: &pipeline.FileCfg{
+							Path: downloadDstPath,
+						},
+					},
+				},
+			},
+		})
 
 	p := pipeline.New()
-	p.Cfg = cfg
+	p.SetCfg(cfg)
 	p.Inherit(D)
 	err := runner.Init(p)
 	if err != nil {
