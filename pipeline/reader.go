@@ -5,8 +5,11 @@ import (
 	"io"
 	"slices"
 
+	"github.com/donkeywon/golib/plugin"
 	"github.com/donkeywon/golib/runner"
 )
+
+var CreateReader = newBaseReader
 
 type canceler interface {
 	Cancel()
@@ -16,18 +19,26 @@ type optionApplier interface {
 	WithOptions(...Option)
 }
 
-var CreateReader = newBaseReader
-
 type readerWrapper interface {
-	Wrap(io.Reader)
+	WrapReader(io.Reader)
 }
 
 type Reader interface {
 	Common
 	io.Reader
 	io.WriterTo
+	readerWrapper
+}
 
-	WrapReader(io.Reader)
+type ReaderCfg struct {
+	CommonCfg
+	CommonOption
+}
+
+func (rc *ReaderCfg) build() Reader {
+	r := plugin.CreateWithCfg[Type, Reader](rc.Type, rc.Cfg)
+	r.WithOptions(rc.toOptions(false)...)
+	return r
 }
 
 type BaseReader struct {

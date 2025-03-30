@@ -11,8 +11,8 @@ import (
 )
 
 func init() {
-	plugin.RegWithCfg(ReaderCompress, func() Common { return NewCompressReader() }, func() any { return NewCompressCfg() })
-	plugin.RegWithCfg(WriterCompress, func() Common { return NewCompressWriter() }, func() any { return NewCompressCfg() })
+	plugin.RegWithCfg(ReaderCompress, func() Reader { return NewCompressReader() }, func() any { return NewCompressCfg() })
+	plugin.RegWithCfg(WriterCompress, func() Writer { return NewCompressWriter() }, func() any { return NewCompressCfg() })
 }
 
 const (
@@ -48,7 +48,7 @@ type CompressReader struct {
 	Reader
 	*CompressCfg
 
-	r io.ReadCloser
+	r io.Reader
 }
 
 func NewCompressReader() *CompressReader {
@@ -63,7 +63,7 @@ func (c *CompressReader) Init() error {
 	return c.Reader.Init()
 }
 
-func (c *CompressReader) Wrap(r io.ReadCloser) {
+func (c *CompressReader) WrapReader(r io.Reader) {
 	var compressReader io.ReadCloser
 	switch c.CompressCfg.Type {
 	case CompressTypeGzip:
@@ -85,7 +85,9 @@ func (c *CompressReader) Wrap(r io.ReadCloser) {
 
 func (c *CompressReader) Close() error {
 	if c.r != nil {
-		return errors.Join(c.Reader.Close(), c.r.Close())
+		if rc, ok := c.r.(io.Closer); ok {
+			return errors.Join(c.Reader.Close(), rc.Close())
+		}
 	}
 
 	return c.Reader.Close()
@@ -103,7 +105,7 @@ type CompressWriter struct {
 	Writer
 	*CompressCfg
 
-	w io.WriteCloser
+	w io.Writer
 }
 
 func NewCompressWriter() *CompressWriter {
@@ -118,7 +120,7 @@ func (c *CompressWriter) Init() error {
 	return c.Writer.Init()
 }
 
-func (c *CompressWriter) Wrap(w io.WriteCloser) {
+func (c *CompressWriter) WrapWriter(w io.Writer) {
 	var compressWriter io.WriteCloser
 	switch c.CompressCfg.Type {
 	case CompressTypeGzip:
@@ -140,7 +142,9 @@ func (c *CompressWriter) Wrap(w io.WriteCloser) {
 
 func (c *CompressWriter) Close() error {
 	if c.w != nil {
-		return errors.Join(c.Writer.Close(), c.w.Close())
+		if wc, ok := c.w.(io.Closer); ok {
+			return errors.Join(c.Writer.Close(), wc.Close())
+		}
 	}
 	return c.Writer.Close()
 }
@@ -153,7 +157,7 @@ func (c *CompressWriter) SetCfg(cfg any) {
 	c.CompressCfg = cfg.(*CompressCfg)
 }
 
-func NewZstdWriter(w io.WriteCloser, cfg *CompressCfg) io.WriteCloser {
+func NewZstdWriter(w io.Writer, cfg *CompressCfg) io.WriteCloser {
 	opts := make([]zstd.EOption, 0)
 	if cfg.Concurrency > 0 {
 		opts = append(opts, zstd.WithEncoderConcurrency(cfg.Concurrency))
@@ -172,7 +176,7 @@ func NewZstdWriter(w io.WriteCloser, cfg *CompressCfg) io.WriteCloser {
 	return ze
 }
 
-func NewSnappyWriter(w io.WriteCloser, cfg *CompressCfg) io.WriteCloser {
+func NewSnappyWriter(w io.Writer, cfg *CompressCfg) io.WriteCloser {
 	opts := make([]s2.WriterOption, 0)
 	opts = append(opts, s2.WriterSnappyCompat())
 	if cfg.Concurrency > 0 {
@@ -191,7 +195,7 @@ func NewSnappyWriter(w io.WriteCloser, cfg *CompressCfg) io.WriteCloser {
 	return sw
 }
 
-func NewGzipWritter(w io.WriteCloser, cfg *CompressCfg) io.WriteCloser {
+func NewGzipWritter(w io.Writer, cfg *CompressCfg) io.WriteCloser {
 	var gw *pgzip.Writer
 	switch cfg.Level {
 	case CompressLevelFast:
@@ -218,7 +222,7 @@ func (z *zstdReader) Close() error {
 	return nil
 }
 
-func NewZstdReader(r io.ReadCloser, cfg *CompressCfg) io.ReadCloser {
+func NewZstdReader(r io.Reader, cfg *CompressCfg) io.ReadCloser {
 	var zr *zstd.Decoder
 	if cfg.Concurrency > 0 {
 		zr, _ = zstd.NewReader(r, zstd.WithDecoderConcurrency(cfg.Concurrency))
@@ -237,11 +241,11 @@ func (s *s2Reader) Close() error {
 	return nil
 }
 
-func NewSnappyReader(r io.ReadCloser, _ *CompressCfg) io.ReadCloser {
+func NewSnappyReader(r io.Reader, _ *CompressCfg) io.ReadCloser {
 	return &s2Reader{Reader: s2.NewReader(r)}
 }
 
-func NewGzipReader(r io.ReadCloser, cfg *CompressCfg) io.ReadCloser {
+func NewGzipReader(r io.Reader, cfg *CompressCfg) io.ReadCloser {
 	var gr *pgzip.Reader
 	if cfg.Concurrency > 0 {
 		gr, _ = pgzip.NewReaderN(r, gzipDefaultBlockSize, cfg.Concurrency)

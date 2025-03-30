@@ -5,21 +5,32 @@ import (
 	"io"
 	"slices"
 
+	"github.com/donkeywon/golib/plugin"
 	"github.com/donkeywon/golib/runner"
 )
 
 var CreateWriter = newBaseWriter
 
 type writerWrapper interface {
-	Wrap(io.WriteCloser)
+	WrapWriter(io.Writer)
+}
+
+type WriterCfg struct {
+	CommonCfg
+	CommonOption
+}
+
+func (wc *WriterCfg) build() Writer {
+	w := plugin.CreateWithCfg[Type, Writer](wc.Type, wc.Cfg)
+	w.WithOptions(wc.toOptions(true)...)
+	return w
 }
 
 type Writer interface {
 	Common
 	io.Writer
 	io.ReaderFrom
-
-	WrapWriter(io.WriteCloser)
+	writerWrapper
 }
 
 type flusher interface {
@@ -118,7 +129,7 @@ func (b *BaseWriter) Close() error {
 	return errors.Join(doAllClose(b.closes), b.opt.onclose())
 }
 
-func (b *BaseWriter) WrapWriter(w io.WriteCloser) {
+func (b *BaseWriter) WrapWriter(w io.Writer) {
 	if w == nil {
 		panic(ErrWrapNil)
 	}

@@ -9,8 +9,8 @@ import (
 )
 
 func init() {
-	plugin.RegWithCfg(ReaderFtp, func() Common { return NewFtpReader() }, func() any { return NewFtpCfg() })
-	plugin.RegWithCfg(WriterFtp, func() Common { return NewFtpWriter() }, func() any { return NewFtpCfg() })
+	plugin.RegWithCfg(ReaderFtp, func() Reader { return NewFtpReader() }, func() any { return NewFtpCfg() })
+	plugin.RegWithCfg(WriterFtp, func() Writer { return NewFtpWriter() }, func() any { return NewFtpCfg() })
 }
 
 const (
@@ -59,6 +59,10 @@ func (f *FtpReader) SetCfg(c any) {
 	f.FtpCfg = c.(*FtpCfg)
 }
 
+func (f *FtpReader) WrapReader(io.Reader) {
+	panic(ErrInvalidWrap)
+}
+
 type FtpWriter struct {
 	Writer
 	*FtpCfg
@@ -80,7 +84,7 @@ func (f *FtpWriter) Init() error {
 	return f.Writer.Init()
 }
 
-func (f *FtpWriter) WrapWriter(io.WriteCloser) {
+func (f *FtpWriter) WrapWriter(io.Writer) {
 	panic(ErrInvalidWrap)
 }
 

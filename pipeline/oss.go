@@ -9,8 +9,8 @@ import (
 )
 
 func init() {
-	plugin.RegWithCfg(ReaderOSS, func() Common { return NewOSSReader() }, func() any { return NewOSSCfg() })
-	plugin.RegWithCfg(WriterOSS, func() Common { return NewOSSWriter() }, func() any { return NewOSSCfg() })
+	plugin.RegWithCfg(ReaderOSS, func() Reader { return NewOSSReader() }, func() any { return NewOSSCfg() })
+	plugin.RegWithCfg(WriterOSS, func() Writer { return NewOSSWriter() }, func() any { return NewOSSCfg() })
 }
 
 const (
@@ -49,7 +49,7 @@ func (o *OSSReader) Init() error {
 	return o.Reader.Init()
 }
 
-func (o *OSSReader) Wrap(io.ReadCloser) {
+func (o *OSSReader) WrapReader(io.Reader) {
 	panic(ErrInvalidWrap)
 }
 
@@ -86,7 +86,7 @@ func (o *OSSWriter) Init() error {
 	return o.Writer.Init()
 }
 
-func (o *OSSWriter) Wrap(io.WriteCloser) {
+func (o *OSSWriter) WrapWriter(io.Writer) {
 	panic(ErrInvalidWrap)
 }
 

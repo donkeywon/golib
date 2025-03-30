@@ -9,7 +9,7 @@ import (
 )
 
 func init() {
-	plugin.RegWithCfg(ReaderTail, func() Common { return NewTail() }, func() any { return NewTailCfg() })
+	plugin.RegWithCfg(ReaderTail, func() Reader { return NewTail() }, func() any { return NewTailCfg() })
 }
 
 const ReaderTail Type = "tail"
@@ -48,7 +48,7 @@ func (t *Tail) Init() error {
 	return t.Reader.Init()
 }
 
-func (t *Tail) WrapReader(io.ReadCloser) {
+func (t *Tail) WrapReader(io.Reader) {
 	panic(ErrInvalidWrap)
 }
 

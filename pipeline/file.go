@@ -10,8 +10,8 @@ import (
 )
 
 func init() {
-	plugin.RegWithCfg(ReaderFile, func() Common { return NewFileReader() }, func() any { return NewFileCfg() })
-	plugin.RegWithCfg(WriterFile, func() Common { return NewFileWriter() }, func() any { return NewFileCfg() })
+	plugin.RegWithCfg(ReaderFile, func() Reader { return NewFileReader() }, func() any { return NewFileCfg() })
+	plugin.RegWithCfg(WriterFile, func() Writer { return NewFileWriter() }, func() any { return NewFileCfg() })
 }
 
 const (
@@ -97,7 +97,7 @@ func (f *FileReader) Init() error {
 	return f.Reader.Init()
 }
 
-func (f *FileReader) Wrap(io.ReadCloser) {
+func (f *FileReader) WrapReader(io.Reader) {
 	panic(ErrInvalidWrap)
 }
 
@@ -137,7 +137,7 @@ func (f *FileWriter) Init() error {
 	return f.Writer.Init()
 }
 
-func (f *FileWriter) Wrap(io.WriteCloser) {
+func (f *FileWriter) WrapWriter(io.Writer) {
 	panic(ErrInvalidWrap)
 }
 
