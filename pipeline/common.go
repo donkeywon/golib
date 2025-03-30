@@ -7,6 +7,8 @@ import (
 	"github.com/donkeywon/golib/runner"
 )
 
+type closeFunc func() error
+
 type Common interface {
 	io.Closer
 	runner.Runner

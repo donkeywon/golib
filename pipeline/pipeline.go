@@ -46,18 +46,24 @@ type ItemOption struct {
 	RateLimitCfg        *ratelimit.Cfg `json:"rateLimitCfg" yaml:"rateLimitCfg"`
 }
 
-func (ito *ItemOption) ToOptions() []Option {
+func (ito *ItemOption) toOptions(write bool) []Option {
 	opts := make([]Option, 0, 2)
-	if ito.EnableBuf {
-		opts = append(opts, EnableBuf(ito.BufSize))
-	}
-	if ito.EnableAsync {
-		if ito.Deadline > 0 {
-			opts = append(opts, EnableAsyncDeadline(ito.BufSize, ito.QueueSize, time.Second*time.Duration(ito.Deadline)))
+	if ito.EnableBuf && ito.BufSize > 0 {
+		if write {
+			opts = append(opts, EnableBufWrite(ito.BufSize))
 		} else {
-			opts = append(opts, EnableAsync(ito.BufSize, ito.QueueSize))
+			opts = append(opts, EnableBufRead(ito.BufSize))
 		}
 	}
+
+	if ito.EnableAsync && ito.BufSize > 0 {
+		if write {
+			opts = append(opts, EnableAsyncWrite(ito.BufSize, ito.QueueSize, time.Second*time.Duration(ito.Deadline)))
+		} else {
+			opts = append(opts, EnableAsyncRead(ito.BufSize, ito.QueueSize))
+		}
+	}
+
 	if ito.ProgressLogInterval > 0 {
 		opts = append(opts, ProgressLog(time.Second*time.Duration(ito.ProgressLogInterval)))
 	}
@@ -132,7 +138,7 @@ func (p *Pipeline) Init() error {
 	for i := 0; i < len(p.ws)-1; i++ {
 		pr, pw := io.Pipe()
 		if len(p.ws[i].Writers()) > 0 {
-			if ww, ok := p.ws[i].LastWriter().(WriterWrapper); !ok {
+			if ww, ok := p.ws[i].LastWriter().(writerWrapper); !ok {
 				return errs.Errorf("worker(%d) %s last writer %s is not WriterWrapper", i, p.ws[i].Type(), reflect.TypeOf(p.ws[i].LastWriter()).String())
 			} else {
 				ww.Wrap(pw)
@@ -142,7 +148,7 @@ func (p *Pipeline) Init() error {
 		}
 
 		if len(p.ws[i+1].Readers()) > 0 {
-			if rr, ok := p.ws[i+1].LastReader().(ReaderWrapper); !ok {
+			if rr, ok := p.ws[i+1].LastReader().(readerWrapper); !ok {
 				return errs.Errorf("worker(%d) %s last reader %s is not ReaderWrapper", i, p.ws[i+1].Type(), reflect.TypeOf(p.ws[i+1].LastReader()).String())
 			} else {
 				rr.Wrap(pr)
@@ -228,7 +234,7 @@ func (p *Pipeline) SetCfg(cfg any) {
 		switch typ {
 		case 'r', 'w':
 			if itemCfg.Option != nil {
-				item.WithOptions(itemCfg.Option.ToOptions()...)
+				item.WithOptions(itemCfg.Option.toOptions(typ == 'w')...)
 			}
 		}
 

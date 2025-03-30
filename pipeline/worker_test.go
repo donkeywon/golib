@@ -26,7 +26,7 @@ func TestCopy(t *testing.T) {
 			Region:  "",
 		},
 	})
-	o.WithOptions(EnableBuf(8 * 1024 * 1024))
+	o.WithOptions(EnableBufWrite(1 * 1024 * 1024))
 	tests.Init(o)
 
 	compress := NewCompressWriter()

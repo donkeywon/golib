@@ -1,17 +1,16 @@
 package pipeline
 
 import (
-	"bufio"
 	"errors"
 	"io"
+	"slices"
 
-	"github.com/donkeywon/golib/aio"
 	"github.com/donkeywon/golib/runner"
 )
 
 var CreateWriter = newBaseWriter
 
-type WriterWrapper interface {
+type writerWrapper interface {
 	Wrap(io.WriteCloser)
 }
 
@@ -23,10 +22,6 @@ type Writer interface {
 	WrapWriter(io.WriteCloser)
 }
 
-type nopWriteCloser struct {
-	io.Writer
-}
-
 type flusher interface {
 	Flush() error
 }
@@ -35,7 +30,25 @@ type flusher2 interface {
 	Flush()
 }
 
-func (n nopWriteCloser) Close() error {
+type flushOnClose struct {
+	f  flusher
+	f2 flusher2
+}
+
+func (f *flushOnClose) Close() error {
+	if f.f != nil {
+		return f.f.Flush()
+	} else if f.f2 != nil {
+		f.f2.Flush()
+	}
+	return nil
+}
+
+type nopWriteCloser struct {
+	io.Writer
+}
+
+func (n *nopWriteCloser) Close() error {
 	switch t := n.Writer.(type) {
 	case flusher:
 		return t.Flush()
@@ -47,9 +60,10 @@ func (n nopWriteCloser) Close() error {
 
 type BaseWriter struct {
 	runner.Runner
-	io.WriteCloser
+	io.Writer
 
-	originWriter io.WriteCloser
+	originWriter io.Writer
+	closes       []closeFunc
 
 	opt *option
 }
@@ -62,51 +76,64 @@ func newBaseWriter(name string) Writer {
 }
 
 func (b *BaseWriter) Init() error {
-	b.originWriter = b.WriteCloser
+	b.originWriter = b.Writer
+	b.appendCloses(b.originWriter)
 	if len(b.opt.ws) > 0 {
-		b.originWriter = b.WriteCloser
 		ws := make([]io.Writer, 0, 1+len(b.opt.ws))
-		ws = append(ws, b.WriteCloser)
+		ws = append(ws, b.Writer)
 		ws = append(ws, b.opt.ws...)
-		b.WriteCloser = nopWriteCloser{io.MultiWriter(ws...)}
+		b.Writer = io.MultiWriter(ws...)
 	}
 
-	if b.opt.enableBuf {
-		b.WriteCloser = nopWriteCloser{bufio.NewWriterSize(b.WriteCloser, b.opt.bufSize)}
-	} else if b.opt.enableAsync {
-		b.WriteCloser = nopWriteCloser{aio.NewAsyncWriter(b.WriteCloser, aio.BufSize(b.opt.bufSize), aio.QueueSize(b.opt.queueSize), aio.Deadline(b.opt.deadline))}
+	if len(b.opt.writerWrapFuncs) > 0 {
+		for _, f := range b.opt.writerWrapFuncs {
+			b.Writer = f(b.Writer)
+			b.appendCloses(b.Writer)
+		}
 	}
+
+	slices.Reverse(b.closes)
 
 	return b.Runner.Init()
 }
 
+func (b *BaseWriter) appendCloses(w io.Writer) {
+	if c, ok := w.(io.Closer); ok {
+		b.closes = append(b.closes, c.Close)
+	}
+	switch f := w.(type) {
+	case flusher:
+		b.closes = append(b.closes, f.Flush)
+	case flusher2:
+		b.closes = append(b.closes, func() error {
+			f.Flush()
+			return nil
+		})
+	}
+}
+
 func (b *BaseWriter) Close() error {
 	defer b.Cancel()
-	if b.originWriter != nil && b.originWriter != b.WriteCloser {
-		return errors.Join(b.WriteCloser.Close(), b.originWriter.Close(), b.opt.onclose())
-	}
-	if b.WriteCloser != nil {
-		return errors.Join(b.WriteCloser.Close(), b.opt.onclose())
-	}
-	return nil
+
+	return errors.Join(doAllClose(b.closes), b.opt.onclose())
 }
 
 func (b *BaseWriter) WrapWriter(w io.WriteCloser) {
 	if w == nil {
 		panic(ErrWrapNil)
 	}
-	if b.WriteCloser != nil {
+	if b.Writer != nil {
 		panic(ErrWrapTwice)
 	}
-	b.WriteCloser = w
+	b.Writer = w
 }
 
 func (b *BaseWriter) ReadFrom(r io.Reader) (int64, error) {
-	if rf, ok := b.WriteCloser.(io.ReaderFrom); ok {
+	if rf, ok := b.Writer.(io.ReaderFrom); ok {
 		return rf.ReadFrom(r)
 	}
 
-	return io.Copy(b.WriteCloser, r)
+	return io.Copy(b.Writer, r)
 }
 
 func (b *BaseWriter) WithOptions(opts ...Option) {

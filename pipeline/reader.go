@@ -1,11 +1,10 @@
 package pipeline
 
 import (
-	"bufio"
 	"errors"
 	"io"
+	"slices"
 
-	"github.com/donkeywon/golib/aio"
 	"github.com/donkeywon/golib/runner"
 )
 
@@ -19,8 +18,8 @@ type optionApplier interface {
 
 var CreateReader = newBaseReader
 
-type ReaderWrapper interface {
-	Wrap(io.ReadCloser)
+type readerWrapper interface {
+	Wrap(io.Reader)
 }
 
 type Reader interface {
@@ -28,14 +27,15 @@ type Reader interface {
 	io.Reader
 	io.WriterTo
 
-	WrapReader(io.ReadCloser)
+	WrapReader(io.Reader)
 }
 
 type BaseReader struct {
 	runner.Runner
-	io.ReadCloser
+	io.Reader
 
-	originReader io.ReadCloser
+	originReader io.Reader
+	closes       []closeFunc
 
 	opt *option
 }
@@ -48,50 +48,53 @@ func newBaseReader(name string) Reader {
 }
 
 func (b *BaseReader) Init() error {
-	b.originReader = b.ReadCloser
+	b.originReader = b.Reader
+	b.appendCloses(b.originReader)
 	if len(b.opt.tees) > 0 {
-		b.ReadCloser = io.NopCloser(io.TeeReader(b.ReadCloser, io.MultiWriter(b.opt.tees...)))
+		b.Reader = io.NopCloser(io.TeeReader(b.Reader, io.MultiWriter(b.opt.tees...)))
 	}
 
-	if b.opt.enableAsync {
-		b.ReadCloser = aio.NewAsyncReader(b.ReadCloser, aio.BufSize(b.opt.bufSize), aio.QueueSize(b.opt.queueSize))
-	} else if b.opt.enableBuf {
-		b.ReadCloser = io.NopCloser(bufio.NewReaderSize(b.ReadCloser, b.opt.bufSize))
+	if len(b.opt.readerWrapFuncs) > 0 {
+		for _, f := range b.opt.readerWrapFuncs {
+			b.Reader = f(b.Reader)
+			b.appendCloses(b.Reader)
+		}
 	}
+
+	slices.Reverse(b.closes)
 
 	return b.Runner.Init()
 }
 
-func (b *BaseReader) Close() error {
-	defer b.Cancel()
-
-	if b.originReader != nil && b.originReader != b.ReadCloser {
-		return errors.Join(b.ReadCloser.Close(), b.originReader.Close(), b.opt.onclose())
+func (b *BaseReader) appendCloses(r io.Reader) {
+	if c, ok := r.(io.Closer); ok {
+		b.closes = append(b.closes, c.Close)
 	}
-	if b.ReadCloser != nil {
-		return errors.Join(b.ReadCloser.Close(), b.opt.onclose())
-	}
-	return nil
 }
 
-func (b *BaseReader) WrapReader(r io.ReadCloser) {
+func (b *BaseReader) Close() error {
+	defer b.Cancel()
+	return errors.Join(doAllClose(b.closes), b.opt.onclose())
+}
+
+func (b *BaseReader) WrapReader(r io.Reader) {
 	if r == nil {
 		panic(ErrWrapNil)
 	}
-	if b.ReadCloser != nil {
+	if b.Reader != nil {
 		panic(ErrWrapTwice)
 	}
-	b.ReadCloser = r
+	b.Reader = r
 }
 
 func (b *BaseReader) Type() Type { panic("not implemented") }
 
 func (b *BaseReader) WriteTo(w io.Writer) (int64, error) {
-	if wt, ok := b.ReadCloser.(io.WriterTo); ok {
+	if wt, ok := b.Reader.(io.WriterTo); ok {
 		return wt.WriteTo(w)
 	}
 
-	return io.Copy(w, b.ReadCloser)
+	return io.Copy(w, b.Reader)
 }
 
 func (b *BaseReader) WithOptions(opts ...Option) {
