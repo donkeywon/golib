@@ -65,3 +65,7 @@ func (p *PipelineStep) Type() Type {
 func (p *PipelineStep) SetCfg(cfg any) {
 	p.p.SetCfg(cfg)
 }
+
+func (p *PipelineStep) Pipeline() *pipeline.Pipeline {
+	return p.p
+}
