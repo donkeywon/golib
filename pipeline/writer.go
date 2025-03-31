@@ -109,9 +109,13 @@ func (b *BaseWriter) Init() error {
 }
 
 func (b *BaseWriter) appendCloses(w io.Writer) {
-	if c, ok := w.(io.Closer); ok {
+	switch c := w.(type) {
+	case Writer:
+		// do not close wrapped pipeline.Writer, wrapped pipeline.Writer will close by caller like Worker
+	case io.Closer:
 		b.closes = append(b.closes, c.Close)
 	}
+
 	switch f := w.(type) {
 	case flusher:
 		b.closes = append(b.closes, f.Flush)
@@ -125,7 +129,7 @@ func (b *BaseWriter) appendCloses(w io.Writer) {
 
 func (b *BaseWriter) Close() error {
 	defer b.Cancel()
-
+	b.Debug("close")
 	return errors.Join(doAllClose(b.closes), b.opt.onclose())
 }
 

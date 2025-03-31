@@ -2,6 +2,7 @@ package pipeline
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"reflect"
 
@@ -35,26 +36,26 @@ func (wc *WorkerCfg) build() Worker {
 type Worker interface {
 	Common
 
-	WriteTo(...io.WriteCloser)
-	ReadFrom(...io.ReadCloser)
+	WriteTo(...io.Writer)
+	ReadFrom(...io.Reader)
 
-	Writers() []io.WriteCloser
-	Readers() []io.ReadCloser
-	LastWriter() io.WriteCloser
-	LastReader() io.ReadCloser
+	Writers() []io.Writer
+	Readers() []io.Reader
+	LastWriter() io.Writer
+	LastReader() io.Reader
 
-	Reader() io.ReadCloser
-	Writer() io.WriteCloser
+	Reader() io.Reader
+	Writer() io.Writer
 }
 
 type BaseWorker struct {
 	runner.Runner
 
-	r io.ReadCloser
-	w io.WriteCloser
+	r io.Reader
+	w io.Writer
 
-	ws []io.WriteCloser
-	rs []io.ReadCloser
+	ws []io.Writer
+	rs []io.Reader
 }
 
 func newBaseWorker(name string) Worker {
@@ -117,38 +118,38 @@ func (b *BaseWorker) Stop() error {
 
 func (b *BaseWorker) Type() Type { panic("not implemented") }
 
-func (b *BaseWorker) WriteTo(w ...io.WriteCloser) {
+func (b *BaseWorker) WriteTo(w ...io.Writer) {
 	b.ws = append(b.ws, w...)
 }
 
-func (b *BaseWorker) ReadFrom(r ...io.ReadCloser) {
+func (b *BaseWorker) ReadFrom(r ...io.Reader) {
 	b.rs = append(b.rs, r...)
 }
 
-func (b *BaseWorker) Readers() []io.ReadCloser {
+func (b *BaseWorker) Readers() []io.Reader {
 	return b.rs
 }
 
-func (b *BaseWorker) Writers() []io.WriteCloser {
+func (b *BaseWorker) Writers() []io.Writer {
 	return b.ws
 }
 
-func (b *BaseWorker) Reader() io.ReadCloser {
+func (b *BaseWorker) Reader() io.Reader {
 	return b.r
 }
 
-func (b *BaseWorker) Writer() io.WriteCloser {
+func (b *BaseWorker) Writer() io.Writer {
 	return b.w
 }
 
-func (b *BaseWorker) LastWriter() io.WriteCloser {
+func (b *BaseWorker) LastWriter() io.Writer {
 	if len(b.ws) > 0 {
 		return b.ws[len(b.ws)-1]
 	}
 	return nil
 }
 
-func (b *BaseWorker) LastReader() io.ReadCloser {
+func (b *BaseWorker) LastReader() io.Reader {
 	if len(b.rs) > 0 {
 		return b.rs[len(b.rs)-1]
 	}
@@ -157,19 +158,7 @@ func (b *BaseWorker) LastReader() io.ReadCloser {
 
 func (b *BaseWorker) Close() error {
 	defer b.Cancel()
-	defer func() {
-		err := recover()
-		if err != nil {
-			b.AppendError(errs.PanicToErrWithMsg(err, "panic on closing"))
-		}
-	}()
-	var err error
-	if b.Reader() != nil {
-		err = b.Reader().Close()
-	}
-	if b.Writer() != nil {
-		err = errors.Join(err, b.Writer().Close())
-	}
+	err := errors.Join(b.closeReaders(), b.closeWriters())
 	if err != nil {
 		b.AppendError(errs.Wrap(err, "close failed"))
 	}
@@ -178,4 +167,111 @@ func (b *BaseWorker) Close() error {
 
 func (b *BaseWorker) WithOptions(...Option) {
 
+}
+
+func (b *BaseWorker) closeReaders() error {
+	var err []error
+	for i, r := range b.rs {
+		e := closeReader(i, r)
+		if e != nil {
+			err = append(err, e)
+		}
+	}
+
+	if len(err) == 0 {
+		return nil
+	}
+	if len(err) == 1 {
+		return err[0]
+	}
+	return errors.Join(err...)
+}
+
+func closeReader(idx int, r io.Reader) (err error) {
+	defer func() {
+		p := recover()
+		if p != nil {
+			err = errs.PanicToErrWithMsg(p, fmt.Sprintf("panic on close reader(%d) %s", idx, getName(r)))
+		}
+	}()
+
+	if c, ok := r.(io.Closer); ok {
+		e := c.Close()
+		if e != nil {
+			err = errs.Wrapf(e, "err on close reader(%d) %s", idx, getName(r))
+		}
+	}
+	return
+}
+
+func closeWriter(idx int, w io.Writer) (err error) {
+	defer func() {
+		p := recover()
+		if p != nil {
+			err = errs.PanicToErrWithMsg(p, fmt.Sprintf("panic on close writer(%d) %s", idx, getName(w)))
+		}
+	}()
+
+	if c, ok := w.(io.Closer); ok {
+		e := c.Close()
+		if e != nil {
+			err = errs.Wrapf(e, "err on close writer(%d) %s", idx, getName(w))
+		}
+	}
+	return
+}
+
+func flushWriter(idx int, w io.Writer) (err error) {
+	defer func() {
+		p := recover()
+		if p != nil {
+			err = errs.PanicToErrWithMsg(p, fmt.Sprintf("panic on flush writer(%d) %s", idx, getName(w)))
+		}
+	}()
+
+	switch f := w.(type) {
+	case flusher:
+		e := f.Flush()
+		if e != nil {
+			err = errs.Wrapf(e, "err on flush writer(%d) %s", idx, getName(w))
+		}
+	case flusher2:
+		f.Flush()
+	}
+	return
+}
+
+func (b *BaseWorker) closeWriters() error {
+	var err []error
+	for i, w := range b.ws {
+		e := flushWriter(i, w)
+		if e != nil {
+			err = append(err, e)
+		}
+		e = closeWriter(i, w)
+		if e != nil {
+			err = append(err, e)
+		}
+	}
+
+	if len(err) == 0 {
+		return nil
+	}
+	if len(err) == 1 {
+		return err[0]
+	}
+	return errors.Join(err...)
+}
+
+type hasName interface {
+	Name() string
+}
+
+func getName(v any) string {
+	switch vv := v.(type) {
+	case hasName:
+		return vv.Name()
+	default:
+		return reflect.TypeOf(v).String()
+	}
 }
