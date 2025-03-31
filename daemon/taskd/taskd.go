@@ -25,7 +25,7 @@ var (
 	ErrTaskNotPausing      = errors.New("task not pausing")
 )
 
-var D Taskd = New()
+var D Taskd = New(string(DaemonTypeTaskd))
 
 type Taskd interface {
 	boot.Daemon
@@ -39,6 +39,7 @@ type Taskd interface {
 	IsTaskWaiting(taskID string) bool
 	IsTaskRunning(taskID string) bool
 	IsTaskPausing(taskID string) bool
+	ListAllTasks() []*task.Task
 	ListTaskIDs() []string
 	ListWaitingTaskIDs() []string
 	ListRunningTaskIDs() []string
@@ -74,9 +75,9 @@ type taskd struct {
 	deferStepDoneHooks []task.StepHook
 }
 
-func New() Taskd {
+func New(name string) Taskd {
 	return &taskd{
-		Runner:           runner.Create(string(DaemonTypeTaskd)),
+		Runner:           runner.Create(name),
 		taskMap:          make(map[string]*task.Task),
 		taskIDMap:        make(map[string]struct{}),
 		taskIDRunningMap: make(map[string]struct{}),
@@ -218,7 +219,7 @@ func (td *taskd) ResumeTask(taskID string) (*task.Task, error) {
 }
 
 func (td *taskd) waitAllTaskDone() {
-	for _, t := range td.allTask() {
+	for _, t := range td.ListAllTasks() {
 		<-t.Done()
 	}
 }
@@ -419,7 +420,7 @@ func (td *taskd) unmarkTaskIfPausing(taskID string) (bool, *task.Task) {
 	return true, t
 }
 
-func (td *taskd) allTask() []*task.Task {
+func (td *taskd) ListAllTasks() []*task.Task {
 	td.mu.Lock()
 	defer td.mu.Unlock()
 	tasks := make([]*task.Task, len(td.taskMap))
