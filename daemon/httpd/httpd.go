@@ -14,7 +14,7 @@ import (
 )
 
 type HTTPD interface {
-	runner.Runner
+	boot.Daemon
 	Handle(pattern string, handler http.Handler)
 	HandleFunc(pattern string, handler http.HandlerFunc)
 	RegMiddleware(mid ...MiddlewareFunc)
@@ -66,10 +66,6 @@ func (h *httpd) Start() error {
 
 func (h *httpd) Stop() error {
 	return h.s.Close()
-}
-
-func (h *httpd) Type() boot.DaemonType {
-	return DaemonTypeHTTPd
 }
 
 func (h *httpd) AppendError(err ...error) {

@@ -28,10 +28,6 @@ func NewMapKVS() *MapKVS {
 	return &MapKVS{}
 }
 
-func (m *MapKVS) Type() Type {
-	return TypeMap
-}
-
 func (m *MapKVS) Store(k string, v any) {
 	m.m.Store(k, v)
 }

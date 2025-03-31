@@ -83,10 +83,6 @@ func (c *Cmd) Stop() error {
 	return c.c.Process.Kill()
 }
 
-func (c *Cmd) Type() Type {
-	return WorkerCmd
-}
-
 func (c *Cmd) SetCfg(cfg any) {
 	c.Cfg = cfg.(*cmd.Cfg)
 }

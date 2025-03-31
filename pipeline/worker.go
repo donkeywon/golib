@@ -124,8 +124,6 @@ func (b *BaseWorker) Stop() error {
 	panic("not implemented")
 }
 
-func (b *BaseWorker) Type() Type { panic("not implemented") }
-
 func (b *BaseWorker) WriteTo(w ...io.Writer) {
 	b.ws = append(b.ws, w...)
 }

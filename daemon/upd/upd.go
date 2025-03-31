@@ -20,7 +20,7 @@ const DaemonTypeUpd boot.DaemonType = "upd"
 var D Upd = New()
 
 type Upd interface {
-	runner.Runner
+	boot.Daemon
 	Upgrade(vi *VerInfo)
 }
 
@@ -34,7 +34,7 @@ type upd struct {
 	allDoneExceptMe    chan struct{}
 }
 
-func New() *upd {
+func New() Upd {
 	return &upd{
 		Runner:             runner.Create(string(DaemonTypeUpd)),
 		upgradingBlockChan: make(chan struct{}),
@@ -50,10 +50,6 @@ func (u *upd) Stop() error {
 		<-u.upgradingBlockChan
 	}
 	return u.Runner.Stop()
-}
-
-func (u *upd) Type() boot.DaemonType {
-	return DaemonTypeUpd
 }
 
 func (u *upd) markUpgrading() bool {

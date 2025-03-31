@@ -61,7 +61,3 @@ func (srl *SleepRateLimiter) RxWaitN(n int, timeout int) error {
 func (srl *SleepRateLimiter) TxWaitN(n int, timeout int) error {
 	return srl.waitN(n, timeout)
 }
-
-func (srl *SleepRateLimiter) Type() Type {
-	return TypeSleep
-}

@@ -28,7 +28,7 @@ var (
 var D Taskd = New()
 
 type Taskd interface {
-	runner.Runner
+	boot.Daemon
 	SubmitTask(taskCfg *task.Cfg) (*task.Task, error)
 	SubmitTaskAndWait(taskCfg *task.Cfg) (*task.Task, error)
 	TrySubmitTask(taskCfg *task.Cfg) (*task.Task, bool, error)
@@ -100,10 +100,6 @@ func (td *taskd) Start() error {
 func (td *taskd) Stop() error {
 	td.Cancel()
 	return nil
-}
-
-func (td *taskd) Type() boot.DaemonType {
-	return DaemonTypeTaskd
 }
 
 func (td *taskd) SubmitTask(taskCfg *task.Cfg) (*task.Task, error) {

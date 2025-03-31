@@ -15,7 +15,7 @@ import (
 const DaemonTypeMetricsd boot.DaemonType = "metricsd"
 
 type Metricsd interface {
-	runner.Runner
+	boot.Daemon
 	SetGauge(name string, v float64)
 	AddGauge(name string, v float64)
 	SubGauge(name string, v float64)
@@ -65,10 +65,6 @@ func (p *metricsd) Init() error {
 
 	p.registerHTTPHandler()
 	return p.Runner.Init()
-}
-
-func (p *metricsd) Type() boot.DaemonType {
-	return DaemonTypeMetricsd
 }
 
 func (p *metricsd) registerHTTPHandler() {

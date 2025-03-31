@@ -30,7 +30,7 @@ type DaemonType string
 
 type Daemon interface {
 	runner.Runner
-	plugin.Plugin[DaemonType]
+	plugin.Plugin
 }
 
 var (
@@ -66,7 +66,7 @@ func SetLoggerLevel(lvl string) {
 }
 
 // RegDaemon register a Daemon creator and its config creator.
-func RegDaemon(typ DaemonType, creator plugin.Creator[DaemonType, plugin.Plugin[DaemonType]], cfgCreator plugin.CfgCreator[any]) {
+func RegDaemon(typ DaemonType, creator plugin.Creator[Daemon], cfgCreator plugin.CfgCreator[any]) {
 	if slices.Contains(_daemons, typ) {
 		panic("duplicate register daemon: " + typ)
 	}

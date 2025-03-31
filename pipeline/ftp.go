@@ -51,10 +51,6 @@ func (f *FtpReader) Init() error {
 	return f.Reader.Init()
 }
 
-func (f *FtpReader) Type() Type {
-	return ReaderFtp
-}
-
 func (f *FtpReader) SetCfg(c any) {
 	f.FtpCfg = c.(*FtpCfg)
 }
@@ -86,10 +82,6 @@ func (f *FtpWriter) Init() error {
 
 func (f *FtpWriter) WrapWriter(io.Writer) {
 	panic(ErrInvalidWrap)
-}
-
-func (f *FtpWriter) Type() Type {
-	return WriterFtp
 }
 
 func (f *FtpWriter) SetCfg(c any) {

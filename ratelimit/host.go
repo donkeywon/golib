@@ -107,10 +107,6 @@ func (h *HostRateLimiter) Init() error {
 	return h.Runner.Init()
 }
 
-func (h *HostRateLimiter) Type() Type {
-	return TypeHost
-}
-
 func (h *HostRateLimiter) RxWaitN(n int, timeout int) error {
 	ctx := h.Ctx()
 	if timeout > 0 {

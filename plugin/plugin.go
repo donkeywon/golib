@@ -11,7 +11,7 @@ var (
 	ErrInvalidPluginCfgCreator = errors.New("invalid plugin cfg creator")
 )
 
-type Creator[T any, P Plugin[T]] func() P
+type Creator[P Plugin] func() P
 type CfgCreator[C any] func() C
 
 type Type string
@@ -20,9 +20,7 @@ type CfgSetter[C any] interface {
 	SetCfg(cfg C)
 }
 
-type Plugin[T any] interface {
-	Type() T
-}
+type Plugin interface{}
 
 var (
 	_pluginCreators    = make(map[any]any)
@@ -33,7 +31,7 @@ var (
 // type DaemonType string
 // const DaemonTypeHttpd DaemonType = "httpd"
 // Reg(DaemonTypeHttpd, func() any { return NewHttpd() }).
-func Reg[T any, P Plugin[T]](typ T, creator Creator[T, P]) {
+func Reg[T any, P Plugin](typ T, creator Creator[P]) {
 	var p P
 	rt := reflect.TypeOf(p)
 	if rt != nil && rt.Kind() != reflect.Ptr {
@@ -46,7 +44,7 @@ func RegCfg[T any](typ T, creator CfgCreator[any]) {
 	_pluginCfgCreators[typ] = creator
 }
 
-func RegWithCfg[T any, P Plugin[T]](typ T, creator Creator[T, P], cfgCreator CfgCreator[any]) {
+func RegWithCfg[T any, P Plugin](typ T, creator Creator[P], cfgCreator CfgCreator[any]) {
 	Reg(typ, creator)
 	RegCfg(typ, cfgCreator)
 }
@@ -58,7 +56,7 @@ func RegWithCfg[T any, P Plugin[T]](typ T, creator Creator[T, P], cfgCreator Cfg
 // 1. plugin不存在，说明没有注册，大部分情况是没有调用RegisterPlugin
 // 2. cfg设置失败，说明plugin本身定义的有问题
 // 这两种情况下说明代码本身有问题，所以直接panic.
-func CreateWithCfg[T any, P Plugin[T]](typ T, cfg any) P {
+func CreateWithCfg[T any, P Plugin](typ T, cfg any) P {
 	f, exists := _pluginCreators[typ]
 	if !exists {
 		panic(fmt.Sprintf("plugin not exists: %+v", typ))
@@ -68,7 +66,7 @@ func CreateWithCfg[T any, P Plugin[T]](typ T, cfg any) P {
 	// 校验逻辑应该放到Create之后的Init阶段，例如runner.Init
 	// 即使plugin不是Runner类型，也应该有一个统一的类似Init的阶段用来做一些初始化工作
 
-	p := f.(Creator[T, P])()
+	p := f.(Creator[P])()
 	if cfg != nil {
 		SetCfg(p, cfg)
 	}
@@ -85,7 +83,7 @@ func CreateCfg[T any](typ T) any {
 	return f.(CfgCreator[any])()
 }
 
-func Create[T any, P Plugin[T], C any](typ T) P {
+func Create[T any, P Plugin](typ T) P {
 	return CreateWithCfg[T, P](typ, CreateCfg(typ))
 }
 

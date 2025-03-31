@@ -108,8 +108,6 @@ func (b *BaseReader) WrapReader(r io.Reader) {
 	b.Reader = r
 }
 
-func (b *BaseReader) Type() Type { panic("not implemented") }
-
 func (b *BaseReader) WriteTo(w io.Writer) (int64, error) {
 	if wt, ok := b.Reader.(io.WriterTo); ok {
 		return wt.WriteTo(w)

@@ -53,10 +53,6 @@ func (o *OSSReader) WrapReader(io.Reader) {
 	panic(ErrInvalidWrap)
 }
 
-func (o *OSSReader) Type() Type {
-	return ReaderOSS
-}
-
 func (o *OSSReader) SetCfg(c any) {
 	o.OSSCfg = c.(*OSSCfg)
 }
@@ -88,10 +84,6 @@ func (o *OSSWriter) Init() error {
 
 func (o *OSSWriter) WrapWriter(io.Writer) {
 	panic(ErrInvalidWrap)
-}
-
-func (o *OSSWriter) Type() Type {
-	return WriterOSS
 }
 
 func (o *OSSWriter) SetCfg(c any) {

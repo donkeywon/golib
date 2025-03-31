@@ -101,10 +101,6 @@ func (f *FileReader) WrapReader(io.Reader) {
 	panic(ErrInvalidWrap)
 }
 
-func (f *FileReader) Type() Type {
-	return ReaderFile
-}
-
 func (f *FileReader) SetCfg(cfg any) {
 	f.f.FileCfg = cfg.(*FileCfg)
 }
@@ -139,10 +135,6 @@ func (f *FileWriter) Init() error {
 
 func (f *FileWriter) WrapWriter(io.Writer) {
 	panic(ErrInvalidWrap)
-}
-
-func (f *FileWriter) Type() Type {
-	return WriterFile
 }
 
 func (f *FileWriter) SetCfg(cfg any) {

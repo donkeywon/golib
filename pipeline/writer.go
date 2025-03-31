@@ -160,7 +160,3 @@ func (b *BaseWriter) ReadFrom(r io.Reader) (int64, error) {
 func (b *BaseWriter) WithOptions(opts ...Option) {
 	b.opt.with(opts...)
 }
-
-func (b *BaseWriter) Type() Type {
-	panic("not implemented")
-}

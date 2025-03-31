@@ -20,7 +20,7 @@ type closeFunc func() error
 type Common interface {
 	io.Closer
 	runner.Runner
-	plugin.Plugin[Type]
+	plugin.Plugin
 	optionApplier
 }
 

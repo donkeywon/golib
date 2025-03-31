@@ -22,7 +22,7 @@ const DaemonTypeProfd boot.DaemonType = "profd"
 var D Profd = New()
 
 type Profd interface {
-	runner.Runner
+	boot.Daemon
 	SetHTTPD(d httpd.HTTPD)
 }
 
@@ -117,10 +117,6 @@ func (p *profd) Stop() error {
 		}
 	}
 	return nil
-}
-
-func (p *profd) Type() boot.DaemonType {
-	return DaemonTypeProfd
 }
 
 func (p *profd) SetHTTPD(d httpd.HTTPD) {
