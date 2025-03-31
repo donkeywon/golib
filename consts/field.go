@@ -12,7 +12,7 @@ const (
 	FieldCmdExitCode = "exit"
 	FieldCmdSignaled = "signaled"
 
-	FieldPipelineResult = "pipelineResult"
+	FieldResult = "result"
 
 	FieldFtpCode = "ftpCode"
 	FieldFtpMsg  = "ftpMsg"

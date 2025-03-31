@@ -20,6 +20,12 @@ const PluginTypePipeline plugin.Type = "ppl"
 
 type Type string
 
+type Result struct {
+	Cfg           *Cfg            `json:"cfg" yaml:"cfg"`
+	Data          map[string]any  `json:"data" yaml:"data"`
+	WorkersResult []*WorkerResult `json:"workersResult" yaml:"workersResult"`
+}
+
 type Cfg struct {
 	Workers []*WorkerCfg `json:"workers" yaml:"workers"`
 }
@@ -153,4 +159,16 @@ func (p *Pipeline) SetCfg(cfg any) {
 	p.cfg = cfg.(*Cfg)
 
 	p.ws = p.cfg.build()
+}
+
+func (p *Pipeline) Result() *Result {
+	r := &Result{
+		Cfg:           p.cfg,
+		Data:          p.LoadAll(),
+		WorkersResult: make([]*WorkerResult, len(p.ws)),
+	}
+	for i, w := range p.ws {
+		r.WorkersResult[i] = w.Result()
+	}
+	return r
 }

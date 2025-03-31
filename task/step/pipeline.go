@@ -1,6 +1,7 @@
 package step
 
 import (
+	"github.com/donkeywon/golib/consts"
 	"github.com/donkeywon/golib/errs"
 	"github.com/donkeywon/golib/pipeline"
 	"github.com/donkeywon/golib/plugin"
@@ -28,6 +29,7 @@ type PipelineStep struct {
 func NewPipelineStep() *PipelineStep {
 	return &PipelineStep{
 		Step: CreateBase(string(TypePipeline)),
+		p:    pipeline.New(),
 	}
 }
 
@@ -36,9 +38,6 @@ func (p *PipelineStep) Init() error {
 	if err != nil {
 		return err
 	}
-
-	p.p = pipeline.New()
-	p.p.SetCfg(p.Cfg)
 
 	err = runner.Init(p.p)
 	if err != nil {
@@ -50,6 +49,7 @@ func (p *PipelineStep) Init() error {
 
 func (p *PipelineStep) Start() error {
 	runner.Start(p.p)
+	p.Store(consts.FieldResult, p.p.Result())
 	return p.p.Err()
 }
 
@@ -60,4 +60,8 @@ func (p *PipelineStep) Stop() error {
 
 func (p *PipelineStep) Type() Type {
 	return TypePipeline
+}
+
+func (p *PipelineStep) SetCfg(cfg any) {
+	p.p.SetCfg(cfg)
 }
