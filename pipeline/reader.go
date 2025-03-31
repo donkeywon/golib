@@ -4,6 +4,7 @@ import (
 	"errors"
 	"io"
 	"slices"
+	"sync"
 
 	"github.com/donkeywon/golib/plugin"
 	"github.com/donkeywon/golib/runner"
@@ -47,6 +48,7 @@ type BaseReader struct {
 
 	originReader io.Reader
 	closes       []closeFunc
+	closeOnce    sync.Once
 
 	opt *option
 }
@@ -87,9 +89,13 @@ func (b *BaseReader) appendCloses(r io.Reader) {
 }
 
 func (b *BaseReader) Close() error {
-	defer b.Cancel()
-	b.Debug("close")
-	return errors.Join(doAllClose(b.closes), b.opt.onclose())
+	var err error
+	b.closeOnce.Do(func() {
+		defer b.Cancel()
+		b.Debug("close")
+		err = errors.Join(doAllClose(b.closes), b.opt.onclose())
+	})
+	return err
 }
 
 func (b *BaseReader) WrapReader(r io.Reader) {

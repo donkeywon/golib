@@ -4,6 +4,7 @@ import (
 	"errors"
 	"io"
 	"slices"
+	"sync"
 
 	"github.com/donkeywon/golib/plugin"
 	"github.com/donkeywon/golib/runner"
@@ -75,6 +76,7 @@ type BaseWriter struct {
 
 	originWriter io.Writer
 	closes       []closeFunc
+	closeOnce    sync.Once
 
 	opt *option
 }
@@ -128,9 +130,13 @@ func (b *BaseWriter) appendCloses(w io.Writer) {
 }
 
 func (b *BaseWriter) Close() error {
-	defer b.Cancel()
-	b.Debug("close")
-	return errors.Join(doAllClose(b.closes), b.opt.onclose())
+	var err error
+	b.closeOnce.Do(func() {
+		defer b.Cancel()
+		b.Debug("close")
+		err = errors.Join(doAllClose(b.closes), b.opt.onclose())
+	})
+	return err
 }
 
 func (b *BaseWriter) WrapWriter(w io.Writer) {
