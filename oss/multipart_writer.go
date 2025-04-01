@@ -15,8 +15,10 @@ import (
 
 	"github.com/avast/retry-go/v4"
 	"github.com/donkeywon/golib/errs"
+	"github.com/donkeywon/golib/util/bytespool"
 	"github.com/donkeywon/golib/util/httpc"
 	"github.com/donkeywon/golib/util/httpu"
+	"github.com/donkeywon/golib/util/iou"
 	"github.com/donkeywon/golib/util/oss"
 	"github.com/google/uuid"
 )
@@ -52,9 +54,17 @@ type MultiPartWriter struct {
 	parts     []*Part
 	blockList []string
 
+	parallelResult []*uploadPartResult
+	parallelErrs   []error
+	mu             sync.Mutex
+	parallelChan   chan *uploadPartReq
+
+	// do complete if nil when closing, or else do abort
 	uploadErr error
 
-	bufw              *bufio.Writer
+	// used by ReadFrom when need content length
+	bufw *bufio.Writer
+
 	initialized       bool
 	needContentLength bool
 	isBlob            bool
@@ -93,18 +103,36 @@ func (w *MultiPartWriter) ReadFrom(r io.Reader) (int64, error) {
 		return 0, err
 	}
 
-	if w.needContentLength {
+	if w.needContentLength && w.cfg.Parallel == 1 {
 		w.bufw = bufio.NewWriterSize(mpwWithoutReadFrom{MultiPartWriter: w}, int(w.cfg.PartSize))
 		return io.Copy(w.bufw, r)
+	}
+
+	if w.cfg.Parallel > 1 {
+		for {
+			b := bytespool.GetN(int(w.cfg.PartSize))
+			n, err := iou.ReadFill(r, b.B())
+			if n > 0 {
+				b.Shrink(n)
+				w.parallelChan <- &uploadPartReq{partNo: w.curPartNo, b: b}
+				w.curPartNo++
+			}
+			if err != nil {
+				// TODO wait all worker done, combine err parallelErrs and return
+			}
+		}
 	}
 
 	rr := &readerWrapper{Reader: r}
 	for {
 		lr := io.LimitReader(rr, w.cfg.PartSize)
-		err = w.uploadPart(httpc.WithBodyReader(lr))
+		r := w.uploadPart(w.curPartNo, httpc.WithBodyReader(lr))
+		w.curPartNo++
+		err = r.err
 		if err != nil {
 			break
 		}
+		w.handleUploadPartResult(r)
 		if rr.eof {
 			break
 		}
@@ -126,6 +154,19 @@ func (r *readerWrapper) Read(p []byte) (int, error) {
 	return nr, err
 }
 
+type uploadPartReq struct {
+	partNo int
+	b      *bytespool.Bytes
+}
+
+type uploadPartResult struct {
+	err   error
+	part  *Part
+	block string
+
+	partNo int
+}
+
 func (w *MultiPartWriter) Write(p []byte) (int, error) {
 	select {
 	case <-w.ctx.Done():
@@ -142,15 +183,56 @@ func (w *MultiPartWriter) Write(p []byte) (int, error) {
 		return 0, err
 	}
 
-	err = w.uploadPart(httpc.WithBody(p))
-	if err != nil {
-		if w.uploadErr == nil {
-			w.uploadErr = err
+	if w.cfg.Parallel > 1 {
+		err := w.parallelErr()
+		if err != nil {
+			return 0, err
 		}
-		return 0, errs.Wrap(err, "upload part failed")
+
+		b := bytespool.GetN(len(p))
+		copy(b.B(), p)
+		w.parallelChan <- &uploadPartReq{partNo: w.curPartNo, b: b}
+		w.curPartNo++
+		return len(p), nil
 	}
 
+	r := w.uploadPart(w.curPartNo, httpc.WithBody(p))
+	w.curPartNo++
+	if r.err != nil {
+		if w.uploadErr == nil {
+			w.uploadErr = r.err
+		}
+		return 0, errs.Wrap(r.err, "upload part failed")
+	}
+	w.handleUploadPartResult(r)
+
 	return len(p), nil
+}
+
+func (w *MultiPartWriter) handleParallelResult(r *uploadPartResult) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	if r.err != nil {
+		w.parallelErrs = append(w.parallelErrs, r.err)
+		return
+	}
+
+	w.parallelResult = append(w.parallelResult, r)
+}
+
+func (w *MultiPartWriter) handleUploadPartResult(r *uploadPartResult) {
+	if w.isBlob {
+		w.blockList = append(w.blockList, r.block)
+	} else {
+		w.parts = append(w.parts, r.part)
+	}
+}
+
+func (w *MultiPartWriter) parallelErr() error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return errors.Join(w.parallelErrs...)
 }
 
 func (w *MultiPartWriter) Close() error {
@@ -159,6 +241,9 @@ func (w *MultiPartWriter) Close() error {
 		err = w.bufw.Flush()
 	}
 	w.closeOnce.Do(func() {
+		close(w.parallelChan)
+		// TODO before cancel, wait all parallel worker done, use waitgroup
+
 		w.cancel()
 		if w.uploadErr == nil {
 			err = errors.Join(err, w.complete())
@@ -188,7 +273,36 @@ func (w *MultiPartWriter) init() error {
 	}
 	w.initialized = true
 	w.curPartNo = 1
+
+	if w.cfg.Parallel > 1 {
+		w.parallelChan = make(chan *uploadPartReq)
+		for range w.cfg.Parallel {
+			go w.uploadWorker()
+		}
+	}
+
 	return nil
+}
+
+func (w *MultiPartWriter) uploadWorker() {
+	for {
+		select {
+		case <-w.ctx.Done():
+			return
+		case req, ok := <-w.parallelChan:
+			if !ok {
+				return
+			}
+			err := w.parallelErr()
+			if err != nil {
+				req.b.Free()
+				continue
+			}
+
+			r := w.uploadPart(req.partNo, httpc.WithBody(req.b.B()))
+			w.handleParallelResult(r)
+		}
+	}
 }
 
 func (w *MultiPartWriter) abort() error {
@@ -220,6 +334,8 @@ func (w *MultiPartWriter) abort() error {
 }
 
 func (w *MultiPartWriter) complete() error {
+	// TODO handle parallel result
+
 	if len(w.blockList) == 0 && len(w.parts) == 0 {
 		return nil
 	}
@@ -306,7 +422,7 @@ func (w *MultiPartWriter) initMultiPart() (string, error) {
 	return result.UploadID, nil
 }
 
-func (w *MultiPartWriter) uploadPart(opts ...httpc.Option) error {
+func (w *MultiPartWriter) uploadPart(partNo int, opts ...httpc.Option) *uploadPartResult {
 	var (
 		url         string
 		checkStatus httpc.Option
@@ -322,7 +438,7 @@ func (w *MultiPartWriter) uploadPart(opts ...httpc.Option) error {
 		url = fmt.Sprintf("%s?comp=block&blockid=%s", w.cfg.URL, blockID)
 		checkStatus = httpc.CheckStatusCode(http.StatusCreated)
 	} else {
-		url = fmt.Sprintf("%s?partNumber=%d&uploadId=%s", w.cfg.URL, w.curPartNo, w.uploadID)
+		url = fmt.Sprintf("%s?partNumber=%d&uploadId=%s", w.cfg.URL, partNo, w.uploadID)
 		checkStatus = httpc.CheckStatusCode(http.StatusOK)
 	}
 
@@ -341,8 +457,13 @@ func (w *MultiPartWriter) uploadPart(opts ...httpc.Option) error {
 			}
 		}),
 	)
+
+	r := &uploadPartResult{
+		partNo: partNo,
+	}
 	if err != nil {
-		return errs.Wrapf(err, "upload failed with max retry, respStatus: %s, respBody: %s", respStatus, respBody.String())
+		r.err = errs.Wrapf(err, "upload failed with max retry, respStatus: %s, respBody: %s", respStatus, respBody.String())
+		return r
 	}
 
 	if !w.isBlob {
@@ -351,16 +472,16 @@ func (w *MultiPartWriter) uploadPart(opts ...httpc.Option) error {
 			etag = resp.Header.Get("ETag")
 		}
 		if etag == "" {
-			return errs.Errorf("etag not exists in resp header, respStatus: %s, respBody: %s", respStatus, respBody.String())
+			r.err = errs.Errorf("etag not exists in resp header, respStatus: %s, respBody: %s", respStatus, respBody.String())
+			return r
 		}
 
-		w.parts = append(w.parts, &Part{
+		r.part = &Part{
 			PartNumber: w.curPartNo,
 			ETag:       etag,
-		})
-		w.curPartNo++
+		}
 	} else {
-		w.blockList = append(w.blockList, etag)
+		r.block = etag
 	}
 
 	return nil
