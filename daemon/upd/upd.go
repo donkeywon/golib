@@ -153,16 +153,16 @@ func (u *upd) upgrade(vi *VerInfo) bool {
 
 	u.Info("start deploy new package")
 	var cmdResult *cmd.Result
-	cmdResult, err = cmd.Run(deployCmd...)
-	if err != nil {
+	cmdResult = cmd.Run(deployCmd...)
+	if cmdResult.Err() != nil {
 		u.Error("deploy new package failed", err, "cmd_result", cmdResult)
 		os.Exit(1)
 	}
 	u.Info("deploy new package done")
 
 	u.Info("start new version")
-	cmdResult, err = cmd.Run(startCmd...)
-	if err != nil {
+	cmdResult = cmd.Run(startCmd...)
+	if cmdResult.Err() != nil {
 		u.Error("start new version failed", err, "cmd_result", cmdResult)
 		os.Exit(1)
 	}
@@ -174,14 +174,20 @@ func (u *upd) upgrade(vi *VerInfo) bool {
 func downloadPackage(downloadDstPath string, storeCfg *pipeline.ReaderCfg) error {
 	cfg := pipeline.NewCfg().
 		Add(&pipeline.WorkerCfg{
-			Type:    pipeline.WorkerCopy,
+			CommonCfgWithOption: pipeline.CommonCfgWithOption{
+				CommonCfg: pipeline.CommonCfg{
+					Type: pipeline.WorkerCopy,
+				},
+			},
 			Readers: []*pipeline.ReaderCfg{storeCfg},
 			Writers: []*pipeline.WriterCfg{
 				{
-					CommonCfg: pipeline.CommonCfg{
-						Type: pipeline.WriterFile,
-						Cfg: &pipeline.FileCfg{
-							Path: downloadDstPath,
+					CommonCfgWithOption: pipeline.CommonCfgWithOption{
+						CommonCfg: pipeline.CommonCfg{
+							Type: pipeline.WriterFile,
+							Cfg: &pipeline.FileCfg{
+								Path: downloadDstPath,
+							},
 						},
 					},
 				},

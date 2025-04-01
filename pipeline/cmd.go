@@ -39,7 +39,7 @@ func (c *Cmd) Init() error {
 func (c *Cmd) Start() error {
 	defer c.Close()
 
-	result, err := cmd.RunCmd(context.Background(), c.c, c.Cfg, func(cmd *exec.Cmd) error {
+	result := cmd.RunCmd(context.Background(), c.c, c.Cfg, func(cmd *exec.Cmd) error {
 		if c.Writer() != nil {
 			cmd.Stdout = c.Writer()
 		}
@@ -63,14 +63,14 @@ func (c *Cmd) Start() error {
 	if result != nil && result.Signaled {
 		select {
 		case <-c.Stopping():
-			c.Info("exit signaled", "err", err)
+			c.Info("exit signaled", "err", result.Err())
 			return nil
 		default:
 		}
 	}
 
-	if err != nil {
-		return errs.Wrapf(err, "cmd failed")
+	if result.Err() != nil {
+		return errs.Wrapf(result.Err(), "cmd failed")
 	}
 
 	return nil

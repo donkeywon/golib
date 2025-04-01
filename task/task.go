@@ -39,6 +39,7 @@ type Cfg struct {
 	DeferSteps      []*step.Cfg `json:"deferSteps"      yaml:"deferSteps"`
 	CurStepIdx      int         `json:"curStepIdx"      yaml:"curStepIdx"`
 	CurDeferStepIdx int         `json:"curDeferStepIdx" yaml:"curDeferStepIdx"`
+	Pool            string      `json:"pool"            yaml:"pool"`
 }
 
 func NewCfg() *Cfg {

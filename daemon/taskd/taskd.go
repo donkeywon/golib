@@ -1,6 +1,7 @@
 package taskd
 
 import (
+	"context"
 	"errors"
 	"sync"
 
@@ -25,12 +26,12 @@ var (
 	ErrTaskNotPausing      = errors.New("task not pausing")
 )
 
-var D Taskd = New(string(DaemonTypeTaskd))
+var D Taskd = New()
 
 type Taskd interface {
 	boot.Daemon
 	SubmitTask(taskCfg *task.Cfg) (*task.Task, error)
-	SubmitTaskAndWait(taskCfg *task.Cfg) (*task.Task, error)
+	SubmitTaskAndWait(context.Context, *task.Cfg) (*task.Task, error)
 	TrySubmitTask(taskCfg *task.Cfg) (*task.Task, bool, error)
 	StopTask(taskID string) error
 	PauseTask(taskID string) error
@@ -58,7 +59,7 @@ type taskd struct {
 	runner.Runner
 	*Cfg
 
-	pool *pond.WorkerPool
+	pools map[string]*pond.WorkerPool
 
 	mu               sync.Mutex
 	taskIDMap        map[string]struct{}   // task id map include waiting, except pausing
@@ -75,18 +76,24 @@ type taskd struct {
 	deferStepDoneHooks []task.StepHook
 }
 
-func New(name string) Taskd {
+func New() Taskd {
 	return &taskd{
-		Runner:           runner.Create(name),
+		Runner:           runner.Create(string(DaemonTypeTaskd)),
 		taskMap:          make(map[string]*task.Task),
 		taskIDMap:        make(map[string]struct{}),
 		taskIDRunningMap: make(map[string]struct{}),
 		taskPausingMap:   make(map[string]*task.Task),
+		pools:            make(map[string]*pond.WorkerPool),
 	}
 }
 
 func (td *taskd) Init() error {
-	td.pool = pond.New(td.Cfg.PoolSize, td.Cfg.QueueSize)
+	if len(td.Pools) == 0 {
+		return errs.New("no pools")
+	}
+	for _, poolCfg := range td.Pools {
+		td.pools[poolCfg.Name] = pond.New(poolCfg.Size, poolCfg.QueueSize)
+	}
 	return td.Runner.Init()
 }
 
@@ -94,7 +101,9 @@ func (td *taskd) Start() error {
 	td.Info("ready for task")
 	<-td.Stopping()
 	td.waitAllTaskDone()
-	td.pool.Stop()
+	for _, pool := range td.pools {
+		pool.Stop()
+	}
 	return td.Runner.Start()
 }
 
@@ -103,18 +112,22 @@ func (td *taskd) Stop() error {
 	return nil
 }
 
+func (td *taskd) getPool(taskCfg *task.Cfg) *pond.WorkerPool {
+	return td.pools[taskCfg.Pool]
+}
+
 func (td *taskd) SubmitTask(taskCfg *task.Cfg) (*task.Task, error) {
-	t, _, err := td.createInitSubmit(taskCfg, false, true, nil)
+	t, _, err := td.createInitSubmit(td.Ctx(), taskCfg, false, true, nil)
 	return t, err
 }
 
-func (td *taskd) SubmitTaskAndWait(taskCfg *task.Cfg) (*task.Task, error) {
-	t, _, err := td.createInitSubmit(taskCfg, true, true, nil)
+func (td *taskd) SubmitTaskAndWait(ctx context.Context, taskCfg *task.Cfg) (*task.Task, error) {
+	t, _, err := td.createInitSubmit(ctx, taskCfg, true, true, nil)
 	return t, err
 }
 
 func (td *taskd) TrySubmitTask(taskCfg *task.Cfg) (*task.Task, bool, error) {
-	t, submitted, err := td.createInitSubmit(taskCfg, false, false, nil)
+	t, submitted, err := td.createInitSubmit(td.Ctx(), taskCfg, false, false, nil)
 	return t, submitted, err
 }
 
@@ -191,7 +204,7 @@ func (td *taskd) ResumeTask(taskID string) (*task.Task, error) {
 	}
 
 	td.Info("resuming task", "task_id", taskID)
-	newT, _, err := td.createInitSubmit(t.Cfg, false, true, []task.Hook{
+	newT, _, err := td.createInitSubmit(td.Ctx(), t.Cfg, false, true, []task.Hook{
 		func(newT *task.Task, err error, hed *task.HookExtraData) {
 			for i, newStep := range newT.Steps() {
 				data := t.Steps()[i].LoadAll()
@@ -224,7 +237,7 @@ func (td *taskd) waitAllTaskDone() {
 	}
 }
 
-func (td *taskd) createInit(taskCfg *task.Cfg) (*task.Task, error) {
+func (td *taskd) createInit(ctx context.Context, taskCfg *task.Cfg) (*task.Task, error) {
 	err := v.Struct(taskCfg)
 	if err != nil {
 		return nil, errs.Wrap(err, "invalid task cfg")
@@ -240,7 +253,7 @@ func (td *taskd) createInit(taskCfg *task.Cfg) (*task.Task, error) {
 	t.HookStepDone(td.stepDoneHooks...)
 	t.HookDeferStepDone(td.deferStepDoneHooks...)
 
-	err = td.initTask(t)
+	err = td.initTask(ctx, t)
 	td.hookTask(t, err, td.initHooks, "init", nil)
 	if err != nil {
 		td.Error("init task failed", err, "cfg", taskCfg)
@@ -273,7 +286,7 @@ func (td *taskd) submit(t *task.Task, wait bool, must bool) bool {
 	var submitted bool
 	td.markTask(t)
 	if !must {
-		submitted = td.pool.TrySubmit(f)
+		submitted = td.getPool(t.Cfg).TrySubmit(f)
 		if !submitted {
 			td.Warn("try submit fail, full queue and no idle worker", "task_id", t.Cfg.ID)
 			td.unmarkTaskAndTaskID(t.Cfg.ID)
@@ -283,10 +296,10 @@ func (td *taskd) submit(t *task.Task, wait bool, must bool) bool {
 	} else {
 		if wait {
 			td.Info("task submit and wait", "task_id", t.Cfg.ID)
-			td.pool.SubmitAndWait(f)
+			td.getPool(t.Cfg).SubmitAndWait(f)
 			td.Info("task submit and wait done", "task_id", t.Cfg.ID)
 		} else {
-			td.pool.Submit(f)
+			td.getPool(t.Cfg).Submit(f)
 			td.Info("task submitted", "task_id", t.Cfg.ID)
 		}
 		submitted = true
@@ -296,7 +309,7 @@ func (td *taskd) submit(t *task.Task, wait bool, must bool) bool {
 	return submitted
 }
 
-func (td *taskd) createInitSubmit(taskCfg *task.Cfg, wait bool, must bool, beforeSubmit []task.Hook) (*task.Task, bool, error) {
+func (td *taskd) createInitSubmit(ctx context.Context, taskCfg *task.Cfg, wait bool, must bool, beforeSubmit []task.Hook) (*task.Task, bool, error) {
 	select {
 	case <-td.Stopping():
 		return nil, false, ErrStopping
@@ -309,7 +322,7 @@ func (td *taskd) createInitSubmit(taskCfg *task.Cfg, wait bool, must bool, befor
 		return nil, false, ErrTaskAlreadyExists
 	}
 
-	t, err := td.createInit(taskCfg)
+	t, err := td.createInit(ctx, taskCfg)
 	if err != nil {
 		td.unmarkTaskID(taskCfg.ID)
 		return nil, false, errs.Wrap(err, "create init task failed")
@@ -339,7 +352,7 @@ func (td *taskd) createTask(cfg *task.Cfg) (t *task.Task, err error) {
 	return plugin.CreateWithCfg[plugin.Type, *task.Task](task.PluginTypeTask, cfg), nil
 }
 
-func (td *taskd) initTask(t *task.Task) (err error) {
+func (td *taskd) initTask(ctx context.Context, t *task.Task) (err error) {
 	defer func() {
 		e := recover()
 		if e != nil {
@@ -348,6 +361,7 @@ func (td *taskd) initTask(t *task.Task) (err error) {
 	}()
 
 	t.Inherit(td)
+	t.SetCtx(ctx)
 	t.WithLoggerFields("task_id", t.Cfg.ID, "task_type", t.Cfg.Type)
 	return runner.Init(t)
 }
