@@ -28,8 +28,7 @@ type SSHStepCfg struct {
 	PrivateKey string `json:"privateKey" yaml:"privateKey"`
 	Timeout    int    `json:"timeout"    yaml:"timeout"`
 
-	Cmd  string   `json:"cmd"  yaml:"cmd" validate:"required"`
-	Args []string `json:"args" yaml:"args"`
+	Cmd []string `json:"cmd"  yaml:"cmd" validate:"required"`
 }
 
 func NewSSHStepCfg() *SSHStepCfg {
@@ -79,10 +78,7 @@ func (s *SSHStep) Start() error {
 	stderrBuf := bufferpool.Get()
 	defer stderrBuf.Free()
 
-	cmd := s.SSHStepCfg.Cmd
-	if len(s.SSHStepCfg.Args) > 0 {
-		cmd += " " + strings.Join(s.SSHStepCfg.Args, " ")
-	}
+	cmd := strings.Join(s.SSHStepCfg.Cmd, " ")
 
 	startNano := time.Now().UnixNano()
 	err = s.sess.Run(cmd)

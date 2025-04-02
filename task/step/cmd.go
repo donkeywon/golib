@@ -25,7 +25,8 @@ type CmdStep struct {
 	Step
 	*cmd.Cfg
 
-	cmd *exec.Cmd
+	cmd       *exec.Cmd
+	beforeRun []func(cmd *exec.Cmd) error
 }
 
 func NewCmdStep() *CmdStep {
@@ -43,15 +44,13 @@ func (c *CmdStep) Init() error {
 
 	c.WithLoggerFields("cmd", c.Command[0])
 
-	c.cmd = exec.CommandContext(c.Ctx(), c.Command[0], c.Command[1:]...)
-
 	return c.Step.Init()
 }
 
 func (c *CmdStep) Start() error {
 	var err error
 
-	result := cmd.RunCmd(c.Ctx(), c.cmd, c.Cfg)
+	result := cmd.RunCmd(c.Ctx(), c.cmd, c.Cfg, c.beforeRun...)
 	err = result.Err()
 	c.Info("cmd exit", "result", result)
 
@@ -82,4 +81,13 @@ func (c *CmdStep) Start() error {
 
 func (c *CmdStep) Stop() error {
 	return cmd.MustStop(context.Background(), c.cmd)
+}
+
+func (c *CmdStep) SetCfg(cfg any) {
+	c.Cfg = cfg.(*cmd.Cfg)
+	c.cmd = exec.CommandContext(c.Ctx(), c.Command[0], c.Command[1:]...)
+}
+
+func (c *CmdStep) BeforeRun(f ...func(cmd *exec.Cmd) error) {
+	c.beforeRun = append(c.beforeRun, f...)
 }
