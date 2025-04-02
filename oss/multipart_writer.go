@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"slices"
 	"sync"
 	"time"
 
@@ -54,10 +55,12 @@ type MultiPartWriter struct {
 	parts     []*Part
 	blockList []string
 
-	parallelResult []*uploadPartResult
-	parallelErrs   []error
-	mu             sync.Mutex
-	parallelChan   chan *uploadPartReq
+	parallelWg       sync.WaitGroup
+	parallelResult   []*uploadPartResult
+	parallelErrs     []error
+	mu               sync.Mutex
+	parallelChan     chan *uploadPartReq
+	parallelChanOnce sync.Once
 
 	// do complete if nil when closing, or else do abort
 	uploadErr error
@@ -109,18 +112,31 @@ func (w *MultiPartWriter) ReadFrom(r io.Reader) (int64, error) {
 	}
 
 	if w.cfg.Parallel > 1 {
+		var (
+			total int64
+			n     int
+		)
 		for {
 			b := bytespool.GetN(int(w.cfg.PartSize))
-			n, err := iou.ReadFill(r, b.B())
+			n, err = iou.ReadFill(r, b.B())
+			total += int64(n)
 			if n > 0 {
 				b.Shrink(n)
 				w.parallelChan <- &uploadPartReq{partNo: w.curPartNo, b: b}
 				w.curPartNo++
 			}
 			if err != nil {
-				// TODO wait all worker done, combine err parallelErrs and return
+				break
 			}
 		}
+
+		w.closeParallelChan()
+		w.parallelWg.Wait()
+		if err == io.EOF {
+			err = nil
+		}
+
+		return total, errors.Join(err, w.parallelErr())
 	}
 
 	rr := &readerWrapper{Reader: r}
@@ -184,7 +200,7 @@ func (w *MultiPartWriter) Write(p []byte) (int, error) {
 	}
 
 	if w.cfg.Parallel > 1 {
-		err := w.parallelErr()
+		err = w.parallelErr()
 		if err != nil {
 			return 0, err
 		}
@@ -241,8 +257,8 @@ func (w *MultiPartWriter) Close() error {
 		err = w.bufw.Flush()
 	}
 	w.closeOnce.Do(func() {
-		close(w.parallelChan)
-		// TODO before cancel, wait all parallel worker done, use waitgroup
+		w.closeParallelChan()
+		w.parallelWg.Wait()
 
 		w.cancel()
 		if w.uploadErr == nil {
@@ -252,6 +268,14 @@ func (w *MultiPartWriter) Close() error {
 		}
 	})
 	return err
+}
+
+func (w *MultiPartWriter) closeParallelChan() {
+	w.parallelChanOnce.Do(func() {
+		if w.parallelChan != nil {
+			close(w.parallelChan)
+		}
+	})
 }
 
 func (w *MultiPartWriter) init() error {
@@ -275,6 +299,7 @@ func (w *MultiPartWriter) init() error {
 	w.curPartNo = 1
 
 	if w.cfg.Parallel > 1 {
+		w.parallelWg.Add(w.cfg.Parallel)
 		w.parallelChan = make(chan *uploadPartReq)
 		for range w.cfg.Parallel {
 			go w.uploadWorker()
@@ -285,6 +310,7 @@ func (w *MultiPartWriter) init() error {
 }
 
 func (w *MultiPartWriter) uploadWorker() {
+	defer w.parallelWg.Done()
 	for {
 		select {
 		case <-w.ctx.Done():
@@ -300,6 +326,7 @@ func (w *MultiPartWriter) uploadWorker() {
 			}
 
 			r := w.uploadPart(req.partNo, httpc.WithBody(req.b.B()))
+			req.b.Free()
 			w.handleParallelResult(r)
 		}
 	}
@@ -334,7 +361,22 @@ func (w *MultiPartWriter) abort() error {
 }
 
 func (w *MultiPartWriter) complete() error {
-	// TODO handle parallel result
+	if w.cfg.Parallel > 1 {
+		slices.SortFunc(w.parallelResult, func(a, b *uploadPartResult) int {
+			return a.partNo - b.partNo
+		})
+		if w.isBlob {
+			w.blockList = make([]string, len(w.parallelResult))
+			for i, r := range w.parallelResult {
+				w.blockList[i] = r.block
+			}
+		} else {
+			w.parts = make([]*Part, len(w.parallelResult))
+			for i, r := range w.parallelResult {
+				w.parts[i] = r.part
+			}
+		}
+	}
 
 	if len(w.blockList) == 0 && len(w.parts) == 0 {
 		return nil
@@ -477,14 +519,14 @@ func (w *MultiPartWriter) uploadPart(partNo int, opts ...httpc.Option) *uploadPa
 		}
 
 		r.part = &Part{
-			PartNumber: w.curPartNo,
+			PartNumber: partNo,
 			ETag:       etag,
 		}
 	} else {
 		r.block = etag
 	}
 
-	return nil
+	return r
 }
 
 func (w *MultiPartWriter) upload(url string, opts ...httpc.Option) (*http.Response, error) {
