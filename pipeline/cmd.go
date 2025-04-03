@@ -39,7 +39,7 @@ func (c *Cmd) Init() error {
 func (c *Cmd) Start() error {
 	defer c.Close()
 
-	result := cmd.RunCmd(context.Background(), c.c, c.Cfg, func(cmd *exec.Cmd) error {
+	result := cmd.RunCmd(context.Background(), c.c, c.Cfg, func(cmd *exec.Cmd) {
 		if c.Writer() != nil {
 			cmd.Stdout = c.Writer()
 		}
@@ -47,7 +47,6 @@ func (c *Cmd) Start() error {
 		if c.Reader() != nil {
 			cmd.Stdin = c.Reader()
 		}
-		return nil
 	})
 
 	c.Info("cmd exit", "result", result)

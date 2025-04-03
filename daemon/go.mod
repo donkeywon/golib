@@ -3,7 +3,7 @@ module github.com/donkeywon/golib/daemon
 go 1.23.0
 
 require (
-	github.com/alitto/pond v1.9.2
+	github.com/alitto/pond/v2 v2.3.0
 	github.com/arl/statsviz v0.6.0
 	github.com/donkeywon/golib v0.0.0
 	github.com/google/gops v0.3.28
@@ -27,7 +27,7 @@ require (
 	github.com/go-playground/locales v0.14.1 // indirect
 	github.com/go-playground/universal-translator v0.18.1 // indirect
 	github.com/go-playground/validator/v10 v10.26.0 // indirect
-	github.com/goccy/go-yaml v1.16.0 // indirect
+	github.com/goccy/go-yaml v1.17.1 // indirect
 	github.com/google/pprof v0.0.0-20250317173921-a4b03ec1a45e // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
@@ -61,7 +61,7 @@ require (
 	golang.org/x/sys v0.31.0 // indirect
 	golang.org/x/text v0.23.0 // indirect
 	golang.org/x/time v0.11.0 // indirect
-	golang.org/x/tools v0.29.0 // indirect
+	golang.org/x/tools v0.31.0 // indirect
 	google.golang.org/protobuf v1.36.6 // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect

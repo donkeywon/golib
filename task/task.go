@@ -28,8 +28,7 @@ type StepHook func(*Task, int, step.Step)
 type Hook func(*Task, error, *HookExtraData)
 
 type HookExtraData struct {
-	Submitted  bool
-	SubmitWait bool
+	Wait bool
 }
 
 type Cfg struct {
@@ -81,8 +80,6 @@ type Task struct {
 
 	steps      []step.Step
 	deferSteps []step.Step
-
-	collector Collector
 }
 
 func New() *Task {
@@ -141,6 +138,14 @@ func (t *Task) Stop() error {
 	return nil
 }
 
+func (t *Task) CloneTask() *Task {
+	tc := New()
+	tc.Runner = t.Runner.Clone()
+	tc.stepDoneHooks = t.stepDoneHooks
+	tc.deferStepDoneHooks = t.deferStepDoneHooks
+	return tc
+}
+
 func (t *Task) HookStepDone(hook ...StepHook) {
 	t.stepDoneHooks = append(t.stepDoneHooks, hook...)
 }
@@ -149,18 +154,7 @@ func (t *Task) HookDeferStepDone(hook ...StepHook) {
 	t.deferStepDoneHooks = append(t.deferStepDoneHooks, hook...)
 }
 
-func (t *Task) SetCollector(c Collector) {
-	t.collector = c
-}
-
-func (t *Task) Result() any {
-	if t.collector == nil {
-		return t.result()
-	}
-	return t.collector(t)
-}
-
-func (t *Task) result() *Result {
+func (t *Task) Result() *Result {
 	r := &Result{}
 	for _, step := range t.Steps() {
 		v := step.LoadAll()
