@@ -27,6 +27,48 @@ type WorkerCfg struct {
 	Writers []*WriterCfg `json:"writers" yaml:"writers"`
 }
 
+func (w *WorkerCfg) WriteTo(typ Type, cfg any, opt CommonOption) *WorkerCfg {
+	w.Writers = append(w.Writers, &WriterCfg{
+		CommonCfgWithOption: CommonCfgWithOption{
+			CommonCfg: CommonCfg{
+				Type: typ,
+				Cfg:  cfg,
+			},
+			CommonOption: opt,
+		},
+	})
+
+	return w
+}
+
+func (w *WorkerCfg) ReadFrom(typ Type, cfg any, opt CommonOption) *WorkerCfg {
+	w.Readers = append(w.Readers, &ReaderCfg{
+		CommonCfgWithOption: CommonCfgWithOption{
+			CommonCfg: CommonCfg{
+				Type: typ,
+				Cfg:  cfg,
+			},
+			CommonOption: opt,
+		},
+	})
+
+	return w
+}
+
+func (w *WorkerCfg) WriteToWriter(c CommonCfgWithOption) *WorkerCfg {
+	w.Writers = append(w.Writers, &WriterCfg{
+		CommonCfgWithOption: c,
+	})
+	return w
+}
+
+func (w *WorkerCfg) ReadFromReader(c CommonCfgWithOption) *WorkerCfg {
+	w.Readers = append(w.Readers, &ReaderCfg{
+		CommonCfgWithOption: c,
+	})
+	return w
+}
+
 type workerCfgWithoutCommonCfg struct {
 	Readers []*ReaderCfg `json:"readers" yaml:"readers"`
 	Writers []*WriterCfg `json:"writers" yaml:"writers"`
