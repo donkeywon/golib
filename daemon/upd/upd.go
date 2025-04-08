@@ -172,27 +172,10 @@ func (u *upd) upgrade(vi *VerInfo) bool {
 }
 
 func downloadPackage(downloadDstPath string, storeCfg *pipeline.ReaderCfg) error {
-	cfg := pipeline.NewCfg().
-		Add(&pipeline.WorkerCfg{
-			CommonCfgWithOption: pipeline.CommonCfgWithOption{
-				CommonCfg: pipeline.CommonCfg{
-					Type: pipeline.WorkerCopy,
-				},
-			},
-			Readers: []*pipeline.ReaderCfg{storeCfg},
-			Writers: []*pipeline.WriterCfg{
-				{
-					CommonCfgWithOption: pipeline.CommonCfgWithOption{
-						CommonCfg: pipeline.CommonCfg{
-							Type: pipeline.WriterFile,
-							Cfg: &pipeline.FileCfg{
-								Path: downloadDstPath,
-							},
-						},
-					},
-				},
-			},
-		})
+	cfg := pipeline.NewCfg()
+	cfg.Add(pipeline.WorkerCopy, pipeline.NewCopyCfg(), pipeline.CommonOption{}).
+		ReadFromReader(storeCfg.CommonCfgWithOption).
+		WriteTo(pipeline.WriterFile, &pipeline.FileCfg{Path: downloadDstPath}, pipeline.CommonOption{})
 
 	p := pipeline.New()
 	p.SetCfg(cfg)

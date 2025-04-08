@@ -15,6 +15,17 @@ import (
 
 var commonTimeout = 10 * time.Second
 
+var NeedContentLength = func(url string) bool {
+	switch Which(url) {
+	case TypeOBS, TypeAliyunOSS:
+		return false
+	case TypeBlob, TypeAmazonS3, TypeMinIO, TypeUnknown:
+		return true
+	default:
+		return true
+	}
+}
+
 func Which(url string) Type {
 	if IsAzblob(url) {
 		return TypeBlob
@@ -54,17 +65,6 @@ func whichByHead(url string) Type {
 			return TypeBlob
 		}
 		return TypeUnknown
-	}
-}
-
-func NeedContentLength(url string) bool {
-	switch Which(url) {
-	case TypeOBS, TypeAliyunOSS:
-		return false
-	case TypeBlob, TypeAmazonS3, TypeMinIO, TypeUnknown:
-		return true
-	default:
-		return true
 	}
 }
 

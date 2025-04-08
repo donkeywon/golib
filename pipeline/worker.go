@@ -23,12 +23,12 @@ type WorkerResult struct {
 
 type WorkerCfg struct {
 	CommonCfgWithOption
-	Readers []*ReaderCfg `json:"readers" yaml:"readers"`
-	Writers []*WriterCfg `json:"writers" yaml:"writers"`
+	Readers []ReaderCfg `json:"readers" yaml:"readers"`
+	Writers []WriterCfg `json:"writers" yaml:"writers"`
 }
 
-func (w *WorkerCfg) WriteTo(typ Type, cfg any, opt CommonOption) *WorkerCfg {
-	w.Writers = append(w.Writers, &WriterCfg{
+func (wc *WorkerCfg) WriteTo(typ Type, cfg any, opt CommonOption) *WorkerCfg {
+	wc.Writers = append(wc.Writers, WriterCfg{
 		CommonCfgWithOption: CommonCfgWithOption{
 			CommonCfg: CommonCfg{
 				Type: typ,
@@ -38,11 +38,11 @@ func (w *WorkerCfg) WriteTo(typ Type, cfg any, opt CommonOption) *WorkerCfg {
 		},
 	})
 
-	return w
+	return wc
 }
 
-func (w *WorkerCfg) ReadFrom(typ Type, cfg any, opt CommonOption) *WorkerCfg {
-	w.Readers = append(w.Readers, &ReaderCfg{
+func (wc *WorkerCfg) ReadFrom(typ Type, cfg any, opt CommonOption) *WorkerCfg {
+	wc.Readers = append(wc.Readers, ReaderCfg{
 		CommonCfgWithOption: CommonCfgWithOption{
 			CommonCfg: CommonCfg{
 				Type: typ,
@@ -52,26 +52,22 @@ func (w *WorkerCfg) ReadFrom(typ Type, cfg any, opt CommonOption) *WorkerCfg {
 		},
 	})
 
-	return w
+	return wc
 }
 
-func (w *WorkerCfg) WriteToWriter(c CommonCfgWithOption) *WorkerCfg {
-	w.Writers = append(w.Writers, &WriterCfg{
-		CommonCfgWithOption: c,
-	})
-	return w
+func (wc *WorkerCfg) WriteToWriter(c CommonCfgWithOption) *WorkerCfg {
+	wc.Writers = append(wc.Writers, WriterCfg{c})
+	return wc
 }
 
-func (w *WorkerCfg) ReadFromReader(c CommonCfgWithOption) *WorkerCfg {
-	w.Readers = append(w.Readers, &ReaderCfg{
-		CommonCfgWithOption: c,
-	})
-	return w
+func (wc *WorkerCfg) ReadFromReader(c CommonCfgWithOption) *WorkerCfg {
+	wc.Readers = append(wc.Readers, ReaderCfg{CommonCfgWithOption: c})
+	return wc
 }
 
 type workerCfgWithoutCommonCfg struct {
-	Readers []*ReaderCfg `json:"readers" yaml:"readers"`
-	Writers []*WriterCfg `json:"writers" yaml:"writers"`
+	Readers []ReaderCfg `json:"readers" yaml:"readers"`
+	Writers []WriterCfg `json:"writers" yaml:"writers"`
 }
 
 func (wc *WorkerCfg) UnmarshalJSON(data []byte) error {
@@ -92,7 +88,7 @@ func (wc *WorkerCfg) UnmarshalYAML(data []byte) error {
 
 func (wc *WorkerCfg) customUnmarshal(data []byte, unmarshal func([]byte, any) error) error {
 	wcc := workerCfgWithoutCommonCfg{}
-	err := jsons.Unmarshal(data, &wcc)
+	err := unmarshal(data, &wcc)
 	if err != nil {
 		return err
 	}

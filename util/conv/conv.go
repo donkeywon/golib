@@ -101,6 +101,14 @@ func ToString(v any) (string, error) {
 	return vs, err
 }
 
+func MustToString(any interface{}) string {
+	v, err := ToString(any)
+	if err != nil {
+		panic(err)
+	}
+	return v
+}
+
 func ToBool(v any) (bool, error) {
 	var (
 		vv  bool
@@ -119,6 +127,14 @@ func ToBool(v any) (bool, error) {
 		err = fmt.Errorf("unexpected value type, expected: string or bool, actual: %s", reflect.TypeOf(v))
 	}
 	return vv, err
+}
+
+func MustToBool(v any) bool {
+	vv, err := ToBool(v)
+	if err != nil {
+		panic(err)
+	}
+	return vv
 }
 
 func ToInt(v any) (int, error) {
@@ -156,6 +172,14 @@ func ToInt(v any) (int, error) {
 		err = fmt.Errorf("unexpected value type, expected: string or any integer type, actual: %s", reflect.TypeOf(v))
 	}
 	return vv, err
+}
+
+func MustToInt(v any) int {
+	vv, err := ToInt(v)
+	if err != nil {
+		panic(err)
+	}
+	return vv
 }
 
 func ToUint(v any) (uint, error) {
@@ -198,6 +222,14 @@ func ToUint(v any) (uint, error) {
 	return vv, err
 }
 
+func MustToUint(v any) uint {
+	vv, err := ToUint(v)
+	if err != nil {
+		panic(err)
+	}
+	return vv
+}
+
 func ToFloat(v any) (float64, error) {
 	var (
 		vv  float64
@@ -220,4 +252,12 @@ func ToFloat(v any) (float64, error) {
 		err = fmt.Errorf("unexpected value type, expected: string or any float type, actual: %s", reflect.TypeOf(v))
 	}
 	return vv, err
+}
+
+func MustToFloat(v any) float64 {
+	vv, err := ToFloat(v)
+	if err != nil {
+		panic(err)
+	}
+	return vv
 }
