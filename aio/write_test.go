@@ -9,13 +9,12 @@ import (
 )
 
 type testWriter struct {
+	err          error
 	errOnCount   int
 	errOnBytes   int
-	err          error
 	costPerWrite time.Duration
-
-	count int
-	nw    int
+	count        int
+	nw           int
 }
 
 func (w *testWriter) Write(p []byte) (n int, err error) {

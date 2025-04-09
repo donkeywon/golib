@@ -26,7 +26,7 @@ type NoErrKVS interface {
 	Range(func(k string, v any) bool)
 }
 
-func PLoadAsBool(kvs NoErrKVS, k string) bool {
+func MustLoadAsBool(kvs NoErrKVS, k string) bool {
 	v, exists := kvs.Load(k)
 	if !exists {
 		return false
@@ -38,7 +38,7 @@ func PLoadAsBool(kvs NoErrKVS, k string) bool {
 	return vv
 }
 
-func PLoadAsString(kvs NoErrKVS, k string) string {
+func MustLoadAsString(kvs NoErrKVS, k string) string {
 	v, exists := kvs.Load(k)
 	if !exists || v == nil {
 		return ""
@@ -50,19 +50,19 @@ func PLoadAsString(kvs NoErrKVS, k string) string {
 	return vv
 }
 
-func PLoadAsStringOr(kvs NoErrKVS, k string, d string) string {
-	v := PLoadAsString(kvs, k)
+func MustLoadAsStringOr(kvs NoErrKVS, k string, d string) string {
+	v := MustLoadAsString(kvs, k)
 	if v == "" {
 		return d
 	}
 	return v
 }
 
-func PLoadAsInt(kvs NoErrKVS, k string) int {
-	return PLoadAsIntOr(kvs, k, 0)
+func MustLoadAsInt(kvs NoErrKVS, k string) int {
+	return MustLoadAsIntOr(kvs, k, 0)
 }
 
-func PLoadAsIntOr(kvs NoErrKVS, k string, d int) int {
+func MustLoadAsIntOr(kvs NoErrKVS, k string, d int) int {
 	v, exists := kvs.Load(k)
 	if !exists || v == nil {
 		return d
@@ -74,11 +74,11 @@ func PLoadAsIntOr(kvs NoErrKVS, k string, d int) int {
 	return vv
 }
 
-func PLoadAsUint(kvs NoErrKVS, k string) uint {
-	return PLoadAsUintOr(kvs, k, 0)
+func MustLoadAsUint(kvs NoErrKVS, k string) uint {
+	return MustLoadAsUintOr(kvs, k, 0)
 }
 
-func PLoadAsUintOr(kvs NoErrKVS, k string, d uint) uint {
+func MustLoadAsUintOr(kvs NoErrKVS, k string, d uint) uint {
 	v, exists := kvs.Load(k)
 	if !exists || v == nil {
 		return d
@@ -90,11 +90,11 @@ func PLoadAsUintOr(kvs NoErrKVS, k string, d uint) uint {
 	return vv
 }
 
-func PLoadAsFloat(kvs NoErrKVS, k string) float64 {
-	return PLoadAsFloatOr(kvs, k, 0)
+func MustLoadAsFloat(kvs NoErrKVS, k string) float64 {
+	return MustLoadAsFloatOr(kvs, k, 0)
 }
 
-func PLoadAsFloatOr(kvs NoErrKVS, k string, d float64) float64 {
+func MustLoadAsFloatOr(kvs NoErrKVS, k string, d float64) float64 {
 	v, exists := kvs.Load(k)
 	if !exists || v == nil {
 		return d

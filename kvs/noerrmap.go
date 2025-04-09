@@ -57,39 +57,39 @@ func (m *MapKVS) Del(k string) {
 }
 
 func (m *MapKVS) LoadAsBool(k string) bool {
-	return PLoadAsBool(m, k)
+	return MustLoadAsBool(m, k)
 }
 
 func (m *MapKVS) LoadAsString(k string) string {
-	return PLoadAsString(m, k)
+	return MustLoadAsString(m, k)
 }
 
 func (m *MapKVS) LoadAsStringOr(k string, d string) string {
-	return PLoadAsStringOr(m, k, d)
+	return MustLoadAsStringOr(m, k, d)
 }
 
 func (m *MapKVS) LoadAsInt(k string) int {
-	return PLoadAsInt(m, k)
+	return MustLoadAsInt(m, k)
 }
 
 func (m *MapKVS) LoadAsIntOr(k string, d int) int {
-	return PLoadAsIntOr(m, k, d)
+	return MustLoadAsIntOr(m, k, d)
 }
 
 func (m *MapKVS) LoadAsUint(k string) uint {
-	return PLoadAsUint(m, k)
+	return MustLoadAsUint(m, k)
 }
 
 func (m *MapKVS) LoadAsUintOr(k string, d uint) uint {
-	return PLoadAsUintOr(m, k, d)
+	return MustLoadAsUintOr(m, k, d)
 }
 
 func (m *MapKVS) LoadAsFloat(k string) float64 {
-	return PLoadAsFloat(m, k)
+	return MustLoadAsFloat(m, k)
 }
 
 func (m *MapKVS) LoadAsFloatOr(k string, d float64) float64 {
-	return PLoadAsFloatOr(m, k, d)
+	return MustLoadAsFloatOr(m, k, d)
 }
 
 func (m *MapKVS) LoadAll() map[string]any {

@@ -21,19 +21,16 @@ import (
 const appendURLSuffix = "?append"
 
 type AppendWriter struct {
-	cfg *Cfg
-
-	timeout   time.Duration
-	ctx       context.Context
-	cancel    context.CancelFunc
-	closeOnce sync.Once
-
+	ctx               context.Context
+	cfg               *Cfg
+	cancel            context.CancelFunc
+	bufw              *bufio.Writer
+	timeout           time.Duration
 	offset            int64
+	closeOnce         sync.Once
 	needContentLength bool
 	isBlob            bool
 	blobCreated       bool
-
-	bufw *bufio.Writer
 }
 
 func NewAppendWriter(ctx context.Context, cfg *Cfg) *AppendWriter {
