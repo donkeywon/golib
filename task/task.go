@@ -32,13 +32,14 @@ type HookExtraData struct {
 }
 
 type Cfg struct {
-	ID              string      `json:"id"              validate:"required" yaml:"id"`
-	Type            Type        `json:"type"            validate:"required" yaml:"type"`
-	Steps           []*step.Cfg `json:"steps"           validate:"required" yaml:"steps"`
-	DeferSteps      []*step.Cfg `json:"deferSteps"      yaml:"deferSteps"`
-	CurStepIdx      int         `json:"curStepIdx"      yaml:"curStepIdx"`
-	CurDeferStepIdx int         `json:"curDeferStepIdx" yaml:"curDeferStepIdx"`
-	Pool            string      `json:"pool"            yaml:"pool"`
+	ID              string         `json:"id"              validate:"required" yaml:"id"`
+	Type            Type           `json:"type"            validate:"required" yaml:"type"`
+	Steps           []*step.Cfg    `json:"steps"           validate:"required" yaml:"steps"`
+	DeferSteps      []*step.Cfg    `json:"deferSteps"      yaml:"deferSteps"`
+	CurStepIdx      int            `json:"curStepIdx"      yaml:"curStepIdx"`
+	CurDeferStepIdx int            `json:"curDeferStepIdx" yaml:"curDeferStepIdx"`
+	Pool            string         `json:"pool"            yaml:"pool"`
+	Values          map[string]any `json:"values"          yaml:"values"`
 }
 
 func NewCfg() *Cfg {
