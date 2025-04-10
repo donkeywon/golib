@@ -116,16 +116,6 @@ func (b *BaseWriter) appendCloses(w io.Writer) {
 	case io.Closer:
 		b.closes = append(b.closes, c.Close)
 	}
-
-	switch f := w.(type) {
-	case flusher:
-		b.closes = append(b.closes, f.Flush)
-	case flusher2:
-		b.closes = append(b.closes, func() error {
-			f.Flush()
-			return nil
-		})
-	}
 }
 
 func (b *BaseWriter) Close() error {
