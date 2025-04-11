@@ -311,43 +311,30 @@ func closeWriter(idx int, w io.Writer) (err error) {
 		}
 	}()
 
-	if c, ok := w.(io.Closer); ok {
+	switch c := w.(type) {
+	case io.Closer:
 		e := c.Close()
 		if e != nil {
-			err = errs.Wrapf(e, "err on close writer(%d) %s", idx, getName(w))
+			err = errs.Wrapf(e, "failed to close writer(%d) %s", idx, getName(w))
 		}
-	}
-	return
-}
-
-func flushWriter(idx int, w io.Writer) (err error) {
-	defer func() {
-		p := recover()
-		if p != nil {
-			err = errs.PanicToErrWithMsg(p, fmt.Sprintf("panic on flush writer(%d) %s", idx, getName(w)))
-		}
-	}()
-
-	switch f := w.(type) {
 	case flusher:
-		e := f.Flush()
+		e := c.Flush()
 		if e != nil {
-			err = errs.Wrapf(e, "err on flush writer(%d) %s", idx, getName(w))
+			if e != nil {
+				err = errs.Wrapf(e, "failed to flush-on-close writer(%d) %s", idx, getName(w))
+			}
 		}
 	case flusher2:
-		f.Flush()
+		c.Flush()
 	}
+
 	return
 }
 
 func (b *BaseWorker) closeWriters() error {
 	var err []error
 	for i, w := range b.ws {
-		e := flushWriter(i, w)
-		if e != nil {
-			err = append(err, e)
-		}
-		e = closeWriter(i, w)
+		e := closeWriter(i, w)
 		if e != nil {
 			err = append(err, e)
 		}

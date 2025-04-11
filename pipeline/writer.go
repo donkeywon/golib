@@ -3,9 +3,11 @@ package pipeline
 import (
 	"errors"
 	"io"
+	"reflect"
 	"slices"
 	"sync"
 
+	"github.com/donkeywon/golib/errs"
 	"github.com/donkeywon/golib/plugin"
 	"github.com/donkeywon/golib/runner"
 )
@@ -114,7 +116,26 @@ func (b *BaseWriter) appendCloses(w io.Writer) {
 	case Writer:
 		// do not close wrapped pipeline.Writer, wrapped pipeline.Writer will close by caller like Worker
 	case io.Closer:
-		b.closes = append(b.closes, c.Close)
+		b.closes = append(b.closes, func() error {
+			err := c.Close()
+			if err != nil {
+				return errs.Wrapf(err, "close %s failed", reflect.TypeOf(c).String())
+			}
+			return nil
+		})
+	case flusher:
+		b.closes = append(b.closes, func() error {
+			err := c.Flush()
+			if err != nil {
+				return errs.Wrapf(err, "flush-on-close %s failed", reflect.TypeOf(c).String())
+			}
+			return nil
+		})
+	case flusher2:
+		b.closes = append(b.closes, func() error {
+			c.Flush()
+			return nil
+		})
 	}
 }
 
