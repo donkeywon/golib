@@ -48,7 +48,7 @@ func (c *Cfg) customUnmarshal(data []byte, unmarshaler func([]byte, any) error) 
 	cv := rateLimiterCfgOnlyCfg{}
 	cv.Cfg = plugin.CreateCfg(c.Type)
 	if cv.Cfg == nil {
-		return errs.Errorf("created rw cfg is nil: %s", c.Type)
+		return nil
 	}
 	err := unmarshaler(data, &cv)
 	if err != nil {
