@@ -9,9 +9,39 @@ import (
 	"github.com/donkeywon/golib/util/iou"
 )
 
+type loadOnceError struct {
+	err    error
+	loaded bool
+}
+
+func (e *loadOnceError) Has() bool {
+	return e.err != nil
+}
+
+func (e *loadOnceError) Loaded() bool {
+	return e.loaded
+}
+
+func (e *loadOnceError) Load() error {
+	if e.loaded {
+		return nil
+	}
+	e.loaded = true
+	return e.err
+}
+
+func (e *loadOnceError) Err() error {
+	e.loaded = true
+	return e.err
+}
+
+func (e *loadOnceError) Store(err error) {
+	e.err = err
+}
+
 type AsyncWriter struct {
 	w              io.Writer
-	err            error // TODO Flush和Close避免重复返回相同err
+	err            loadOnceError
 	opt            *option
 	off            int
 	buf            *bytespool.Bytes
@@ -41,18 +71,18 @@ func NewAsyncWriter(w io.Writer, opts ...Option) *AsyncWriter {
 func (aw *AsyncWriter) Write(p []byte) (n int, err error) {
 	select {
 	case <-aw.closed:
-		return 0, aw.err
+		return 0, aw.err.Err()
 	default:
-	}
-
-	if aw.err != nil {
-		return 0, aw.err
 	}
 
 	aw.initOnce()
 
 	var nn int
 	for len(p) > 0 {
+		if aw.err.Has() {
+			return 0, aw.err.Err()
+		}
+
 		aw.mu.Lock()
 
 		aw.prepareBuf()
@@ -62,11 +92,7 @@ func (aw *AsyncWriter) Write(p []byte) (n int, err error) {
 		n += nn
 
 		if aw.off == aw.buf.Len() {
-			err = aw.flushNoLock()
-			if err != nil {
-				aw.mu.Unlock()
-				break
-			}
+			aw.flushNoLock()
 		}
 
 		aw.mu.Unlock()
@@ -80,12 +106,12 @@ func (aw *AsyncWriter) Close() error {
 	aw.closeOnce.Do(func() {
 		close(aw.closed)
 
-		err = aw.Flush()
+		aw.Flush()
 		close(aw.queue)
 		<-aw.asyncDone
 
-		if err == nil {
-			err = aw.err
+		if aw.err.Has() {
+			err = aw.err.Load()
 		}
 	})
 	return err
@@ -94,21 +120,18 @@ func (aw *AsyncWriter) Close() error {
 func (aw *AsyncWriter) ReadFrom(r io.Reader) (n int64, err error) {
 	select {
 	case <-aw.closed:
-		return 0, aw.err
+		return 0, aw.err.Err()
 	default:
-	}
-
-	if aw.err != nil {
-		return 0, aw.err
 	}
 
 	aw.initOnce()
 
-	var (
-		nn       int
-		flushErr error
-	)
+	var nn int
 	for {
+		if aw.err.Has() {
+			return 0, aw.err.Err()
+		}
+
 		aw.mu.Lock()
 
 		aw.prepareBuf()
@@ -116,11 +139,11 @@ func (aw *AsyncWriter) ReadFrom(r io.Reader) (n int64, err error) {
 		aw.off += nn
 		n += int64(nn)
 
-		if err == nil && aw.off == aw.buf.Len() || err == io.EOF {
-			flushErr = aw.flushNoLock()
+		if err == io.EOF || err == nil && aw.off == aw.buf.Len() {
+			aw.flushNoLock()
 			aw.mu.Unlock()
-			if flushErr != nil || err == io.EOF {
-				err = flushErr
+			if err == io.EOF {
+				err = nil
 				return
 			}
 			continue
@@ -131,20 +154,20 @@ func (aw *AsyncWriter) ReadFrom(r io.Reader) (n int64, err error) {
 	}
 }
 
-func (aw *AsyncWriter) Flush() error {
+func (aw *AsyncWriter) Flush() {
 	aw.mu.Lock()
 	defer aw.mu.Unlock()
 
-	return aw.flushNoLock()
+	aw.flushNoLock()
 }
 
-func (aw *AsyncWriter) flushNoLock() error {
-	if aw.err != nil {
-		return aw.err
+func (aw *AsyncWriter) flushNoLock() {
+	if aw.err.Has() {
+		return
 	}
 
 	if aw.buf == nil || aw.buf.Len() == 0 {
-		return nil
+		return
 	}
 
 	aw.buf.Shrink(aw.off)
@@ -153,7 +176,6 @@ func (aw *AsyncWriter) flushNoLock() error {
 	if aw.deadlineTimer != nil {
 		aw.deadlineTimer.Reset(aw.opt.deadline)
 	}
-	return nil
 }
 
 func (aw *AsyncWriter) prepareBuf() {
@@ -177,7 +199,10 @@ func (aw *AsyncWriter) initOnce() {
 }
 
 func (aw *AsyncWriter) asyncWrite() {
-	var nw int
+	var (
+		nw  int
+		err error
+	)
 	for {
 		b, ok := <-aw.queue
 		if !ok {
@@ -185,18 +210,19 @@ func (aw *AsyncWriter) asyncWrite() {
 			return
 		}
 
-		if aw.err != nil {
+		if aw.err.Has() {
 			b.Free()
 			continue
 		}
 
-		nw, aw.err = aw.w.Write(b.B())
+		nw, err = aw.w.Write(b.B())
 		b.Free()
-		if aw.err != nil {
+		if err != nil {
+			aw.err.Store(err)
 			continue
 		}
 		if nw < b.Len() {
-			aw.err = io.ErrShortWrite
+			aw.err.Store(io.ErrShortWrite)
 			continue
 		}
 	}
@@ -208,14 +234,7 @@ func (aw *AsyncWriter) deadline() {
 		case <-aw.closed:
 			return
 		case <-aw.deadlineTimer.C:
-			if aw.err != nil {
-				return
-			}
-
-			err := aw.Flush()
-			if err != nil {
-				return
-			}
+			aw.Flush()
 		}
 	}
 }
