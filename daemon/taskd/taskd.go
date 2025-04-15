@@ -234,7 +234,6 @@ func (td *taskd) ResumeTask(taskID string) (*task.Task, error) {
 	if err != nil {
 		td.Error("resume task failed", err, "task_id", taskID)
 		td.markTaskPaused(t)
-		td.unmarkTaskAndTaskID(t.Cfg.ID)
 		return newT, err
 	}
 
@@ -398,6 +397,7 @@ func (td *taskd) unmarkTaskID(taskID string) bool {
 func (td *taskd) unmarkTaskAndTaskID(taskID string) {
 	td.mu.Lock()
 	defer td.mu.Unlock()
+	delete(td.taskIDRunningMap, taskID)
 	delete(td.taskIDMap, taskID)
 	delete(td.taskMap, taskID)
 }

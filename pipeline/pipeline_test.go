@@ -5,6 +5,7 @@ import (
 
 	"github.com/donkeywon/golib/oss"
 	"github.com/donkeywon/golib/runner"
+	"github.com/donkeywon/golib/util/cmd"
 	"github.com/donkeywon/golib/util/tests"
 	"github.com/stretchr/testify/require"
 )
@@ -88,6 +89,21 @@ func TestPipelineWithCfg(t *testing.T) {
 	//	time.Sleep(time.Millisecond * 500)
 	//	runner.Stop(ppl)
 	//}()
+	require.NoError(t, runner.Init(ppl))
+	runner.Start(ppl)
+	if ppl.Err() != nil {
+		ppl.Error("failed", ppl.Err())
+	}
+	require.NoError(t, ppl.Err())
+}
+
+func TestPipelineCmd(t *testing.T) {
+	c := NewCfg()
+	c.Add(WorkerCmd, &cmd.Cfg{Command: []string{"bash", "-c", "cat /tmp/test.file"}}, CommonOption{})
+	c.Add(WorkerCmd, &cmd.Cfg{Command: []string{"bash", "-c", "cat > /tmp/test.file.1"}}, CommonOption{})
+	ppl := New()
+	ppl.SetCfg(c)
+	tests.DebugInit(ppl)
 	require.NoError(t, runner.Init(ppl))
 	runner.Start(ppl)
 	if ppl.Err() != nil {
