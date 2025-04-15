@@ -57,20 +57,22 @@ func (s *SSH) Init() error {
 		return errs.Wrap(err, "failed to create ssh client and session")
 	}
 
-	if s.Reader() != nil {
+	return s.Worker.Init()
+}
+
+func (s *SSH) Start() error {
+	defer s.Close()
+
+	if len(s.Readers()) > 0 {
 		s.sshCmd = sshWriteCmd(s.c.Path)
 		s.sshSess.Stdin = s.Reader()
-	} else if s.Writer() != nil {
+	} else if len(s.Writers()) > 0 {
 		s.sshCmd = sshReadCmd(s.c.Path)
 		s.sshSess.Stdout = s.Writer()
 	} else {
 		return errs.Errorf("ssh must has Reader or Writer")
 	}
 
-	return s.Worker.Init()
-}
-
-func (s *SSH) Start() error {
 	s.sshStderrBuf = bufferpool.Get()
 	defer s.sshStderrBuf.Free()
 	s.sshSess.Stderr = s.sshStderrBuf
