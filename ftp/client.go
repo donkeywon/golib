@@ -197,12 +197,8 @@ func (c *Client) pasv() (string, int, error) {
 	return host, port, nil
 }
 
-func (c *Client) Delete(path string) error {
-	_, _, err := c.cmd(StatusRequestedFileActionOK, "DELE %s", path)
-	if err != nil {
-		return errs.Wrap(err, "ftp cmd DELE failed")
-	}
-	return nil
+func (c *Client) Delete(path string) (int, string, error) {
+	return c.cmd(StatusRequestedFileActionOK, "DELE %s", path)
 }
 
 func (c *Client) login() error {
