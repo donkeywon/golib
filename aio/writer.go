@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/donkeywon/golib/util/bytespool"
-	"github.com/donkeywon/golib/util/iou"
 )
 
 type loadOnceError struct {
@@ -135,7 +134,7 @@ func (aw *AsyncWriter) ReadFrom(r io.Reader) (n int64, err error) {
 		aw.mu.Lock()
 
 		aw.prepareBuf()
-		nn, err = iou.ReadFill(r, aw.buf.B()[aw.off:])
+		nn, err = r.Read(aw.buf.B()[aw.off:])
 		aw.off += nn
 		n += int64(nn)
 

@@ -289,8 +289,8 @@ func (td *taskd) submit(t *task.Task, wait bool) {
 
 		td.Info("starting task", "task_id", t.Cfg.ID, "task_type", t.Cfg.Type)
 		runner.Start(t)
-		td.hookTask(t, nil, td.doneHooks, "done", extra)
 		td.unmarkTaskAndTaskID(t.Cfg.ID)
+		td.hookTask(t, nil, td.doneHooks, "done", extra)
 
 		err := t.Err()
 		if err != nil {
