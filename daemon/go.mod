@@ -3,7 +3,7 @@ module github.com/donkeywon/golib/daemon
 go 1.23.0
 
 require (
-	github.com/alitto/pond/v2 v2.3.2
+	github.com/alitto/pond/v2 v2.3.3
 	github.com/arl/statsviz v0.6.0
 	github.com/donkeywon/golib v0.0.0
 	github.com/google/gops v0.3.28
