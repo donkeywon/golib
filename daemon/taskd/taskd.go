@@ -39,7 +39,8 @@ type Taskd interface {
 	IsTaskPending(taskID string) bool
 	IsTaskRunning(taskID string) bool
 	IsTaskPaused(taskID string) bool
-	ListAllTasks() []*task.Task
+	ListTasks() []*task.Task
+	ListTasksCfg() []*task.Cfg
 	ListTaskIDs() []string
 	ListPendingTaskIDs() []string
 	ListRunningTaskIDs() []string
@@ -241,7 +242,7 @@ func (td *taskd) ResumeTask(taskID string) (*task.Task, error) {
 }
 
 func (td *taskd) waitAllTaskDone() {
-	for _, t := range td.ListAllTasks() {
+	for _, t := range td.ListTasks() {
 		<-t.Done()
 	}
 }
@@ -436,7 +437,27 @@ func (td *taskd) unmarkTaskIfPaused(taskID string) (bool, *task.Task) {
 	return true, t
 }
 
-func (td *taskd) ListAllTasks() []*task.Task {
+func (td *taskd) ListTasksCfg() []*task.Cfg {
+	td.mu.Lock()
+	defer td.mu.Unlock()
+	tasks := make([]*task.Task, len(td.taskMap)+len(td.taskPausedMap))
+	i := 0
+	for _, t := range td.taskMap {
+		tasks[i] = t
+		i++
+	}
+	for _, t := range td.taskPausedMap {
+		tasks[i] = t
+		i++
+	}
+	cfgs := make([]*task.Cfg, len(tasks))
+	for i = range tasks {
+		cfgs[i] = tasks[i].Cfg
+	}
+	return cfgs
+}
+
+func (td *taskd) ListTasks() []*task.Task {
 	td.mu.Lock()
 	defer td.mu.Unlock()
 	tasks := make([]*task.Task, len(td.taskMap))
@@ -508,9 +529,13 @@ func (td *taskd) IsTaskPaused(taskID string) bool {
 func (td *taskd) ListTaskIDs() []string {
 	td.mu.Lock()
 	defer td.mu.Unlock()
-	ids := make([]string, len(td.taskIDMap))
+	ids := make([]string, len(td.taskIDMap)+len(td.taskPausedMap))
 	i := 0
 	for id := range td.taskIDMap {
+		ids[i] = id
+		i++
+	}
+	for id := range td.taskPausedMap {
 		ids[i] = id
 		i++
 	}
