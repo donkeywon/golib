@@ -215,7 +215,7 @@ func Hash(h hash.Hash) Option {
 
 func Checksum(checksum string, h hash.Hash) Option {
 	hs := &hasher{h: h, checksum: checksum}
-	return multiOption{MultiWrite(hs), OnClose(hs.Close)}
+	return multiOption{Tee(hs), OnClose(hs.Close)}
 }
 
 type progressLogger struct {
