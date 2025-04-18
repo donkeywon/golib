@@ -31,8 +31,6 @@ func NewCmd() *Cmd {
 }
 
 func (c *Cmd) Init() error {
-	c.WithLoggerFields("cmd", c.Cfg.Command[0])
-
 	c.c = exec.CommandContext(c.Ctx(), c.Cfg.Command[0], c.Cfg.Command[1:]...)
 
 	return c.Worker.Init()
@@ -40,6 +38,8 @@ func (c *Cmd) Init() error {
 
 func (c *Cmd) Start() error {
 	defer c.Close()
+
+	c.WithLoggerFields("cmd", c.Cfg.Command[0])
 
 	result := cmd.RunCmd(context.Background(), c.c, c.Cfg, func(cmd *exec.Cmd) {
 		if c.Writer() != nil {
