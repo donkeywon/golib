@@ -7,6 +7,7 @@ import (
 	"github.com/klauspost/compress/s2"
 	"github.com/klauspost/compress/zstd"
 	"github.com/klauspost/pgzip"
+	"github.com/pierrec/lz4/v4"
 )
 
 func init() {
@@ -22,6 +23,7 @@ const (
 	CompressTypeGzip   CompressType = "gzip"
 	CompressTypeSnappy CompressType = "snappy"
 	CompressTypeZstd   CompressType = "zstd"
+	CompressTypeLz4    CompressType = "lz4"
 
 	CompressLevelFast   CompressLevel = "fast"
 	CompressLevelBetter CompressLevel = "better"
@@ -66,6 +68,8 @@ func (c *CompressReader) Init() error {
 		compressReader = NewSnappyReader(c.r, c.CompressCfg)
 	case CompressTypeZstd:
 		compressReader = NewZstdReader(c.r, c.CompressCfg)
+	case CompressTypeLz4:
+		compressReader = NewLz4Reader(c.r, c.CompressCfg)
 	default:
 	}
 
@@ -110,6 +114,8 @@ func (c *CompressWriter) Init() error {
 		compressWriter = NewSnappyWriter(c.w, c.CompressCfg)
 	case CompressTypeZstd:
 		compressWriter = NewZstdWriter(c.w, c.CompressCfg)
+	case CompressTypeLz4:
+		compressWriter = NewLz4Writer(c.w, c.CompressCfg)
 	default:
 	}
 
@@ -187,6 +193,27 @@ func NewGzipWritter(w io.Writer, cfg *CompressCfg) io.WriteCloser {
 	return gw
 }
 
+func NewLz4Writer(w io.Writer, cfg *CompressCfg) io.WriteCloser {
+	opts := make([]lz4.Option, 0)
+	if cfg.Concurrency > 0 {
+		opts = append(opts, lz4.ConcurrencyOption(cfg.Concurrency))
+	}
+	switch cfg.Level {
+	case CompressLevelFast:
+		opts = append(opts, lz4.CompressionLevelOption(lz4.Fast))
+	case CompressLevelBetter:
+		opts = append(opts, lz4.CompressionLevelOption(lz4.Level1))
+	case CompressLevelBest:
+		opts = append(opts, lz4.CompressionLevelOption(lz4.Level9))
+	default:
+		opts = append(opts, lz4.CompressionLevelOption(lz4.Fast))
+	}
+
+	lw := lz4.NewWriter(w)
+	_ = lw.Apply(opts...)
+	return lw
+}
+
 type zstdReader struct {
 	*zstd.Decoder
 }
@@ -227,4 +254,20 @@ func NewGzipReader(r io.Reader, cfg *CompressCfg) io.ReadCloser {
 		gr, _ = pgzip.NewReader(r)
 	}
 	return gr
+}
+
+type lz4Reader struct {
+	*lz4.Reader
+}
+
+func (l *lz4Reader) Close() error {
+	return nil
+}
+
+func NewLz4Reader(r io.Reader, cfg *CompressCfg) io.ReadCloser {
+	lr := lz4.NewReader(r)
+	if cfg.Concurrency > 0 {
+		_ = lr.Apply(lz4.ConcurrencyOption(cfg.Concurrency))
+	}
+	return &lz4Reader{Reader: lr}
 }
