@@ -5,7 +5,7 @@ import "io"
 // ReadFill read from reader as much as possible.
 // The return value n is the number of bytes read. Any error encountered during r.Read is also returned.
 // n == len(buf) or nil error means buf is full.
-func ReadFill(r io.Reader, buf []byte) (n int, err error) {
+func ReadFill(buf []byte, r io.Reader) (n int, err error) {
 	var (
 		l  = len(buf)
 		nn int

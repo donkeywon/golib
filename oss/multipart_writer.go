@@ -16,7 +16,6 @@ import (
 
 	"github.com/avast/retry-go/v4"
 	"github.com/donkeywon/golib/errs"
-	"github.com/donkeywon/golib/util/bytespool"
 	"github.com/donkeywon/golib/util/httpc"
 	"github.com/donkeywon/golib/util/httpu"
 	"github.com/donkeywon/golib/util/iou"
@@ -44,6 +43,7 @@ type MultiPartWriter struct {
 	ctx               context.Context
 	uploadErr         error
 	parallelChan      chan *uploadPartReq
+	bufChan           chan []byte
 	bufw              *bufio.Writer
 	cancel            context.CancelFunc
 	cfg               *Cfg
@@ -57,6 +57,7 @@ type MultiPartWriter struct {
 	timeout           time.Duration
 	parallelChanOnce  sync.Once
 	closeOnce         sync.Once
+	bufChanOnce       sync.Once
 	mu                sync.Mutex
 	initialized       bool
 	needContentLength bool
@@ -105,13 +106,19 @@ func (w *MultiPartWriter) ReadFrom(r io.Reader) (int64, error) {
 		var (
 			total int64
 			n     int
+			b     []byte
 		)
 		for {
-			b := bytespool.GetN(int(w.cfg.PartSize))
-			n, err = iou.ReadFill(r, b.B())
+			select {
+			case b = <-w.bufChan:
+			default:
+				b = make([]byte, w.cfg.PartSize)
+			}
+			b = b[:cap(b)]
+			n, err = iou.ReadFill(b, r)
 			total += int64(n)
 			if n > 0 {
-				b.Shrink(n)
+				b = b[:n]
 				w.parallelChan <- &uploadPartReq{partNo: w.curPartNo, b: b}
 				w.curPartNo++
 			}
@@ -122,6 +129,7 @@ func (w *MultiPartWriter) ReadFrom(r io.Reader) (int64, error) {
 
 		w.closeParallelChan()
 		w.parallelWg.Wait()
+		w.closeBufChan()
 		if err == io.EOF {
 			err = nil
 		}
@@ -162,7 +170,7 @@ func (r *readerWrapper) Read(p []byte) (int, error) {
 }
 
 type uploadPartReq struct {
-	b      *bytespool.Bytes
+	b      []byte
 	partNo int
 }
 
@@ -190,14 +198,21 @@ func (w *MultiPartWriter) Write(p []byte) (int, error) {
 		return 0, err
 	}
 
+	var b []byte
 	if w.cfg.Parallel > 1 {
 		err = w.parallelErr()
 		if err != nil {
 			return 0, err
 		}
 
-		b := bytespool.GetN(len(p))
-		copy(b.B(), p)
+		select {
+		case b = <-w.bufChan:
+		default:
+			b = make([]byte, w.cfg.PartSize)
+		}
+		b = b[:cap(b)]
+		nc := copy(b, p)
+		b = b[:nc]
 		w.parallelChan <- &uploadPartReq{partNo: w.curPartNo, b: b}
 		w.curPartNo++
 		return len(p), nil
@@ -250,6 +265,7 @@ func (w *MultiPartWriter) Close() error {
 	w.closeOnce.Do(func() {
 		w.closeParallelChan()
 		w.parallelWg.Wait()
+		w.closeBufChan()
 
 		w.cancel()
 		if w.uploadErr == nil {
@@ -265,6 +281,14 @@ func (w *MultiPartWriter) closeParallelChan() {
 	w.parallelChanOnce.Do(func() {
 		if w.parallelChan != nil {
 			close(w.parallelChan)
+		}
+	})
+}
+
+func (w *MultiPartWriter) closeBufChan() {
+	w.bufChanOnce.Do(func() {
+		if w.bufChan != nil {
+			close(w.bufChan)
 		}
 	})
 }
@@ -291,6 +315,7 @@ func (w *MultiPartWriter) init() error {
 
 PARALLEL:
 	if w.cfg.Parallel > 1 {
+		w.bufChan = make(chan []byte)
 		w.parallelWg.Add(w.cfg.Parallel)
 		w.parallelChan = make(chan *uploadPartReq)
 		for range w.cfg.Parallel {
@@ -313,12 +338,12 @@ func (w *MultiPartWriter) uploadWorker() {
 			}
 			err := w.parallelErr()
 			if err != nil {
-				req.b.Free()
+				w.bufChan <- req.b
 				continue
 			}
 
-			r := w.uploadPart(req.partNo, httpc.WithBody(req.b.B()))
-			req.b.Free()
+			r := w.uploadPart(req.partNo, httpc.WithBody(req.b))
+			w.bufChan <- req.b
 			w.handleParallelResult(r)
 		}
 	}

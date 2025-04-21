@@ -5,7 +5,6 @@ import (
 	"io"
 	"sync"
 
-	"github.com/donkeywon/golib/util/bytespool"
 	"github.com/donkeywon/golib/util/iou"
 )
 
@@ -14,8 +13,10 @@ type AsyncReader struct {
 	err           error
 	opt           *option
 	off           int
-	buf           *bytespool.Bytes
-	queue         chan *bytespool.Bytes
+	buf           []byte
+	bufChan       chan []byte
+	bufChanOnce   sync.Once
+	queue         chan []byte
 	closed        chan struct{}
 	asyncReadOnce sync.Once
 	closeOnce     sync.Once
@@ -30,7 +31,7 @@ func NewAsyncReader(r io.Reader, opts ...Option) *AsyncReader {
 	for _, o := range opts {
 		o.apply(ar.opt)
 	}
-	ar.queue = make(chan *bytespool.Bytes, ar.opt.queueSize)
+	ar.queue = make(chan []byte, ar.opt.queueSize)
 	return ar
 }
 
@@ -59,7 +60,7 @@ func (ar *AsyncReader) Read(p []byte) (int, error) {
 			break
 		}
 
-		nn = copy(p[n:], ar.buf.B()[ar.off:])
+		nn = copy(p[n:], ar.buf[ar.off:])
 		ar.off += nn
 
 		n += nn
@@ -68,19 +69,8 @@ func (ar *AsyncReader) Read(p []byte) (int, error) {
 }
 
 func (ar *AsyncReader) Close() error {
-	ar.closeOnce.Do(func() {
-		close(ar.closed)
-
-		for b := range ar.queue {
-			if b == nil {
-				break
-			}
-			b.Free()
-		}
-		if ar.buf != nil {
-			ar.buf.Free()
-		}
-	})
+	ar.closeOnce.Do(func() { close(ar.closed) })
+	ar.bufChanOnce.Do(func() { close(ar.bufChan) })
 	return nil
 }
 
@@ -99,8 +89,8 @@ func (ar *AsyncReader) WriteTo(w io.Writer) (n int64, err error) {
 			}
 			return n, err
 		}
-		remain = ar.buf.Len() - ar.off
-		nn, err = w.Write(ar.buf.B()[ar.off:])
+		remain = len(ar.buf) - ar.off
+		nn, err = w.Write(ar.buf[ar.off:])
 		ar.off += nn
 		n += int64(nn)
 		if err != nil {
@@ -114,22 +104,25 @@ func (ar *AsyncReader) WriteTo(w io.Writer) (n int64, err error) {
 
 func (ar *AsyncReader) initOnce() {
 	ar.asyncReadOnce.Do(func() {
+		ar.bufChan = make(chan []byte, ar.opt.queueSize+2)
+
 		go ar.asyncRead()
 	})
 }
 
 func (ar *AsyncReader) prepareBuf() error {
-	if ar.buf != nil && ar.off < ar.buf.Len() {
+	if ar.buf != nil && ar.off < len(ar.buf) {
 		return nil
 	}
 
 	b, ok := <-ar.queue
 	if !ok {
+		ar.bufChanOnce.Do(func() { close(ar.bufChan) })
 		return ar.err
 	}
 
 	if ar.buf != nil {
-		ar.buf.Free()
+		ar.bufChan <- ar.buf
 	}
 	ar.buf = b
 	ar.off = 0
@@ -137,6 +130,8 @@ func (ar *AsyncReader) prepareBuf() error {
 }
 
 func (ar *AsyncReader) asyncRead() {
+	defer close(ar.queue)
+	var b []byte
 	for {
 		select {
 		case <-ar.closed:
@@ -144,18 +139,20 @@ func (ar *AsyncReader) asyncRead() {
 		default:
 		}
 
-		bs := bytespool.GetN(ar.opt.bufSize)
-		nr, err := iou.ReadFill(ar.r, bs.B())
-		if nr == 0 {
-			bs.Free()
-		} else {
-			bs.Shrink(nr)
-			ar.queue <- bs
+		select {
+		case b = <-ar.bufChan:
+		default:
+			b = make([]byte, ar.opt.bufSize)
 		}
+
+		b = b[:cap(b)]
+
+		nr, err := iou.ReadFill(b, ar.r)
+		b = b[:nr]
+		ar.queue <- b
 
 		if err != nil {
 			ar.err = err
-			close(ar.queue)
 			return
 		}
 	}

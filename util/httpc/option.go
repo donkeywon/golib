@@ -189,9 +189,9 @@ func ToBytes(n *int, b []byte) Option {
 	return RespOptionFunc(func(r *http.Response) error {
 		var err error
 		if n == nil {
-			_, err = iou.ReadFill(r.Body, b)
+			_, err = iou.ReadFill(b, r.Body)
 		} else {
-			*n, err = iou.ReadFill(r.Body, b)
+			*n, err = iou.ReadFill(b, r.Body)
 		}
 		if err != nil && !errors.Is(err, io.EOF) {
 			return errs.Wrap(err, "read response body failed")

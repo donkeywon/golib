@@ -250,7 +250,7 @@ func (r *Reader) readFromRemain(p []byte) (n int, err error) {
 		}
 	}
 
-	n, err = iou.ReadFill(r.respBody, p)
+	n, err = iou.ReadFill(p, r.respBody)
 	if err != nil && err != io.EOF {
 		r.respBody.Close()
 		r.respBody = nil
