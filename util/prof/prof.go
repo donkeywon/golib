@@ -3,11 +3,11 @@ package prof
 import (
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"sync/atomic"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/pkg/profile"
 )
 
@@ -33,8 +33,6 @@ func Start(mode string, dir string, timeoutSec int) (string, <-chan struct{}, er
 			opts = append(opts, profile.CPUProfile)
 		case "mem":
 			opts = append(opts, profile.MemProfile)
-		case "heap":
-			opts = append(opts, profile.MemProfileHeap)
 		case "allocs":
 			opts = append(opts, profile.MemProfileAllocs)
 		case "mutex":
@@ -111,5 +109,5 @@ func IsRunning() bool {
 }
 
 func genDir(dir string, mode string) string {
-	return filepath.Join(dir, fmt.Sprintf("%s-%s-%s", time.Now().Format("20060102150405"), mode, uuid.NewString()))
+	return filepath.Join(dir, fmt.Sprintf("go-prof-%d-%s-%s-%s", os.Getpid(), time.Now().Format("20060102150405"), mode))
 }

@@ -7,7 +7,7 @@ import (
 
 func TestResultString(t *testing.T) {
 	r := &Result{
-		Stdout:        []string{"abc", "def"},
+		Stdout:        []string{`ab"c`, "de'f"},
 		Stderr:        []string{},
 		ExitCode:      1,
 		Pid:           123,
@@ -15,5 +15,5 @@ func TestResultString(t *testing.T) {
 		StopTimeNano:  9876543210,
 		Signaled:      true,
 	}
-	require.Equal(t, `{"stdout":["abc","def"],"stderr":[],"exitCode":1,"pid":123,"startTimeNano":1234567890,"stopTimeNano":9876543210,"signaled":true}`, r.String())
+	require.Equal(t, `{"stdout":["ab\"c","de'f"],"stderr":[],"exitCode":1,"pid":123,"startTimeNano":1234567890,"stopTimeNano":9876543210,"signaled":true}`, r.String())
 }
