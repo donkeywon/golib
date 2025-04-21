@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 )
@@ -95,6 +96,29 @@ func TestReader(t *testing.T) {
 	nr, err = ar.Read(p)
 	require.Equal(t, 2, nr)
 	require.Equal(t, io.EOF, err)
+	require.NoError(t, ar.Close())
+
+	tr = &testReader{
+		errOnCount: 100,
+		errOnBytes: 80,
+		nrPerRead:  30,
+		err:        errTest,
+	}
+
+	ar = NewAsyncReader(tr, BufSize(4), QueueSize(2))
+	p = make([]byte, 4)
+	var nwi int
+	nwi, err = ar.Read(p)
+	time.Sleep(time.Millisecond * 10)
+	require.Equal(t, 4, nwi)
+	require.Equal(t, 2, len(ar.queue))
+	require.Equal(t, 0, len(ar.bufChan))
+	require.NoError(t, err)
+	nwi, err = ar.Read(p)
+	require.Equal(t, 4, nwi)
+	require.Equal(t, 2, len(ar.queue))
+	require.Equal(t, 1, len(ar.bufChan))
+	require.NoError(t, err)
 	require.NoError(t, ar.Close())
 
 	tr = &testReader{
