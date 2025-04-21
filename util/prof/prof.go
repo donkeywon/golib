@@ -109,5 +109,5 @@ func IsRunning() bool {
 }
 
 func genDir(dir string, mode string) string {
-	return filepath.Join(dir, fmt.Sprintf("go-prof-%d-%s-%s-%s", os.Getpid(), time.Now().Format("20060102150405"), mode))
+	return filepath.Join(dir, fmt.Sprintf("go-prof-%d-%s-%s", os.Getpid(), mode, time.Now().Format("20060102150405")))
 }
