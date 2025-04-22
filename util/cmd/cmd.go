@@ -17,6 +17,7 @@ type Cfg struct {
 	RunAsUser  string            `json:"runAsUser"  yaml:"runAsUser"`
 	WorkingDir string            `json:"workingDir" yaml:"workingDir"`
 	Command    []string          `json:"command"    validate:"required" yaml:"command"`
+	SetPgid    bool              `json:"setPgid" yaml:"setPgid"`
 }
 
 func NewCfg() *Cfg {
@@ -211,6 +212,16 @@ func Stop(cmd *exec.Cmd) error {
 	return proc.Stop(cmd.Process.Pid)
 }
 
+func StopGroup(cmd *exec.Cmd) error {
+	if cmd == nil {
+		return nil
+	}
+	if cmd.Process == nil {
+		return nil
+	}
+	return proc.StopGroup(cmd.Process.Pid)
+}
+
 func MustStop(ctx context.Context, cmd *exec.Cmd) error {
 	if cmd == nil {
 		return nil
@@ -220,4 +231,24 @@ func MustStop(ctx context.Context, cmd *exec.Cmd) error {
 	}
 
 	return proc.MustStop(ctx, cmd.Process.Pid)
+}
+
+func MustStopGroup(ctx context.Context, cmd *exec.Cmd) error {
+	if cmd == nil {
+		return nil
+	}
+	if cmd.Process == nil {
+		return nil
+	}
+	return proc.MustStopGroup(ctx, cmd.Process.Pid)
+}
+
+func KillGroup(cmd *exec.Cmd) error {
+	if cmd == nil {
+		return nil
+	}
+	if cmd.Process == nil {
+		return nil
+	}
+	return proc.KillGroup(cmd.Process.Pid)
 }

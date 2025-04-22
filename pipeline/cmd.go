@@ -2,12 +2,11 @@ package pipeline
 
 import (
 	"context"
-	"os/exec"
-
 	"github.com/donkeywon/golib/consts"
 	"github.com/donkeywon/golib/errs"
 	"github.com/donkeywon/golib/plugin"
 	"github.com/donkeywon/golib/util/cmd"
+	"os/exec"
 )
 
 func init() {
@@ -38,6 +37,8 @@ func (c *Cmd) Init() error {
 
 func (c *Cmd) Start() error {
 	defer c.Close()
+
+	c.Cfg.SetPgid = true
 
 	c.WithLoggerFields("cmd", c.Cfg.Command[0])
 
@@ -81,7 +82,7 @@ func (c *Cmd) Stop() error {
 	if c.c == nil || c.c.Process == nil {
 		return nil
 	}
-	return c.c.Process.Kill()
+	return cmd.KillGroup(c.c)
 }
 
 func (c *Cmd) SetCfg(cfg any) {
