@@ -42,6 +42,8 @@ func (c *Cmd) Start() error {
 
 	c.WithLoggerFields("cmd", c.Cfg.Command[0])
 
+	c.Debug("starting pipeline cmd", "commands", c.Cfg.Command)
+
 	result := cmd.RunCmd(context.Background(), c.c, c.Cfg, func(cmd *exec.Cmd) {
 		if c.Writer() != nil {
 			cmd.Stdout = c.Writer()
