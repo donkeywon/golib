@@ -213,7 +213,7 @@ func (w *AppendWriter) appendPart(opts ...httpc.Option) error {
 		retry.LastErrorOnly(true),
 	)
 	if err != nil {
-		return errs.Wrapf(err, "append failed with max retry, respStatus: %s, respBody: %s", respStatus, respBody.String())
+		return errs.Wrapf(err, "append failed with max retry, offset: %d, respStatus: %s, respBody: %s", w.offset, respStatus, respBody.String())
 	}
 
 	if w.isBlob {
