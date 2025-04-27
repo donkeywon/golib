@@ -324,6 +324,8 @@ type rateLimit struct {
 	cfg   *ratelimit.Cfg
 	rl    ratelimit.RxTxRateLimiter
 	write bool
+
+	logTicker *time.Ticker
 }
 
 func newRateLimit(cfg *ratelimit.Cfg) *rateLimit {
@@ -338,23 +340,38 @@ func (rl *rateLimit) Write(p []byte) (n int, err error) {
 		return
 	}
 
+	if rl.logTicker == nil {
+		rl.logTicker = time.NewTicker(time.Second * 5)
+	}
+
 	var e error
 	if rl.write {
 		e = rl.rl.TxWaitN(n, 0)
 		if e != nil {
-			rl.Warn("write rate limit failed", "n", n, "err", err)
+			rl.log("write rate limit failed", n, e)
 		}
 	} else {
 		e = rl.rl.RxWaitN(n, 0)
 		if e != nil {
-			rl.Warn("read rate limit failed", "n", n, "err", err)
+			rl.Warn("read rate limit failed", n, e)
 		}
 	}
 	return
 }
 
+func (rl *rateLimit) log(msg string, n int, e error) {
+	select {
+	case <-rl.logTicker.C:
+		rl.Warn(msg, "n", n, "err", e)
+	default:
+	}
+}
+
 func (rl *rateLimit) Close() error {
 	runner.Stop(rl.rl)
+	if rl.logTicker != nil {
+		rl.logTicker.Stop()
+	}
 	return nil
 }
 

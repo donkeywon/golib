@@ -1,8 +1,11 @@
 package step
 
 import (
+	"bytes"
 	"errors"
+	"github.com/donkeywon/golib/util/conv"
 	"io"
+	"strconv"
 	"strings"
 	"time"
 
@@ -29,6 +32,32 @@ type SSHStepCfg struct {
 	Timeout    int    `json:"timeout"    yaml:"timeout"`
 
 	Cmd []string `json:"cmd"  yaml:"cmd" validate:"required"`
+}
+
+func (c SSHStepCfg) MarshalJSON() (ret []byte, err error) {
+	buf := bytes.NewBuffer(make([]byte, 0, 192))
+	buf.WriteByte('{')
+	buf.WriteString(`"addr":`)
+	buf.WriteString(strconv.Quote(c.Addr))
+	buf.WriteByte(',')
+	buf.WriteString(`"timeout":`)
+	buf.WriteString(strconv.Itoa(c.Timeout))
+	buf.WriteByte(',')
+	buf.WriteString(`"cmd":[`)
+	for i, cmd := range c.Cmd {
+		buf.WriteString(strconv.Quote(cmd))
+		if i != len(c.Cmd)-1 {
+			buf.WriteByte(',')
+		}
+	}
+	buf.WriteByte(']')
+	buf.WriteByte('}')
+	return buf.Bytes(), nil
+}
+
+func (c *SSHStepCfg) String() string {
+	b, _ := c.MarshalJSON()
+	return conv.Bytes2String(b)
 }
 
 func NewSSHStepCfg() *SSHStepCfg {

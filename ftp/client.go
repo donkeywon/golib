@@ -2,7 +2,9 @@ package ftp
 
 import (
 	"bufio"
+	"bytes"
 	"errors"
+	"github.com/donkeywon/golib/util/conv"
 	"net"
 	"net/textproto"
 	"os"
@@ -29,6 +31,26 @@ type Cfg struct {
 	Pwd     string `json:"pwd"     yaml:"pwd"`
 	Timeout int    `json:"timeout" validate:"gte=1"    yaml:"timeout"`
 	Retry   int    `json:"retry"   validate:"gte=1"    yaml:"retry"`
+}
+
+func (c Cfg) MarshalJSON() (ret []byte, err error) {
+	buf := bytes.NewBuffer(make([]byte, 0, 64))
+	buf.WriteByte('{')
+	buf.WriteString(`"addr":`)
+	buf.WriteString(strconv.Quote(c.Addr))
+	buf.WriteByte(',')
+	buf.WriteString(`"retry":`)
+	buf.WriteString(strconv.Itoa(c.Retry))
+	buf.WriteByte(',')
+	buf.WriteString(`"timeout":`)
+	buf.WriteString(strconv.Itoa(c.Timeout))
+	buf.WriteByte('}')
+	return buf.Bytes(), nil
+}
+
+func (c *Cfg) String() string {
+	b, _ := c.MarshalJSON()
+	return conv.Bytes2String(b)
 }
 
 func NewCfg() *Cfg {

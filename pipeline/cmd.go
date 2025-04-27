@@ -6,6 +6,7 @@ import (
 	"github.com/donkeywon/golib/errs"
 	"github.com/donkeywon/golib/plugin"
 	"github.com/donkeywon/golib/util/cmd"
+	"github.com/donkeywon/golib/util/jsons"
 	"os/exec"
 )
 
@@ -74,7 +75,7 @@ func (c *Cmd) Start() error {
 	}
 
 	if result.Err() != nil {
-		return errs.Wrapf(result.Err(), "cmd failed")
+		return errs.Wrapf(result.Err(), "pipeline cmd failed, stderr: %s, stdout: %s", jsons.MustMarshalString(result.Stderr), jsons.MustMarshalString(result.Stdout))
 	}
 
 	return nil
