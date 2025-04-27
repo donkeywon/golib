@@ -3,7 +3,7 @@ module github.com/donkeywon/golib/daemon
 go 1.23.0
 
 require (
-	github.com/alitto/pond/v2 v2.3.3
+	github.com/alitto/pond/v2 v2.3.4
 	github.com/arl/statsviz v0.6.0
 	github.com/donkeywon/golib v0.0.0
 	github.com/google/gops v0.3.28
@@ -28,7 +28,7 @@ require (
 	github.com/go-playground/universal-translator v0.18.1 // indirect
 	github.com/go-playground/validator/v10 v10.26.0 // indirect
 	github.com/goccy/go-yaml v1.17.1 // indirect
-	github.com/google/pprof v0.0.0-20250418163039-24c5476c6587 // indirect
+	github.com/google/pprof v0.0.0-20250423184734-337e5dd93bb4 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/klauspost/compress v1.18.0 // indirect
 	github.com/klauspost/cpuid/v2 v2.2.10 // indirect

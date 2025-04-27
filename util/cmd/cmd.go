@@ -8,7 +8,9 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/donkeywon/golib/errs"
 	"github.com/donkeywon/golib/util/bufferpool"
+	"github.com/donkeywon/golib/util/jsons"
 	"github.com/donkeywon/golib/util/proc"
 )
 
@@ -180,6 +182,11 @@ func wait(ctx context.Context, cmd *exec.Cmd, startResult *Result) error {
 	}
 	if startResult.stderrBuf != nil {
 		startResult.Stderr = startResult.stderrBuf.Lines()
+	}
+	if waitErr != nil {
+		if len(startResult.Stdout) > 0 || len(startResult.Stderr) > 0 {
+			waitErr = errs.Wrapf(waitErr, "stdout: %s, stderr: %s", jsons.MustMarshalString(startResult.Stdout), jsons.MustMarshalString(startResult.Stderr))
+		}
 	}
 	return waitErr
 }

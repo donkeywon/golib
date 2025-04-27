@@ -106,10 +106,18 @@ func (ito *CommonOption) toOptions(write bool) []Option {
 	if len(ito.Hash) > 0 && len(ito.Checksum) > 0 {
 		opts = append(opts, Checksum(ito.Checksum, initHash(ito.Hash)))
 	} else if len(ito.Hash) > 0 {
-		opts = append(opts, Hash(initHash(ito.Hash)))
+		if write {
+			opts = append(opts, HashWrite(initHash(ito.Hash)))
+		} else {
+			opts = append(opts, HashRead(initHash(ito.Hash)))
+		}
 	}
 	if ito.RateLimitCfg != nil {
-		opts = append(opts, RateLimit(ito.RateLimitCfg))
+		if write {
+			opts = append(opts, RateLimitWrite(ito.RateLimitCfg))
+		} else {
+			opts = append(opts, RateLimitRead(ito.RateLimitCfg))
+		}
 	}
 	if ito.Count {
 		if write {
