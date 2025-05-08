@@ -218,7 +218,7 @@ func (w *MultiPartWriter) Write(p []byte) (int, error) {
 		return len(p), nil
 	}
 
-	r := w.uploadPart(w.curPartNo, httpc.WithBody(p))
+	r := w.retryUploadPart(w.curPartNo, p)
 	w.curPartNo++
 	if r.err != nil {
 		if w.uploadErr == nil {
@@ -342,7 +342,7 @@ func (w *MultiPartWriter) uploadWorker() {
 				continue
 			}
 
-			r := w.uploadPart(req.partNo, httpc.WithBody(req.b))
+			r := w.retryUploadPart(req.partNo, req.b)
 			w.bufChan <- req.b
 			w.handleParallelResult(r)
 		}
@@ -483,6 +483,27 @@ func (w *MultiPartWriter) initMultiPart() (string, error) {
 	return result.UploadID, nil
 }
 
+func (w *MultiPartWriter) retryUploadPart(partNo int, b []byte) *uploadPartResult {
+	r, err := retry.DoWithData(
+		func() (*uploadPartResult, error) {
+			r := w.uploadPart(partNo, httpc.WithBody(b))
+			return r, r.err
+		},
+		retry.Attempts(uint(w.cfg.Retry)),
+		retry.RetryIf(func(err error) bool {
+			select {
+			case <-w.ctx.Done():
+				return false
+			default:
+				return err != nil
+			}
+		}),
+		retry.LastErrorOnly(true),
+	)
+	r.err = err
+	return r
+}
+
 func (w *MultiPartWriter) uploadPart(partNo int, opts ...httpc.Option) *uploadPartResult {
 	var (
 		url         string
@@ -503,21 +524,7 @@ func (w *MultiPartWriter) uploadPart(partNo int, opts ...httpc.Option) *uploadPa
 		checkStatus = httpc.CheckStatusCode(http.StatusOK)
 	}
 
-	resp, err = retry.DoWithData(
-		func() (*http.Response, error) {
-			respBody.Reset()
-			return w.upload(url, append(opts, httpc.ToStatus(&respStatus), httpc.ToBytesBuffer(respBody), checkStatus)...)
-		},
-		retry.Attempts(uint(w.cfg.Retry)),
-		retry.RetryIf(func(err error) bool {
-			select {
-			case <-w.ctx.Done():
-				return false
-			default:
-				return err != nil
-			}
-		}),
-	)
+	resp, err = w.upload(url, append(opts, httpc.ToStatus(&respStatus), httpc.ToBytesBuffer(respBody), checkStatus)...)
 
 	r := &uploadPartResult{
 		partNo: partNo,

@@ -62,7 +62,7 @@ func (w *AppendWriter) Write(p []byte) (int, error) {
 		return 0, err
 	}
 
-	err = w.appendPart(httpc.WithBody(p))
+	err = w.retryAppendPart(p)
 	if err != nil {
 		return 0, errs.Wrap(err, "append part failed")
 	}
@@ -172,6 +172,24 @@ func (w *AppendWriter) addAuth(req *http.Request) error {
 	return oss.Sign(req, w.cfg.Ak, w.cfg.Sk, w.cfg.Region)
 }
 
+func (w *AppendWriter) retryAppendPart(p []byte) error {
+	return retry.Do(
+		func() error {
+			return w.appendPart(httpc.WithBody(p))
+		},
+		retry.Attempts(uint(w.cfg.Retry)),
+		retry.RetryIf(func(err error) bool {
+			select {
+			case <-w.ctx.Done():
+				return false
+			default:
+				return err != nil
+			}
+		}),
+		retry.LastErrorOnly(true),
+	)
+}
+
 func (w *AppendWriter) appendPart(opts ...httpc.Option) error {
 	var (
 		url        string
@@ -197,21 +215,7 @@ func (w *AppendWriter) appendPart(opts ...httpc.Option) error {
 
 	allOpts = append(allOpts, httpc.ReqOptionFunc(w.addAuth))
 
-	resp, err = retry.DoWithData(
-		func() (*http.Response, error) {
-			return w.append(url, allOpts...)
-		},
-		retry.Attempts(uint(w.cfg.Retry)),
-		retry.RetryIf(func(err error) bool {
-			select {
-			case <-w.ctx.Done():
-				return false
-			default:
-				return err != nil
-			}
-		}),
-		retry.LastErrorOnly(true),
-	)
+	resp, err = w.append(url, allOpts...)
 	if err != nil {
 		return errs.Wrapf(err, "append failed with max retry, offset: %d, respStatus: %s, respBody: %s", w.offset, respStatus, respBody.String())
 	}
