@@ -522,10 +522,11 @@ func (w *MultiPartWriter) initMultiPart() (string, error) {
 }
 
 func (w *MultiPartWriter) retryUploadPart(partNo int, b []byte) *uploadPartResult {
-	r, err := retry.DoWithData(
-		func() (*uploadPartResult, error) {
-			r := w.uploadPart(partNo, httpc.WithBody(b))
-			return r, r.err
+	var r *uploadPartResult
+	retry.Do(
+		func() error {
+			r = w.uploadPart(partNo, httpc.WithBody(b))
+			return r.err
 		},
 		retry.Attempts(uint(w.cfg.Retry)),
 		retry.RetryIf(func(err error) bool {
@@ -538,7 +539,6 @@ func (w *MultiPartWriter) retryUploadPart(partNo int, b []byte) *uploadPartResul
 		}),
 		retry.LastErrorOnly(true),
 	)
-	r.err = err
 	return r
 }
 
