@@ -5,7 +5,6 @@ import (
 
 	"github.com/donkeywon/golib/errs"
 	"github.com/donkeywon/golib/plugin"
-	"github.com/donkeywon/golib/util/bytespool"
 )
 
 func init() {
@@ -46,10 +45,9 @@ func (c *Copy) Start() error {
 	if bufSize <= 0 {
 		bufSize = 32 * 1024
 	}
-	buf := bytespool.GetN(bufSize)
-	defer buf.Free()
+	bs := make([]byte, bufSize)
 
-	_, err := io.CopyBuffer(c.Writer(), c.Reader(), buf.B())
+	_, err := io.CopyBuffer(c.Writer(), c.Reader(), bs)
 	select {
 	case <-c.Stopping():
 		// stop before copy done
