@@ -29,11 +29,11 @@ func (l *logWriter) Set(c Common) {
 func TestPipelineWithCfg(t *testing.T) {
 	c := NewCfg()
 
-	c.Add(WorkerCopy, NewCopyCfg(), CommonOption{}).
+	c.Add(WorkerCopy, NewCopyCfg(), &CommonOption{}).
 		ReadFrom(ReaderFile, &FileCfg{
 			Path: "/tmp/test.file",
 			Perm: 644,
-		}, CommonOption{
+		}, &CommonOption{
 			Count: true,
 			Hash:  "xxh3",
 		}).
@@ -41,7 +41,7 @@ func TestPipelineWithCfg(t *testing.T) {
 			Type:        CompressTypeZstd,
 			Level:       CompressLevelFast,
 			Concurrency: 4,
-		}, CommonOption{}).
+		}, &CommonOption{}).
 		WriteTo(WriterOSS,
 			&OSSCfg{
 				Cfg: &oss.Cfg{
@@ -53,7 +53,7 @@ func TestPipelineWithCfg(t *testing.T) {
 				},
 				Append: false,
 			},
-			CommonOption{
+			&CommonOption{
 				ProgressLogInterval: 1,
 				BufSize:             5 * 1024 * 1024,
 			})
@@ -99,8 +99,8 @@ func TestPipelineWithCfg(t *testing.T) {
 
 func TestPipelineCmd(t *testing.T) {
 	c := NewCfg()
-	c.Add(WorkerCmd, &cmd.Cfg{Command: []string{"bash", "-c", "cat /tmp/test.file"}}, CommonOption{})
-	c.Add(WorkerCmd, &cmd.Cfg{Command: []string{"bash", "-c", "cat > /tmp/test.file.1"}}, CommonOption{})
+	c.Add(WorkerCmd, &cmd.Cfg{Command: []string{"bash", "-c", "cat /tmp/test.file"}}, &CommonOption{})
+	c.Add(WorkerCmd, &cmd.Cfg{Command: []string{"bash", "-c", "cat > /tmp/test.file.1"}}, &CommonOption{})
 	ppl := New()
 	ppl.SetCfg(c)
 	tests.DebugInit(ppl)

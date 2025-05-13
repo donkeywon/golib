@@ -22,15 +22,15 @@ type WorkerResult struct {
 }
 
 type WorkerCfg struct {
-	CommonCfgWithOption
-	Readers []ReaderCfg `json:"readers" yaml:"readers"`
-	Writers []WriterCfg `json:"writers" yaml:"writers"`
+	*CommonCfgWithOption
+	Readers []*ReaderCfg `json:"readers" yaml:"readers"`
+	Writers []*WriterCfg `json:"writers" yaml:"writers"`
 }
 
-func (wc *WorkerCfg) WriteTo(typ Type, cfg any, opt CommonOption) *WorkerCfg {
-	wc.Writers = append(wc.Writers, WriterCfg{
-		CommonCfgWithOption: CommonCfgWithOption{
-			CommonCfg: CommonCfg{
+func (wc *WorkerCfg) WriteTo(typ Type, cfg any, opt *CommonOption) *WorkerCfg {
+	wc.Writers = append(wc.Writers, &WriterCfg{
+		CommonCfgWithOption: &CommonCfgWithOption{
+			CommonCfg: &CommonCfg{
 				Type: typ,
 				Cfg:  cfg,
 			},
@@ -41,10 +41,10 @@ func (wc *WorkerCfg) WriteTo(typ Type, cfg any, opt CommonOption) *WorkerCfg {
 	return wc
 }
 
-func (wc *WorkerCfg) ReadFrom(typ Type, cfg any, opt CommonOption) *WorkerCfg {
-	wc.Readers = append(wc.Readers, ReaderCfg{
-		CommonCfgWithOption: CommonCfgWithOption{
-			CommonCfg: CommonCfg{
+func (wc *WorkerCfg) ReadFrom(typ Type, cfg any, opt *CommonOption) *WorkerCfg {
+	wc.Readers = append(wc.Readers, &ReaderCfg{
+		CommonCfgWithOption: &CommonCfgWithOption{
+			CommonCfg: &CommonCfg{
 				Type: typ,
 				Cfg:  cfg,
 			},
@@ -55,19 +55,19 @@ func (wc *WorkerCfg) ReadFrom(typ Type, cfg any, opt CommonOption) *WorkerCfg {
 	return wc
 }
 
-func (wc *WorkerCfg) WriteToWriter(c CommonCfgWithOption) *WorkerCfg {
-	wc.Writers = append(wc.Writers, WriterCfg{c})
+func (wc *WorkerCfg) WriteToWriter(c *CommonCfgWithOption) *WorkerCfg {
+	wc.Writers = append(wc.Writers, &WriterCfg{c})
 	return wc
 }
 
-func (wc *WorkerCfg) ReadFromReader(c CommonCfgWithOption) *WorkerCfg {
-	wc.Readers = append(wc.Readers, ReaderCfg{CommonCfgWithOption: c})
+func (wc *WorkerCfg) ReadFromReader(c *CommonCfgWithOption) *WorkerCfg {
+	wc.Readers = append(wc.Readers, &ReaderCfg{CommonCfgWithOption: c})
 	return wc
 }
 
 type workerCfgWithoutCommonCfg struct {
-	Readers []ReaderCfg `json:"readers" yaml:"readers"`
-	Writers []WriterCfg `json:"writers" yaml:"writers"`
+	Readers []*ReaderCfg `json:"readers" yaml:"readers"`
+	Writers []*WriterCfg `json:"writers" yaml:"writers"`
 }
 
 func (wc *WorkerCfg) UnmarshalJSON(data []byte) error {
