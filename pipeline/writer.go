@@ -22,6 +22,20 @@ type WriterCfg struct {
 	*CommonCfgWithOption
 }
 
+func (wc *WriterCfg) UnmarshalJSON(data []byte) error {
+	if wc.CommonCfgWithOption == nil {
+		wc.CommonCfgWithOption = &CommonCfgWithOption{}
+	}
+	return wc.CommonCfgWithOption.UnmarshalJSON(data)
+}
+
+func (wc *WriterCfg) UnmarshalYAML(data []byte) error {
+	if wc.CommonCfgWithOption == nil {
+		wc.CommonCfgWithOption = &CommonCfgWithOption{}
+	}
+	return wc.CommonCfgWithOption.UnmarshalYAML(data)
+}
+
 func (wc *WriterCfg) build() Writer {
 	w := plugin.CreateWithCfg[Type, Writer](wc.Type, wc.Cfg)
 	w.WithOptions(wc.toOptions(true)...)

@@ -71,6 +71,9 @@ type workerCfgWithoutCommonCfg struct {
 }
 
 func (wc *WorkerCfg) UnmarshalJSON(data []byte) error {
+	if wc.CommonCfgWithOption == nil {
+		wc.CommonCfgWithOption = &CommonCfgWithOption{}
+	}
 	err := wc.CommonCfgWithOption.UnmarshalJSON(data)
 	if err != nil {
 		return err
@@ -79,6 +82,9 @@ func (wc *WorkerCfg) UnmarshalJSON(data []byte) error {
 }
 
 func (wc *WorkerCfg) UnmarshalYAML(data []byte) error {
+	if wc.CommonCfgWithOption == nil {
+		wc.CommonCfgWithOption = &CommonCfgWithOption{}
+	}
 	err := wc.CommonCfgWithOption.UnmarshalYAML(data)
 	if err != nil {
 		return err
