@@ -159,7 +159,7 @@ func wait(ctx context.Context, cmd *exec.Cmd, startResult *Result) error {
 		go func() {
 			select {
 			case <-ctx.Done():
-				_ = MustStop(context.Background(), cmd)
+				_ = MustStop(context.Background(), cmd, 5, proc.MustKillSignals...)
 			case <-cmdDone:
 				return
 			}
@@ -216,7 +216,7 @@ func Stop(cmd *exec.Cmd) error {
 		return nil
 	}
 
-	return proc.Stop(cmd.Process.Pid)
+	return proc.Kill(cmd.Process.Pid, syscall.SIGTERM)
 }
 
 func StopGroup(cmd *exec.Cmd) error {
@@ -226,10 +226,10 @@ func StopGroup(cmd *exec.Cmd) error {
 	if cmd.Process == nil {
 		return nil
 	}
-	return proc.StopGroup(cmd.Process.Pid)
+	return proc.KillGroup(cmd.Process.Pid, syscall.SIGTERM)
 }
 
-func MustStop(ctx context.Context, cmd *exec.Cmd) error {
+func MustStop(ctx context.Context, cmd *exec.Cmd, singleSigWaitExitSec int, sig ...syscall.Signal) error {
 	if cmd == nil {
 		return nil
 	}
@@ -237,17 +237,17 @@ func MustStop(ctx context.Context, cmd *exec.Cmd) error {
 		return nil
 	}
 
-	return proc.MustStop(ctx, cmd.Process.Pid)
+	return proc.MustKill(ctx, cmd.Process.Pid, singleSigWaitExitSec, sig...)
 }
 
-func MustStopGroup(ctx context.Context, cmd *exec.Cmd) error {
+func MustStopGroup(ctx context.Context, cmd *exec.Cmd, singleSigWaitExitSec int, sig ...syscall.Signal) error {
 	if cmd == nil {
 		return nil
 	}
 	if cmd.Process == nil {
 		return nil
 	}
-	return proc.MustStopGroup(ctx, cmd.Process.Pid)
+	return proc.MustKillGroup(ctx, cmd.Process.Pid, singleSigWaitExitSec, sig...)
 }
 
 func KillGroup(cmd *exec.Cmd) error {
@@ -257,5 +257,5 @@ func KillGroup(cmd *exec.Cmd) error {
 	if cmd.Process == nil {
 		return nil
 	}
-	return proc.KillGroup(cmd.Process.Pid)
+	return proc.KillGroup(cmd.Process.Pid, syscall.SIGKILL)
 }

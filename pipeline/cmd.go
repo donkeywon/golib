@@ -2,12 +2,14 @@ package pipeline
 
 import (
 	"context"
+	"os/exec"
+
 	"github.com/donkeywon/golib/consts"
 	"github.com/donkeywon/golib/errs"
 	"github.com/donkeywon/golib/plugin"
 	"github.com/donkeywon/golib/util/cmd"
 	"github.com/donkeywon/golib/util/jsons"
-	"os/exec"
+	"github.com/donkeywon/golib/util/proc"
 )
 
 func init() {
@@ -85,7 +87,7 @@ func (c *Cmd) Stop() error {
 	if c.c == nil || c.c.Process == nil {
 		return nil
 	}
-	return cmd.KillGroup(c.c)
+	return cmd.MustStopGroup(context.Background(), c.c, 5, proc.MustKillSignals...)
 }
 
 func (c *Cmd) SetCfg(cfg any) {

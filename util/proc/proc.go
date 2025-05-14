@@ -2,12 +2,13 @@ package proc
 
 import (
 	"context"
+	"syscall"
 	"time"
 
 	"github.com/shirou/gopsutil/v3/process"
 )
 
-const mustStopWaitSec = 60
+var MustKillSignals = []syscall.Signal{syscall.SIGINT, syscall.SIGKILL}
 
 func Exists(pid int) bool {
 	exists, _ := process.PidExists(int32(pid))
