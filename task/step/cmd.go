@@ -53,7 +53,8 @@ func (c *CmdStep) Start() error {
 
 	c.Cfg.SetPgid = true
 
-	result := cmd.RunCmd(c.Ctx(), c.cmd, c.Cfg, c.beforeStart...)
+	result := cmd.Start(c.Ctx(), c.cmd, c.Cfg, c.beforeStart...)
+	<-result.Done()
 	err = result.Err()
 	c.Info("cmd exit", "result", result)
 

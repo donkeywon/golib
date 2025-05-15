@@ -40,6 +40,10 @@ type Result struct {
 	Signaled      bool     `json:"signaled"`
 }
 
+func (r *Result) markDone() {
+	close(r.done)
+}
+
 func (r *Result) Done() <-chan struct{} {
 	return r.done
 }
@@ -85,32 +89,26 @@ func Run(command ...string) *Result {
 }
 
 func RunCtx(ctx context.Context, command ...string) *Result {
-	return RunRaw(ctx, &Cfg{Command: command})
-}
-
-func RunRaw(ctx context.Context, cfg *Cfg, beforeStart ...func(cmd *exec.Cmd)) *Result {
-	cmd := exec.CommandContext(ctx, cfg.Command[0], cfg.Command[1:]...)
-	return RunCmd(ctx, cmd, cfg, beforeStart...)
-}
-
-func RunCmd(ctx context.Context, cmd *exec.Cmd, cfg *Cfg, beforeStart ...func(cmd *exec.Cmd)) *Result {
-	cfgBeforeStart, err := beforeStartFromCfg(cfg)
-	if err != nil {
-		return &Result{err: err}
-	}
-	r := Start(ctx, cmd, append(cfgBeforeStart, beforeStart...)...)
-	<-r.Done()
-	return r
+	cmd := exec.CommandContext(ctx, command[0], command[1:]...)
+	return Start(ctx, cmd, nil)
 }
 
 // Start start a command
 // you can get pid from Result.Pid, 0 means start fail.
-func Start(ctx context.Context, cmd *exec.Cmd, beforeRun ...func(cmd *exec.Cmd)) *Result {
+func Start(ctx context.Context, cmd *exec.Cmd, cfg *Cfg, beforeStart ...func(cmd *exec.Cmd)) *Result {
 	r := &Result{
 		done: make(chan struct{}),
 	}
-	if len(beforeRun) > 0 {
-		for _, f := range beforeRun {
+	cfgBeforeStart, err := beforeStartFromCfg(cfg)
+	if err != nil {
+		r.err = err
+		r.markDone()
+		return r
+	}
+
+	beforeStart = append(cfgBeforeStart, beforeStart...)
+	if len(beforeStart) > 0 {
+		for _, f := range beforeStart {
 			f(cmd)
 		}
 	}
@@ -124,22 +122,22 @@ func Start(ctx context.Context, cmd *exec.Cmd, beforeRun ...func(cmd *exec.Cmd))
 		cmd.Stderr = r.stderrBuf
 	}
 	r.StartTimeNano = time.Now().UnixNano()
-	err := cmd.Start()
+	err = cmd.Start()
 	r.err = err
 	if err == nil {
 		r.Pid = cmd.Process.Pid
 	}
 
 	go func() {
-		defer close(r.done)
-		err = wait(ctx, cmd, r)
+		defer r.markDone()
+		err = wait(ctx, cmd, cfg, r)
 		r.err = err
 	}()
 
 	return r
 }
 
-func wait(ctx context.Context, cmd *exec.Cmd, startResult *Result) error {
+func wait(ctx context.Context, cmd *exec.Cmd, cfg *Cfg, startResult *Result) error {
 	if startResult.stdoutBuf != nil {
 		defer func() {
 			startResult.stdoutBuf.Free()
@@ -159,7 +157,11 @@ func wait(ctx context.Context, cmd *exec.Cmd, startResult *Result) error {
 		go func() {
 			select {
 			case <-ctx.Done():
-				_ = MustStop(context.Background(), cmd, 5, proc.MustKillSignals...)
+				if cfg.SetPgid {
+					_ = MustStopGroup(context.Background(), cmd, 5, proc.MustKillSignals...)
+				} else {
+					_ = MustStop(context.Background(), cmd, 5, proc.MustKillSignals...)
+				}
 			case <-cmdDone:
 				return
 			}
