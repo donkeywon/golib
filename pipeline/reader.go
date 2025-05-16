@@ -29,6 +29,8 @@ type Reader interface {
 	io.Reader
 	io.WriterTo
 	readerWrapper
+
+	DirectReader() io.Reader // for zero copy
 }
 
 type ReaderCfg struct {
@@ -142,4 +144,11 @@ func (b *BaseReader) Size() int64 {
 	default:
 		return 0
 	}
+}
+
+func (b *BaseReader) DirectReader() io.Reader {
+	if b.originReader == b.Reader {
+		return b.originReader
+	}
+	return b
 }

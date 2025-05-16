@@ -47,7 +47,16 @@ func (c *Copy) Start() error {
 	}
 	bs := make([]byte, bufSize)
 
-	_, err := io.CopyBuffer(c.Writer(), c.Reader(), bs)
+	w := c.Writer()
+	if ww, ok := w.(Writer); ok {
+		w = ww.DirectWriter()
+	}
+	r := c.Reader()
+	if rr, ok := r.(Reader); ok {
+		r = rr.DirectReader()
+	}
+
+	_, err := io.CopyBuffer(w, r, bs)
 	select {
 	case <-c.Stopping():
 		// stop before copy done
