@@ -1,13 +1,10 @@
 package pipeline
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
-	"github.com/donkeywon/golib/util/conv"
 	"io"
 	"path/filepath"
-	"strconv"
 	"time"
 
 	"github.com/donkeywon/golib/errs"
@@ -30,26 +27,6 @@ type SSHCfg struct {
 	PrivateKey string `json:"privateKey" yaml:"privateKey"`
 	Path       string `json:"path"       yaml:"path" validate:"required"`
 	Timeout    int    `json:"timeout"    yaml:"timeout"`
-}
-
-func (c SSHCfg) MarshalJSON() (ret []byte, err error) {
-	buf := bytes.NewBuffer(make([]byte, 0, 64))
-	buf.WriteByte('{')
-	buf.WriteString(`"addr":`)
-	buf.WriteString(strconv.Quote(c.Addr))
-	buf.WriteByte(',')
-	buf.WriteString(`"retry":`)
-	buf.WriteString(strconv.Quote(c.Path))
-	buf.WriteByte(',')
-	buf.WriteString(`"timeout":`)
-	buf.WriteString(strconv.Itoa(c.Timeout))
-	buf.WriteByte('}')
-	return buf.Bytes(), nil
-}
-
-func (c *SSHCfg) String() string {
-	b, _ := c.MarshalJSON()
-	return conv.Bytes2String(b)
 }
 
 func NewSSHCfg() *SSHCfg {

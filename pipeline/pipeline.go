@@ -122,17 +122,6 @@ func (p *Pipeline) Init() error {
 	}
 
 	for i, w := range p.ws {
-		for _, writer := range w.Writers() {
-			if common, ok := writer.(Common); ok {
-				common.WithOptions(setToTeesAndMultiWriters(common))
-			}
-		}
-		for _, reader := range w.Readers() {
-			if common, ok := reader.(Common); ok {
-				common.WithOptions(setToTeesAndMultiWriters(common))
-			}
-		}
-
 		w.Inherit(p)
 		err = runner.Init(w)
 		if err != nil {

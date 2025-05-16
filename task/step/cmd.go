@@ -43,6 +43,7 @@ func (c *CmdStep) Init() error {
 		return err
 	}
 
+	c.cmd = exec.CommandContext(c.Ctx(), c.Command[0], c.Command[1:]...)
 	c.WithLoggerFields("cmd", c.Command[0])
 
 	return c.Step.Init()
@@ -56,7 +57,7 @@ func (c *CmdStep) Start() error {
 	result := cmd.Start(c.Ctx(), c.cmd, c.Cfg, c.beforeStart...)
 	<-result.Done()
 	err = result.Err()
-	c.Info("cmd exit", "result", result)
+	c.Info("cmd exit", "result", result.String())
 
 	if result != nil {
 		c.Store(consts.FieldCmdStdout, result.Stdout)
@@ -70,7 +71,7 @@ func (c *CmdStep) Start() error {
 	if result != nil && result.Signaled {
 		select {
 		case <-c.Stopping():
-			c.Info("cmd exit signaled", "err", result.Err)
+			c.Info("cmd exit signaled", "err", err)
 			err = nil
 		default:
 		}
@@ -89,7 +90,6 @@ func (c *CmdStep) Stop() error {
 
 func (c *CmdStep) SetCfg(cfg any) {
 	c.Cfg = cfg.(*cmd.Cfg)
-	c.cmd = exec.CommandContext(c.Ctx(), c.Command[0], c.Command[1:]...)
 }
 
 func (c *CmdStep) BeforeStart(f ...func(cmd *exec.Cmd)) {

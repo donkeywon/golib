@@ -150,6 +150,25 @@ func newBaseWorker(name string) Worker {
 }
 
 func (b *BaseWorker) Init() error {
+	for _, writer := range b.Writers() {
+		if r, ok := writer.(runner.Runner); ok {
+			r.Inherit(b)
+		}
+
+		if common, ok := writer.(Common); ok {
+			common.WithOptions(setToTeesAndMultiWriters(common))
+		}
+	}
+	for _, reader := range b.Readers() {
+		if r, ok := reader.(runner.Runner); ok {
+			r.Inherit(b)
+		}
+
+		if common, ok := reader.(Common); ok {
+			common.WithOptions(setToTeesAndMultiWriters(common))
+		}
+	}
+
 	for i := len(b.ws) - 2; i >= 0; i-- {
 		if ww, ok := b.ws[i].(writerWrapper); !ok {
 			b.Error("writer is not WriterWrapper", nil, "writer", reflect.TypeOf(b.ws[i]))
@@ -177,7 +196,6 @@ func (b *BaseWorker) Init() error {
 	var err error
 	for i := len(b.ws) - 1; i >= 0; i-- {
 		if ww, ok := b.ws[i].(runner.Runner); ok {
-			ww.Inherit(b)
 			err = runner.Init(ww)
 			if err != nil {
 				return errs.Wrapf(err, "init writer failed: %s", reflect.TypeOf(b.ws[i]).String())
@@ -186,7 +204,6 @@ func (b *BaseWorker) Init() error {
 	}
 	for i := len(b.rs) - 1; i >= 0; i-- {
 		if rr, ok := b.rs[i].(runner.Runner); ok {
-			rr.Inherit(b)
 			err = runner.Init(rr)
 			if err != nil {
 				return errs.Wrapf(err, "init reader failed: %s", reflect.TypeOf(b.rs[i]).String())

@@ -103,7 +103,6 @@ func (td *taskd) Init() error {
 }
 
 func (td *taskd) Start() error {
-	td.Info("ready for task")
 	<-td.Stopping()
 	td.waitAllTaskDone()
 	for _, pool := range td.pools {
@@ -162,7 +161,6 @@ func (td *taskd) StopTask(taskID string) error {
 	}
 
 	runner.StopAndWait(t)
-	td.Info("task stopped", "task_id", taskID)
 	return nil
 }
 
@@ -190,10 +188,8 @@ func (td *taskd) PauseTask(taskID string) error {
 	default:
 	}
 
-	td.Info("pausing task", "task_id", taskID)
 	td.hookTask(t, nil, td.pausingHooks, "pausing", nil)
 	runner.StopAndWait(t)
-	td.Info("task paused", "task_id", taskID)
 	td.markTaskPaused(t)
 	td.hookTask(t, nil, td.pausedHooks, "paused", nil)
 	return nil
@@ -211,7 +207,6 @@ func (td *taskd) ResumeTask(taskID string) (*task.Task, error) {
 		return nil, ErrTaskNotPaused
 	}
 
-	td.Info("resuming task", "task_id", taskID)
 	newT, err := td.createInitSubmit(td.Ctx(), t.Cfg, false, func(newT *task.Task, err error, hed *task.HookExtraData) {
 		data := t.LoadAll()
 		for k, v := range data {
@@ -233,7 +228,6 @@ func (td *taskd) ResumeTask(taskID string) (*task.Task, error) {
 	})
 
 	if err != nil {
-		td.Error("resume task failed", err, "task_id", taskID)
 		td.markTaskPaused(t)
 		return newT, err
 	}
@@ -265,7 +259,6 @@ func (td *taskd) createInit(ctx context.Context, taskCfg *task.Cfg, extra *task.
 	}
 	td.hookTask(t, err, td.createHooks, "create", extra)
 	if err != nil {
-		td.Error("create task failed", err, "cfg", taskCfg)
 		return t, errs.Wrap(err, "create task failed")
 	}
 
@@ -279,7 +272,6 @@ func (td *taskd) createInit(ctx context.Context, taskCfg *task.Cfg, extra *task.
 	err = td.initTask(t)
 	td.hookTask(t, err, td.initHooks, "init", extra)
 	if err != nil {
-		td.Error("init task failed", err, "cfg", taskCfg)
 		return t, errs.Wrap(err, "init task failed")
 	}
 
@@ -287,31 +279,21 @@ func (td *taskd) createInit(ctx context.Context, taskCfg *task.Cfg, extra *task.
 }
 
 func (td *taskd) submit(t *task.Task, wait bool) {
-	td.Info("submitting task", "wait", wait, "task", t.Cfg)
 	extra := &task.HookExtraData{Wait: wait}
 
 	f := func() {
 		td.markTaskRunning(t.Cfg.ID)
 		td.hookTask(t, nil, td.startHooks, "start", extra)
 
-		td.Info("starting task", "task_id", t.Cfg.ID, "task_type", t.Cfg.Type)
 		runner.Start(t)
-		err := t.Err()
-		if err != nil {
-			td.Error("task failed", err, "task_id", t.Cfg.ID, "task_type", t.Cfg.Type)
-		} else {
-			td.Info("task done", "task_id", t.Cfg.ID, "task_type", t.Cfg.Type)
-		}
 		td.unmarkTaskAndTaskID(t.Cfg.ID)
-		td.hookTask(t, nil, td.doneHooks, "done", extra)
+		td.hookTask(t, t.Err(), td.doneHooks, "done", extra)
 	}
 
 	td.markTask(t)
 
 	pt := td.getPool(t.Cfg).Submit(f)
-	td.Info("task submitted", "task_id", t.Cfg.ID)
 	if wait {
-		td.Info("wait task done", "task_id", t.Cfg.ID)
 		pt.Wait()
 	}
 
@@ -329,7 +311,6 @@ func (td *taskd) createInitSubmit(ctx context.Context, taskCfg *task.Cfg, wait b
 
 	marked := td.markTaskID(taskCfg.ID)
 	if !marked {
-		td.Warn("task already exists", "id", taskCfg.ID)
 		return nil, ErrTaskAlreadyExists
 	}
 
@@ -477,7 +458,11 @@ func (td *taskd) hookTask(t *task.Task, err error, hooks []task.Hook, hookType s
 			defer func() {
 				err := recover()
 				if err != nil {
-					td.Error("hook task panic", errs.PanicToErr(err), "idx", idx, "hook", reflects.GetFuncName(h), "hook_type", hookType)
+					if t == nil {
+						td.Error("panic on hook task", errs.PanicToErr(err), "idx", idx, "hook", reflects.GetFuncName(h), "hook_type", hookType)
+					} else {
+						td.Error("panic on hook task", errs.PanicToErr(err), "idx", idx, "hook", reflects.GetFuncName(h), "hook_type", hookType, "task_id", t.Cfg.ID, "task_type", t.Cfg.Type)
+					}
 				}
 			}()
 			h(t, err, extra)

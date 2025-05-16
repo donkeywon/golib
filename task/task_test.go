@@ -2,6 +2,7 @@ package task
 
 import (
 	"testing"
+	"time"
 
 	"github.com/donkeywon/golib/runner"
 	"github.com/donkeywon/golib/task/step"
@@ -12,13 +13,13 @@ import (
 
 func TestTask(t *testing.T) {
 	cfg := NewCfg().Add(step.TypeCmd, &cmd.Cfg{
-		Command: []string{"echo", "1"},
+		Command: []string{"sleep", "5"},
 	}).Add(step.TypeCmd, &cmd.Cfg{
-		Command: []string{"echo", "2"},
+		Command: []string{"sleep", "10"},
 	}).Defer(step.TypeCmd, &cmd.Cfg{
-		Command: []string{"echo", "3"},
+		Command: []string{"sleep", "12"},
 	}).Defer(step.TypeCmd, &cmd.Cfg{
-		Command: []string{"echo", "4"},
+		Command: []string{"sleep", "13"},
 	}).SetID("test-task").SetType(Type("test"))
 
 	cfg.CurStepIdx = 0
@@ -29,6 +30,11 @@ func TestTask(t *testing.T) {
 	tests.DebugInit(task)
 
 	require.NoError(t, runner.Init(task))
+
+	go func() {
+		time.Sleep(1 * time.Second)
+		runner.Stop(task)
+	}()
 
 	runner.Start(task)
 	require.NoError(t, task.Err())
