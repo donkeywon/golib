@@ -12,6 +12,7 @@ import (
 	"github.com/donkeywon/golib/boot"
 	"github.com/donkeywon/golib/daemon/httpd"
 	"github.com/donkeywon/golib/runner"
+	"github.com/donkeywon/golib/util/httpu"
 	"github.com/donkeywon/golib/util/prof"
 	"github.com/google/gops/agent"
 	"github.com/maruel/panicparse/v2/stack/webstack"
@@ -23,17 +24,22 @@ var D Profd = New()
 
 type Profd interface {
 	boot.Daemon
-	SetHTTPD(d httpd.HTTPD)
+	SetMux(*http.ServeMux)
+	SetAllowedIPsGetter(func() []string)
 }
 
 type profd struct {
 	runner.Runner
 	*Cfg
 
-	httpd httpd.HTTPD
+	mux *http.ServeMux
+
+	allowedIPsGetter func() []string
 
 	prettystackMu       sync.Mutex
 	prettystackLastTime time.Time
+
+	statsvizServer *statsviz.Server
 }
 
 func New() Profd {
@@ -43,8 +49,8 @@ func New() Profd {
 }
 
 func (p *profd) Init() error {
-	if p.httpd == nil {
-		p.httpd = httpd.D
+	if p.mux == nil {
+		p.mux = httpd.D.Mux()
 	}
 
 	if p.Cfg.EnableStartupProfiling {
@@ -75,28 +81,32 @@ func (p *profd) Init() error {
 		}
 	}
 
+	var err error
 	if p.Cfg.EnableStatsViz {
-		srv, err := statsviz.NewServer()
+		p.statsvizServer, err = statsviz.NewServer()
 		if err != nil {
 			p.Error("init statsviz failed", err)
 		} else {
-			p.httpd.Handle("/debug/statsviz/", srv.Index())
-			p.httpd.HandleFunc("/debug/statsviz/ws", srv.Ws())
+			p.mux.HandleFunc("/debug/statsviz/", p.statsviz)
+			p.mux.HandleFunc("/debug/statsviz/ws", p.statsvizWS)
 		}
 	}
 
 	if p.Cfg.EnableHTTPProf {
-		p.httpd.Handle("/debug/prof/start/{mode}", httpd.RawHandler(p.startProf))
-		p.httpd.Handle("/debug/prof/stop", httpd.RawHandler(p.stopProf))
+		p.mux.Handle("/debug/prof/start/{mode}", httpd.RawHandler(p.startProf))
+		p.mux.Handle("/debug/prof/stop", httpd.RawHandler(p.stopProf))
 	}
 
 	if p.Cfg.EnableWebProf {
-		p.httpd.HandleFunc("/debug/pprof/", pprof.Index)
-		p.httpd.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
-		p.httpd.HandleFunc("/debug/pprof/profile", pprof.Profile)
-		p.httpd.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
-		p.httpd.HandleFunc("/debug/pprof/trace", pprof.Trace)
-		p.httpd.HandleFunc("/debug/prettytrace", p.prettystack)
+		p.mux.HandleFunc("/debug/pprof/", p.pprofIndex)
+		p.mux.HandleFunc("/debug/pprof/cmdline", p.pprofCmdline)
+		p.mux.HandleFunc("/debug/pprof/profile", p.pprofProfile)
+		p.mux.HandleFunc("/debug/pprof/symbol", p.pprofSymbol)
+		p.mux.HandleFunc("/debug/pprof/trace", p.pprofTrace)
+	}
+
+	if p.Cfg.EnableWebPrettyTrace {
+		p.mux.HandleFunc("/debug/prettytrace", p.prettytrace)
 	}
 
 	if p.Cfg.EnableGoPs {
@@ -119,8 +129,12 @@ func (p *profd) Stop() error {
 	return nil
 }
 
-func (p *profd) SetHTTPD(d httpd.HTTPD) {
-	p.httpd = d
+func (p *profd) SetMux(mux *http.ServeMux) {
+	p.mux = mux
+}
+
+func (p *profd) SetAllowedIPsGetter(allowedIPsGetter func() []string) {
+	p.allowedIPsGetter = allowedIPsGetter
 }
 
 func (p *profd) startProf(w http.ResponseWriter, r *http.Request) []byte {
@@ -156,7 +170,102 @@ func (p *profd) stopProf(w http.ResponseWriter, r *http.Request) []byte {
 	return []byte("stopped")
 }
 
-func (p *profd) prettystack(w http.ResponseWriter, req *http.Request) {
+func (p *profd) secure(w http.ResponseWriter, r *http.Request) bool {
+	if !p.ipAllowed(w, r) {
+		return false
+	}
+
+	if !p.auth(w, r) {
+		return false
+	}
+
+	return true
+}
+
+func (p *profd) ipAllowed(w http.ResponseWriter, r *http.Request) bool {
+	if p.allowedIPsGetter == nil {
+		return true
+	}
+
+	ips := p.allowedIPsGetter()
+	if len(ips) == 0 {
+		return true
+	}
+
+	m := make(map[string]struct{}, len(ips))
+	for _, ip := range ips {
+		m[ip] = struct{}{}
+	}
+
+	remoteIP := httpu.GetRealRemoteIP(r)
+	if _, exist := m[remoteIP]; exist {
+		return true
+	}
+
+	http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
+	return false
+}
+
+func (p *profd) auth(w http.ResponseWriter, r *http.Request) bool {
+	if p.Cfg.WebAuthUser == "" && p.Cfg.WebAuthPwd == "" {
+		return true
+	}
+	user, pass, ok := r.BasicAuth()
+	if ok && user == p.Cfg.WebAuthUser && pass == p.Cfg.WebAuthPwd {
+		return true
+	}
+
+	w.Header().Set("WWW-Authenticate", `Basic realm="Restricted", charset="UTF-8"`)
+	http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+	return false
+
+}
+
+func (p *profd) pprofIndex(w http.ResponseWriter, r *http.Request) {
+	if !p.secure(w, r) {
+		return
+	}
+
+	pprof.Index(w, r)
+}
+
+func (p *profd) pprofProfile(w http.ResponseWriter, r *http.Request) {
+	if !p.secure(w, r) {
+		return
+	}
+
+	pprof.Profile(w, r)
+}
+
+func (p *profd) pprofSymbol(w http.ResponseWriter, r *http.Request) {
+	if !p.secure(w, r) {
+		return
+	}
+
+	pprof.Symbol(w, r)
+}
+
+func (p *profd) pprofTrace(w http.ResponseWriter, r *http.Request) {
+	if !p.secure(w, r) {
+		return
+	}
+
+	pprof.Trace(w, r)
+}
+
+func (p *profd) pprofCmdline(w http.ResponseWriter, r *http.Request) {
+	if !p.secure(w, r) {
+		return
+	}
+
+	pprof.Cmdline(w, r)
+}
+
+func (p *profd) prettytrace(w http.ResponseWriter, r *http.Request) {
+	if !p.secure(w, r) {
+		return
+	}
+
 	p.prettystackMu.Lock()
 	defer p.prettystackMu.Unlock()
 
@@ -166,6 +275,22 @@ func (p *profd) prettystack(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	webstack.SnapshotHandler(w, req)
+	webstack.SnapshotHandler(w, r)
 	p.prettystackLastTime = time.Now()
+}
+
+func (p *profd) statsviz(w http.ResponseWriter, r *http.Request) {
+	if !p.secure(w, r) {
+		return
+	}
+
+	p.statsvizServer.Index()(w, r)
+}
+
+func (p *profd) statsvizWS(w http.ResponseWriter, r *http.Request) {
+	if !p.secure(w, r) {
+		return
+	}
+
+	p.statsvizServer.Ws()(w, r)
 }
