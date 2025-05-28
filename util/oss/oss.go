@@ -139,7 +139,7 @@ func Delete(ctx context.Context, timeout time.Duration, url string, ak string, s
 	)
 
 	if err != nil {
-		return errs.Errorf("do http delete request fail, respStatus: %s, respBody: %s", respStatus, respBody.String())
+		return errs.Wrapf(err, "do http delete request fail, respStatus: %s, respBody: %s", respStatus, respBody.String())
 	}
 
 	return nil
@@ -161,7 +161,7 @@ func Head(ctx context.Context, timeout time.Duration, url string, ak string, sk 
 	)
 
 	if err != nil {
-		return nil, errs.Errorf("do http head request fail, respStatus: %s, respBody: %s", respStatus, respBody.String())
+		return nil, errs.Wrapf(err, "do http head request fail, respStatus: %s, respBody: %s", respStatus, respBody.String())
 	}
 
 	return resp, nil
