@@ -93,6 +93,8 @@ func (r *Reader) Read(p []byte) (int, error) {
 	}
 
 	if !r.supportRange {
+		r.mu.Lock()
+		defer r.mu.Unlock()
 		if r.respBody == nil {
 			r.respBody, err = r.retryGetNoRange()
 			if err != nil {
@@ -316,6 +318,12 @@ func (r *Reader) retryGetNoRange() (*respBodyReader, error) {
 		},
 		retry.Attempts(uint(r.opt.retry)),
 	)
+	if err != nil {
+		if respBody != nil {
+			respBody.Close()
+		}
+		return nil, err
+	}
 	return &respBodyReader{ReadCloser: respBody, r: r}, err
 }
 
