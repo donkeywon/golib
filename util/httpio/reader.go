@@ -44,7 +44,9 @@ type Reader struct {
 	offset       int64
 	end          int64
 	supportRange bool
-	respBody     *respBodyReader
+
+	mu       sync.Mutex
+	respBody *respBodyReader
 
 	opt *option
 }
@@ -132,9 +134,12 @@ func (r *Reader) Close() error {
 	var err error
 	r.closeOnce.Do(func() {
 		r.cancel()
+
+		r.mu.Lock()
 		if r.respBody != nil {
 			err = r.respBody.Close()
 		}
+		r.mu.Unlock()
 	})
 	return err
 }
@@ -242,6 +247,9 @@ func (r *Reader) retryReadFromRemain(p []byte) (int, error) {
 }
 
 func (r *Reader) readFromRemain(p []byte) (n int, err error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
 	if r.respBody == nil {
 		r.respBody, err = r.getRemain()
 		if err != nil {
@@ -274,6 +282,13 @@ func (r *Reader) getRemain() (*respBodyReader, error) {
 		resp.Body = io.NopCloser(resp.Body)
 		return nil
 	}))
+
+	if err != nil {
+		if respBody != nil {
+			respBody.Close()
+		}
+		return nil, err
+	}
 	return &respBodyReader{ReadCloser: respBody, r: r}, err
 }
 
