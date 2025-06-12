@@ -26,7 +26,6 @@ type HostRateLimiterCfg struct {
 	MonitorInterval int    `json:"monitorInterval" yaml:"monitorInterval"`
 	ReservePercent  int    `json:"reservePercent"  yaml:"reservePercent"`
 	MinMBps         int    `json:"minMBps"         yaml:"minMBps"`
-	FixedMBps       int    `json:"fixedMBps"       yaml:"fixedMBps"`
 	Burst           int    `json:"burst"           yaml:"burst"`
 }
 
@@ -71,39 +70,34 @@ func (h *HostRateLimiter) Init() error {
 	h.rxRL = rate.NewLimiter(rate.Limit(h.Burst), h.Burst)
 	h.txRL = rate.NewLimiter(rate.Limit(h.Burst), h.Burst)
 
-	if h.FixedMBps > 0 {
-		h.Info("use fixed limit", "limit", i2MBps(h.FixedMBps))
-		h.setRxTxLimit(float64(h.FixedMBps), float64(h.FixedMBps))
-	} else {
-		h.Info("use nic", "nic", h.Nic)
-		h.nicSpeedMbps, err = eth.GetNicSpeed(h.Nic)
+	h.Info("use nic", "nic", h.Nic)
+	h.nicSpeedMbps, err = eth.GetNicSpeed(h.Nic)
+	if err != nil {
+		h.Error("get nic speed failed", err)
+		h.Info("try get nic speed on cloud")
+
+		cloudType := cloud.Which()
+		if cloudType == cloud.TypeUnknown {
+			return errs.Errorf("unknown cloud type")
+		}
+
+		h.Info("host on cloud", "type", cloudType)
+		h.nicSpeedMbps, err = cloud.GetNicSpeed()
 		if err != nil {
-			h.Error("get nic speed failed", err)
-			h.Info("try get nic speed on cloud")
-
-			cloudType := cloud.Which()
-			if cloudType == cloud.TypeUnknown {
-				return errs.Errorf("unknown cloud type")
-			}
-
-			h.Info("host on cloud", "type", cloudType)
-			h.nicSpeedMbps, err = cloud.GetNicSpeed()
-			if err != nil {
-				return errs.Wrapf(err, "get cloud(%s) network nic speed failed", cloudType)
-			}
+			return errs.Wrapf(err, "get cloud(%s) network nic speed failed", cloudType)
 		}
-
-		if h.nicSpeedMbps <= 0 {
-			return errs.Errorf("nic speed must gt 0")
-		}
-
-		h.nicSpeedMBps = h.nicSpeedMbps / 8
-		h.minMBps = float64(h.MinMBps)
-
-		h.Info("nic speed", "B", i2MBps(h.nicSpeedMBps), "b", fmt.Sprintf("%d Mb/s", h.nicSpeedMbps))
-
-		go h.monitor()
 	}
+
+	if h.nicSpeedMbps <= 0 {
+		return errs.Errorf("nic speed must gt 0")
+	}
+
+	h.nicSpeedMBps = h.nicSpeedMbps / 8
+	h.minMBps = float64(h.MinMBps)
+
+	h.Info("nic speed", "B", i2MBps(h.nicSpeedMBps), "b", fmt.Sprintf("%d Mb/s", h.nicSpeedMbps))
+
+	go h.monitor()
 
 	return h.Runner.Init()
 }
@@ -146,8 +140,6 @@ func (h *HostRateLimiter) monitor() {
 		case <-h.Stopping():
 			return
 		case <-t.C:
-			h.monitorCurSpeed()
-
 			stats, err := eth.GetNetDevStats()
 			if err != nil {
 				h.setRxTxLimit(h.minMBps, h.minMBps)
@@ -166,16 +158,6 @@ func (h *HostRateLimiter) monitor() {
 	}
 }
 
-func (h *HostRateLimiter) monitorCurSpeed() {
-	rxPass := atomic.LoadUint64(&h.rxPass)
-	txPass := atomic.LoadUint64(&h.txPass)
-	h.Info("speed",
-		"rx_speed", f2MBPS(float64(rxPass-h.lastRxPass)/1048576/float64(h.MonitorInterval)),
-		"tx_speed", f2MBPS(float64(txPass-h.lastTxPass)/1048576/float64(h.MonitorInterval)))
-	h.lastRxPass = rxPass
-	h.lastTxPass = txPass
-}
-
 func (h *HostRateLimiter) setRxTxLimit(rxL float64, txL float64) {
 	h.Debug("set limit", "rx_limit", rxL, "tx_limit", txL)
 	h.rxRL.SetLimit(rate.Limit(rxL * 1048576))
@@ -188,7 +170,7 @@ func (h *HostRateLimiter) handleNetDevStats(stat *eth.NetDevStats) {
 
 	if h.lastNicRxBytes == 0 || h.lastNicTxBytes == 0 {
 		h.setRxTxLimit(h.minMBps, h.minMBps)
-		h.Info("last rx or tx is 0, use min limit",
+		h.Debug("last rx or tx is 0, use min limit",
 			"last_nic_rx_bytes", h.lastNicRxBytes, "last_nic_tx_bytes", h.lastNicTxBytes, "min", i2MBps(h.MinMBps))
 		h.lastNicRxBytes = curNicRxBytes
 		h.lastNicTxBytes = curNicTxBytes
@@ -216,7 +198,7 @@ func (h *HostRateLimiter) handleNetDevStats(stat *eth.NetDevStats) {
 	txMBps := float64(txSub) / 1024 / 1024 / float64(h.MonitorInterval)
 	rxLimit := calcLimit(rxMBps, float64(h.nicSpeedMBps), float64(h.ReservePercent), float64(h.MinMBps))
 	txLimit := calcLimit(txMBps, float64(h.nicSpeedMBps), float64(h.ReservePercent), float64(h.MinMBps))
-	h.Info("limit",
+	h.Info("nic limit",
 		"rx_limit", f2MBPS(rxLimit), "tx_limit", f2MBPS(txLimit),
 		"nic_rx_bytes", curNicRxBytes, "nic_tx_bytes", curNicTxBytes,
 		"max", i2MBps(h.nicSpeedMBps), "reserve_percent", h.ReservePercent, "min", i2MBps(h.MinMBps))
