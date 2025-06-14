@@ -11,7 +11,6 @@ import (
 func TestHost(t *testing.T) {
 	hc := NewHostRateLimiterCfg()
 	hc.Nic = "eth3"
-	hc.FixedMBps = 0
 	hc.MinMBps = 10
 	hc.MonitorInterval = 1
 	hc.ReservePercent = 10

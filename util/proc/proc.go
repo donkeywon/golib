@@ -5,7 +5,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/shirou/gopsutil/v3/process"
+	"github.com/shirou/gopsutil/v4/process"
 )
 
 var MustKillSignals = []syscall.Signal{syscall.SIGINT, syscall.SIGKILL}
