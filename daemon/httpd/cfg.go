@@ -5,10 +5,10 @@ import (
 )
 
 const (
-	DefaultWriteTimeout      = time.Second
-	DefaultReadTimeout       = time.Second
-	DefaultReadHeaderTimeout = time.Second
-	DefaultIdleTimeout       = time.Second
+	DefaultWriteTimeout      = 30 * time.Second
+	DefaultReadTimeout       = 60 * time.Second
+	DefaultReadHeaderTimeout = 5 * time.Second
+	DefaultIdleTimeout       = 30 * time.Second
 )
 
 type Cfg struct {
