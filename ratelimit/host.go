@@ -107,21 +107,25 @@ func (h *HostRateLimiter) Init() error {
 	return h.Runner.Init()
 }
 
-func (h *HostRateLimiter) RxWaitN(n int, timeout int) error {
-	ctx := h.Ctx()
+func (h *HostRateLimiter) RxWaitN(ctx context.Context, n int, timeout time.Duration) error {
+	if ctx == nil {
+		ctx = h.Ctx()
+	}
 	if timeout > 0 {
 		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(h.Ctx(), time.Second*time.Duration(timeout))
+		ctx, cancel = context.WithTimeout(h.Ctx(), timeout)
 		defer cancel()
 	}
 	return h.rxRL.WaitN(ctx, n)
 }
 
-func (h *HostRateLimiter) TxWaitN(n int, timeout int) error {
-	ctx := h.Ctx()
+func (h *HostRateLimiter) TxWaitN(ctx context.Context, n int, timeout time.Duration) error {
+	if ctx == nil {
+		ctx = h.Ctx()
+	}
 	if timeout > 0 {
 		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(h.Ctx(), time.Second*time.Duration(timeout))
+		ctx, cancel = context.WithTimeout(h.Ctx(), timeout)
 		defer cancel()
 	}
 	return h.txRL.WaitN(ctx, n)

@@ -51,26 +51,25 @@ func (frl *FixedRateLimiter) Init() error {
 	return frl.Runner.Init()
 }
 
-func (frl *FixedRateLimiter) waitN(n int, timeout int, rl *rate.Limiter) error {
+func (frl *FixedRateLimiter) waitN(ctx context.Context, n int, timeout time.Duration, rl *rate.Limiter) error {
 	if n == 0 {
 		return nil
 	}
 
-	ctx := context.Background()
 	var cancel context.CancelFunc
 	if timeout > 0 {
-		ctx, cancel = context.WithTimeout(ctx, time.Second*time.Duration(timeout))
+		ctx, cancel = context.WithTimeout(ctx, timeout)
 		defer cancel()
 	}
 	return rl.WaitN(ctx, n)
 }
 
-func (frl *FixedRateLimiter) RxWaitN(n int, timeout int) error {
-	return frl.waitN(n, timeout, frl.rxRl)
+func (frl *FixedRateLimiter) RxWaitN(ctx context.Context, n int, timeout time.Duration) error {
+	return frl.waitN(ctx, n, timeout, frl.rxRl)
 }
 
-func (frl *FixedRateLimiter) TxWaitN(n int, timeout int) error {
-	return frl.waitN(n, timeout, frl.txRl)
+func (frl *FixedRateLimiter) TxWaitN(ctx context.Context, n int, timeout time.Duration) error {
+	return frl.waitN(ctx, n, timeout, frl.txRl)
 }
 
 func (frl *FixedRateLimiter) SetRxLimit(n int, burst int) {

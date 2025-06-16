@@ -352,12 +352,12 @@ func (rl *rateLimit) Write(p []byte) (n int, err error) {
 
 	var e error
 	if rl.write {
-		e = rl.rl.TxWaitN(n, 0)
+		e = rl.rl.TxWaitN(rl.Common.Ctx(), n, 0)
 		if e != nil {
 			rl.log("write rate limit failed", n, e)
 		}
 	} else {
-		e = rl.rl.RxWaitN(n, 0)
+		e = rl.rl.RxWaitN(rl.Common.Ctx(), n, 0)
 		if e != nil {
 			rl.Warn("read rate limit failed", n, e)
 		}

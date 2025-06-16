@@ -1,6 +1,9 @@
 package ratelimit
 
 import (
+	"context"
+	"time"
+
 	"github.com/donkeywon/golib/errs"
 	"github.com/donkeywon/golib/plugin"
 	"github.com/donkeywon/golib/runner"
@@ -14,8 +17,8 @@ type Type string
 type RxTxRateLimiter interface {
 	runner.Runner
 	plugin.Plugin
-	RxWaitN(n int, timeout int) error
-	TxWaitN(n int, timeout int) error
+	RxWaitN(ctx context.Context, n int, timeout time.Duration) error
+	TxWaitN(ctx context.Context, n int, timeout time.Duration) error
 }
 
 type Cfg struct {
