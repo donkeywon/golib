@@ -17,7 +17,8 @@ func init() {
 const TypeFixed Type = "fixed"
 
 type FixedRateLimiterCfg struct {
-	N int
+	N     int
+	Burst int
 }
 
 func NewFixedRateLimiterCfg() *FixedRateLimiterCfg {
@@ -42,8 +43,11 @@ func (frl *FixedRateLimiter) Init() error {
 	if frl.N < 0 {
 		return errs.Errorf("fixed rate limiter N must ge 0: %d", frl.N)
 	}
-	frl.rxRl = rate.NewLimiter(rate.Limit(frl.N), frl.N)
-	frl.txRl = rate.NewLimiter(rate.Limit(frl.N), frl.N)
+	if frl.Burst <= 0 {
+		return errs.Errorf("fixed rate limiter Burst must gt 0: %d", frl.Burst)
+	}
+	frl.rxRl = rate.NewLimiter(rate.Limit(frl.N), frl.Burst)
+	frl.txRl = rate.NewLimiter(rate.Limit(frl.N), frl.Burst)
 	return frl.Runner.Init()
 }
 
