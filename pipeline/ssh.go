@@ -62,6 +62,7 @@ func (s *SSH) Init() error {
 
 func (s *SSH) Start() error {
 	defer s.Close()
+	defer s.Cancel()
 
 	if len(s.Readers()) > 0 {
 		s.sshCmd = sshWriteCmd(s.c.Path)

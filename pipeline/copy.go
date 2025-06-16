@@ -74,6 +74,7 @@ func (c *Copy) Start() error {
 }
 
 func (c *Copy) Stop() error {
+	defer c.Cancel()
 	switch rc := c.Reader().(type) {
 	case io.Closer:
 		return rc.Close()
