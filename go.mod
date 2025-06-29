@@ -3,7 +3,7 @@ module github.com/donkeywon/golib
 go 1.24.0
 
 require (
-	github.com/DeRuina/timberjack v1.3.8
+	github.com/DeRuina/timberjack v1.3.9
 	github.com/avast/retry-go/v4 v4.7.0
 	github.com/earthboundkid/versioninfo/v2 v2.24.1
 	github.com/fsnotify/fsnotify v1.9.0
@@ -11,12 +11,13 @@ require (
 	github.com/goccy/go-yaml v1.18.0
 	github.com/icza/backscanner v0.0.0-20241124160932-dff01ac50250
 	github.com/jessevdk/go-flags v1.6.1
-	github.com/klauspost/compress v1.18.0
+	github.com/klauspost/compress v1.18.1
 	github.com/klauspost/pgzip v1.2.6
 	github.com/pelletier/go-toml/v2 v2.2.4
 	github.com/petermattis/goid v0.0.0-20250904145737-900bdf8bb490
+	github.com/pierrec/lz4/v4 v4.1.22
 	github.com/pkg/profile v1.7.0
-	github.com/prometheus/procfs v0.17.0
+	github.com/prometheus/procfs v0.19.1
 	github.com/shirou/gopsutil/v4 v4.25.9
 	github.com/stretchr/testify v1.11.1
 	github.com/tidwall/gjson v1.18.0
@@ -44,7 +45,6 @@ require (
 	github.com/kr/pretty v0.3.1 // indirect
 	github.com/leodido/go-urn v1.4.0 // indirect
 	github.com/lufia/plan9stats v0.0.0-20251013123823-9fd1530e3ec3 // indirect
-	github.com/pierrec/lz4/v4 v4.1.22 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/power-devops/perfstat v0.0.0-20240221224432-82ca36839d55 // indirect
 	github.com/rogpeppe/go-internal v1.14.1 // indirect
