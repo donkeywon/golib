@@ -53,6 +53,8 @@ func Which() Type {
 		return TypeAliyun
 	case IsAzure():
 		return TypeAzure
+	case IsTencent():
+		return TypeTencent
 	default:
 		return TypeUnknown
 	}
