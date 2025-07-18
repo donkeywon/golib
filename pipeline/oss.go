@@ -77,7 +77,14 @@ func (o *OSSWriter) Init() error {
 	if o.OSSCfg.Append {
 		o.Writer.WrapWriter(createOSSAppendWriter(o.Ctx(), o.OSSCfg))
 	} else {
-		o.Writer.WrapWriter(createOSSMultipartWriter(o.Ctx(), o.OSSCfg))
+		mw := createOSSMultipartWriter(o.Ctx(), o.OSSCfg)
+		mw.OnUploadPart(func(uploadWorker int, partNo int, partSize int, etag string, err error) {
+			o.Debug("upload part", "upload_worker", uploadWorker, "part_no", partNo, "part_size", partSize, "etag", etag, "err", err)
+		})
+		mw.OnComplete(func(uploadID string, body string, err error) {
+			o.Debug("complete upload", "upload_id", uploadID, "body", body, "err", err)
+		})
+		o.Writer.WrapWriter(mw)
 	}
 	return o.Writer.Init()
 }
