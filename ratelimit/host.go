@@ -101,6 +101,10 @@ func (h *HostRateLimiter) Init() error {
 	return h.Runner.Init()
 }
 
+func (h *HostRateLimiter) NicSpeedMBps() int {
+	return h.nicSpeedMBps
+}
+
 func (h *HostRateLimiter) RxWaitN(ctx context.Context, n int, timeout time.Duration) error {
 	if ctx == nil {
 		ctx = h.Ctx()
