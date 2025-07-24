@@ -34,7 +34,7 @@ func TestMain(m *testing.M) {
 }
 
 func TestTaskd(t *testing.T) {
-	runner.StartBG(td)
+	runner.Start(td)
 
 	maxNum := 10
 	for i := range maxNum {

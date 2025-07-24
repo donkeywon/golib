@@ -13,7 +13,7 @@ func TestHost(t *testing.T) {
 	hc.Nic = "eth3"
 	hc.MinMBps = 10
 	hc.MonitorInterval = 1
-	hc.ReservePercent = 10
+	hc.MaxPercent = 10
 
 	h := NewHostRateLimiter()
 	h.HostRateLimiterCfg = hc

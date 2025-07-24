@@ -95,7 +95,7 @@ func RunCtx(ctx context.Context, command ...string) *Result {
 	return r
 }
 
-// Start start a command
+// Start command
 // you can get pid from Result.Pid, 0 means start fail.
 func Start(ctx context.Context, cmd *exec.Cmd, cfg *Cfg, beforeStart ...func(cmd *exec.Cmd)) *Result {
 	r := &Result{

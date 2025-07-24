@@ -150,8 +150,7 @@ func (p *Pipeline) Start() error {
 	for _, w := range p.ws {
 		go func(w Worker) {
 			defer wg.Done()
-			runner.Start(w)
-			e := w.Err()
+			e := runner.Run(w)
 			if e != nil {
 				errMu.Lock()
 				err = errors.Join(err, e)

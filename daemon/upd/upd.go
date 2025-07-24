@@ -139,14 +139,11 @@ func (u *upd) upgrade(vi *VerInfo) bool {
 	go func() {
 		u.Info("stopping all")
 		runner.StopAndWait(u.Parent())
-		if u.Parent().ChildrenErr() != nil {
-			u.Error("stop all failed", u.Parent().ChildrenErr())
-		}
 	}()
 
 	select {
 	case <-time.After(time.Minute):
-		u.Error("stop all timeout", u.Parent().ChildrenErr())
+		u.Error("stop all timeout", u.Parent().Err())
 	case <-u.allDoneExceptMe:
 		u.Info("all stopped")
 	}
@@ -185,6 +182,5 @@ func downloadPackage(downloadDstPath string, storeCfg *pipeline.ReaderCfg) error
 		return errs.Wrap(err, "init download pipeline failed")
 	}
 
-	runner.Start(p)
-	return p.Err()
+	return runner.Run(p)
 }
