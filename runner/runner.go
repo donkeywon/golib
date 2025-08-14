@@ -26,7 +26,6 @@ type Runner interface {
 	Ctx() context.Context
 	SetCtx(context.Context)
 	Cancel()
-	initCtx()
 
 	Inherit(Runner)
 	Parent() Runner
@@ -48,13 +47,19 @@ type Runner interface {
 
 // Init a runner.
 func Init(r Runner) (err error) {
+	if r == nil {
+		panic("nil runner")
+	}
+	if r.Ctx() == nil {
+		panic("nil runner context")
+	}
+
 	defer func() {
 		p := recover()
 		if p != nil {
 			err = errs.PanicToErrWithMsg(p, fmt.Sprintf("panic on %s init", r.Name()))
 		}
 	}()
-	r.initCtx()
 	r.Info("init")
 	err = r.Init()
 	if err != nil {
@@ -259,9 +264,7 @@ func (br *baseRunner) Stop() error {
 
 func (br *baseRunner) Inherit(r Runner) {
 	br.WithLoggerFrom(r)
-	if br.ctx == nil {
-		br.SetCtx(r.Ctx())
-	}
+	br.SetCtx(r.Ctx())
 	br.parent = r
 }
 
@@ -273,7 +276,10 @@ func (br *baseRunner) SetCtx(ctx context.Context) {
 	if ctx == nil {
 		panic("nil context")
 	}
-	br.ctx = ctx
+	if br.ctx != nil {
+		panic("context already set")
+	}
+	br.ctx, br.cancel = context.WithCancel(ctx)
 }
 
 func (br *baseRunner) Cancel() {
