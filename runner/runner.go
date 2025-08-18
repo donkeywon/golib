@@ -34,10 +34,6 @@ type Runner interface {
 	Stopping() <-chan struct{}
 	StopDone() <-chan struct{}
 	Done() <-chan struct{}
-	markStarted() bool
-	markStopping() bool
-	markStopDone() bool
-	markDone() bool
 
 	AppendError(err ...error)
 	Err() error
@@ -57,7 +53,11 @@ func Init(r Runner) (err error) {
 	defer func() {
 		p := recover()
 		if p != nil {
-			err = errs.PanicToErrWithMsg(p, fmt.Sprintf("panic on %s init", r.Name()))
+			if err == nil {
+				err = errs.PanicToErrWithMsg(p, fmt.Sprintf("panic on %s init", r.Name()))
+			} else {
+				err = errors.Join(err, errs.PanicToErrWithMsg(p, fmt.Sprintf("panic on %s init", r.Name())))
+			}
 		}
 	}()
 	r.Info("init")
@@ -82,7 +82,7 @@ func Start(r Runner) {
 }
 
 func run(r Runner) {
-	if !r.markStarted() {
+	if !markStarted(r) {
 		r.Info("already started")
 		return
 	}
@@ -93,16 +93,16 @@ func run(r Runner) {
 			r.AppendError(errs.PanicToErrWithMsg(err, fmt.Sprintf("panic on %s running", r.Name())))
 		}
 
-		if r.markStopping() {
+		if markStopping(r) {
 			// At this point
 			// 1. stopping or canceled before call runner.Run(r)
 			// 2. done before call runner.Stop(r)
 			// both need to markStopDone
-			r.markStopDone()
+			markStopDone(r)
 		}
 		<-r.StopDone()
 		r.Info("done")
-		r.markDone()
+		markDone(r)
 		r.Cancel()
 	}()
 
@@ -150,7 +150,7 @@ func StopAndWait(r Runner) {
 }
 
 func stop(r Runner, wait bool) {
-	if !r.markStopping() {
+	if !markStopping(r) {
 		r.Info("already stopping")
 		return
 	}
@@ -161,7 +161,7 @@ func stop(r Runner, wait bool) {
 	case <-r.Started():
 		safeStop(r)
 		r.Info("stop done")
-		r.markStopDone()
+		markStopDone(r)
 		if wait {
 			<-r.Done()
 		}
@@ -174,8 +174,8 @@ func stop(r Runner, wait bool) {
 		r.Info("stopping before started")
 		safeStop(r)
 		r.Info("stop done before started")
-		r.markStopDone()
-		r.markDone()
+		markStopDone(r)
+		markDone(r)
 	}
 }
 
@@ -189,10 +189,55 @@ func safeStop(r Runner) {
 	r.AppendError(r.Stop())
 }
 
+type startedMarker interface {
+	MarkStarted() bool
+}
+
+type stoppingMarker interface {
+	MarkStopping() bool
+}
+
+type stopDoneMarker interface {
+	MarkStopDone() bool
+}
+
+type doneMarker interface {
+	MarkDone() bool
+}
+
+func markStarted(r Runner) bool {
+	if sm, ok := r.(startedMarker); ok {
+		return sm.MarkStarted()
+	}
+	return true
+}
+
+func markStopping(r Runner) bool {
+	if sm, ok := r.(stoppingMarker); ok {
+		return sm.MarkStopping()
+	}
+	return true
+}
+
+func markStopDone(r Runner) bool {
+	if sm, ok := r.(stopDoneMarker); ok {
+		sm.MarkStopDone()
+	}
+	return true
+}
+
+func markDone(r Runner) bool {
+	if sm, ok := r.(doneMarker); ok {
+		sm.MarkDone()
+	}
+	return true
+}
+
 type baseRunner struct {
 	kvs.NoErrKVS
 	log.Logger
 
+	initialized  bool
 	ctx          context.Context
 	cancel       context.CancelFunc
 	err          error
@@ -224,6 +269,9 @@ func newBase(name string) Runner {
 }
 
 func (br *baseRunner) SetName(n string) {
+	if br.initialized {
+		panic("set name after initialized")
+	}
 	br.name = n
 }
 
@@ -232,6 +280,9 @@ func (br *baseRunner) Name() string {
 }
 
 func (br *baseRunner) Init() error {
+	if br.initialized {
+		panic("init twice")
+	}
 	if br.Logger == nil {
 		br.Logger = log.NewNopLogger()
 	}
@@ -250,6 +301,7 @@ func (br *baseRunner) Init() error {
 	if br.NoErrKVS == nil {
 		br.NoErrKVS = kvs.NewMapKVS()
 	}
+	br.initialized = true
 	return nil
 }
 
@@ -263,6 +315,12 @@ func (br *baseRunner) Stop() error {
 }
 
 func (br *baseRunner) Inherit(r Runner) {
+	if br.parent != nil {
+		panic("inherit twice")
+	}
+	if br.initialized {
+		panic("inherit after initialized")
+	}
 	br.WithLoggerFrom(r)
 	br.SetCtx(r.Ctx())
 	br.parent = r
@@ -273,6 +331,9 @@ func (br *baseRunner) Parent() Runner {
 }
 
 func (br *baseRunner) SetCtx(ctx context.Context) {
+	if br.initialized {
+		panic("set context after initialized")
+	}
 	if ctx == nil {
 		panic("nil context")
 	}
@@ -289,13 +350,6 @@ func (br *baseRunner) Cancel() {
 			br.cancel()
 		}
 	})
-}
-
-func (br *baseRunner) initCtx() {
-	if br.ctx == nil {
-		br.ctx = context.Background()
-	}
-	br.ctx, br.cancel = context.WithCancel(br.ctx)
 }
 
 func (br *baseRunner) Ctx() context.Context {
@@ -323,7 +377,7 @@ func (br *baseRunner) WithLoggerFrom(r Runner, kvs ...any) {
 	br.WithLoggerFields(kvs...)
 }
 
-func (br *baseRunner) markStarted() bool {
+func (br *baseRunner) MarkStarted() bool {
 	marked := false
 	br.startedOnce.Do(func() {
 		close(br.started)
@@ -332,7 +386,7 @@ func (br *baseRunner) markStarted() bool {
 	return marked
 }
 
-func (br *baseRunner) markStopping() bool {
+func (br *baseRunner) MarkStopping() bool {
 	marked := false
 	br.stoppingOnce.Do(func() {
 		close(br.stopping)
@@ -341,7 +395,7 @@ func (br *baseRunner) markStopping() bool {
 	return marked
 }
 
-func (br *baseRunner) markStopDone() bool {
+func (br *baseRunner) MarkStopDone() bool {
 	marked := false
 	br.stopDoneOnce.Do(func() {
 		close(br.stopDone)
@@ -350,7 +404,7 @@ func (br *baseRunner) markStopDone() bool {
 	return marked
 }
 
-func (br *baseRunner) markDone() bool {
+func (br *baseRunner) MarkDone() bool {
 	marked := false
 	br.doneOnce.Do(func() {
 		close(br.done)
