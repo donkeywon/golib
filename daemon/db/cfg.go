@@ -8,7 +8,7 @@ const (
 	DefaultEnableExportMetrics = true
 )
 
-type DBCfg struct {
+type PoolCfg struct {
 	Name        string        `yaml:"name"`
 	Type        string        `yaml:"type"`
 	DSN         string        `yaml:"dsn"`
@@ -19,8 +19,8 @@ type DBCfg struct {
 }
 
 type Cfg struct {
-	DB                  []*DBCfg `yaml:"db"`
-	EnableExportMetrics bool     `env:"DB_ENABLE_EXPORT_METRICS"   yaml:"enableExportMetrics"   flag-long:"db-enable-export-metrics"   flag-description:"export database conn pool metrics with prometheus protocol"`
+	Pools               []*PoolCfg `yaml:"pools"`
+	EnableExportMetrics bool       `env:"ENABLE_EXPORT_METRICS"   yaml:"enableExportMetrics"   long:"enable-export-metrics"   description:"export database conn pool metrics with prometheus protocol"`
 }
 
 func NewCfg() *Cfg {

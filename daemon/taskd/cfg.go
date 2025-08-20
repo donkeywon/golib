@@ -13,7 +13,7 @@ type PoolCfg struct {
 }
 
 type Cfg struct {
-	Pools []*PoolCfg `json:"pools" yaml:"pools" env:"TASK_POOLS"`
+	Pools []*PoolCfg `json:"pools" yaml:"pools" env:"POOLS"`
 }
 
 func NewCfg() *Cfg {
