@@ -30,6 +30,10 @@ type Runner interface {
 	Inherit(Runner)
 	Parent() Runner
 
+	MarkStarted() bool
+	MarkStopping() bool
+	MarkStopDone() bool
+	MarkDone() bool
 	Started() <-chan struct{}
 	Stopping() <-chan struct{}
 	StopDone() <-chan struct{}
@@ -82,7 +86,7 @@ func Start(r Runner) {
 }
 
 func run(r Runner) {
-	if !markStarted(r) {
+	if !r.MarkStarted() {
 		r.Info("already started")
 		return
 	}
@@ -93,16 +97,16 @@ func run(r Runner) {
 			r.AppendError(errs.PanicToErrWithMsg(err, fmt.Sprintf("panic on %s running", r.Name())))
 		}
 
-		if markStopping(r) {
+		if r.MarkStopping() {
 			// At this point
 			// 1. stopping or canceled before call runner.Run(r)
 			// 2. done before call runner.Stop(r)
 			// both need to markStopDone
-			markStopDone(r)
+			r.MarkStopDone()
 		}
 		<-r.StopDone()
 		r.Info("done")
-		markDone(r)
+		r.MarkDone()
 		r.Cancel()
 	}()
 
@@ -150,18 +154,18 @@ func StopAndWait(r Runner) {
 }
 
 func stop(r Runner, wait bool) {
-	if !markStopping(r) {
-		r.Info("already stopping")
+	if !r.MarkStopping() {
+		r.Info("already stopping", "wait", wait)
 		return
 	}
 
-	r.Info("stopping")
+	r.Info("stopping", "wait", wait)
 
 	select {
 	case <-r.Started():
 		safeStop(r)
 		r.Info("stop done")
-		markStopDone(r)
+		r.MarkStopDone()
 		if wait {
 			<-r.Done()
 		}
@@ -174,8 +178,8 @@ func stop(r Runner, wait bool) {
 		r.Info("stopping before started")
 		safeStop(r)
 		r.Info("stop done before started")
-		markStopDone(r)
-		markDone(r)
+		r.MarkStopDone()
+		r.MarkDone()
 	}
 }
 
@@ -187,50 +191,6 @@ func safeStop(r Runner) {
 		}
 	}()
 	r.AppendError(r.Stop())
-}
-
-type startedMarker interface {
-	MarkStarted() bool
-}
-
-type stoppingMarker interface {
-	MarkStopping() bool
-}
-
-type stopDoneMarker interface {
-	MarkStopDone() bool
-}
-
-type doneMarker interface {
-	MarkDone() bool
-}
-
-func markStarted(r Runner) bool {
-	if sm, ok := r.(startedMarker); ok {
-		return sm.MarkStarted()
-	}
-	return true
-}
-
-func markStopping(r Runner) bool {
-	if sm, ok := r.(stoppingMarker); ok {
-		return sm.MarkStopping()
-	}
-	return true
-}
-
-func markStopDone(r Runner) bool {
-	if sm, ok := r.(stopDoneMarker); ok {
-		sm.MarkStopDone()
-	}
-	return true
-}
-
-func markDone(r Runner) bool {
-	if sm, ok := r.(doneMarker); ok {
-		sm.MarkDone()
-	}
-	return true
 }
 
 type baseRunner struct {
@@ -322,7 +282,9 @@ func (br *baseRunner) Inherit(r Runner) {
 		panic("inherit after initialized")
 	}
 	br.WithLoggerFrom(r)
-	br.SetCtx(r.Ctx())
+	if br.ctx == nil {
+		br.SetCtx(r.Ctx())
+	}
 	br.parent = r
 }
 
@@ -383,6 +345,7 @@ func (br *baseRunner) MarkStarted() bool {
 		close(br.started)
 		marked = true
 	})
+	br.Debug("mark started", "marked", marked)
 	return marked
 }
 
@@ -392,6 +355,7 @@ func (br *baseRunner) MarkStopping() bool {
 		close(br.stopping)
 		marked = true
 	})
+	br.Debug("mark stopping", "marked", marked)
 	return marked
 }
 
@@ -401,6 +365,7 @@ func (br *baseRunner) MarkStopDone() bool {
 		close(br.stopDone)
 		marked = true
 	})
+	br.Debug("mark stop done", "marked", marked)
 	return marked
 }
 
@@ -410,6 +375,7 @@ func (br *baseRunner) MarkDone() bool {
 		close(br.done)
 		marked = true
 	})
+	br.Debug("mark done", "marked", marked)
 	return marked
 }
 

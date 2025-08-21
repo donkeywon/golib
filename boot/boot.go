@@ -134,7 +134,7 @@ func (b *Booter) Init() error {
 		return errs.Wrap(err, "build flag parser failed")
 	}
 
-	err = b.loadOptions()
+	err = b.loadCfgFromFlags()
 	if err != nil {
 		if e, ok := err.(*flags.Error); ok && e.Type == flags.ErrHelp {
 			os.Exit(0)
@@ -240,6 +240,12 @@ func (b *Booter) Start() error {
 }
 
 func (b *Booter) Stop() error {
+	select {
+	case <-b.Ctx().Done():
+		// Booter cancelled, all daemons are stopping now
+		return nil
+	default:
+	}
 	for _, daemon := range b.daemons {
 		runner.StopAndWait(daemon)
 	}
@@ -251,8 +257,8 @@ func (b *Booter) initDaemons(ctx context.Context) error {
 	b.daemons = make([]Daemon, len(_daemonTypes))
 	for i, daemonType := range _daemonTypes {
 		daemon := plugin.CreateWithCfg[DaemonType, Daemon](daemonType, b.cfgMap[string(daemonType)])
-		daemon.Inherit(b)
 		daemon.SetCtx(ctx)
+		daemon.Inherit(b)
 		err = runner.Init(daemon)
 		if err != nil {
 			return errs.Wrapf(err, "init daemon %s failed", daemonType)
@@ -262,7 +268,7 @@ func (b *Booter) initDaemons(ctx context.Context) error {
 	return nil
 }
 
-func (b *Booter) loadOptions() error {
+func (b *Booter) loadCfgFromFlags() error {
 	_, err := b.flagParser.Parse()
 	return err
 }
@@ -312,7 +318,7 @@ func (b *Booter) loadCfgFromFile() error {
 }
 
 func (b *Booter) loadCfg() error {
-	return errors.Join(b.loadCfgFromFile(), b.loadOptions())
+	return errors.Join(b.loadCfgFromFile(), b.loadCfgFromFlags())
 }
 
 func (b *Booter) validateCfg() error {
@@ -383,7 +389,11 @@ func buildFlagParser(base *options, cfgMap map[string]any, cfgKeys []string) (*f
 			return nil, errs.Wrapf(err, "add flags failed: %s", name)
 		}
 		g.Namespace = name
-		g.EnvNamespace = strings.ToUpper(base.envPrefix + parser.EnvNamespaceDelimiter + name)
+		if base.envPrefix != "" {
+			g.EnvNamespace = strings.ToUpper(base.envPrefix + parser.EnvNamespaceDelimiter + name)
+		} else {
+			g.EnvNamespace = strings.ToUpper(name)
+		}
 	}
 
 	return parser, nil
