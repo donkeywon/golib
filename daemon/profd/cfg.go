@@ -22,8 +22,8 @@ type Cfg struct {
 	EnableHTTPProf       bool   `yaml:"enableHTTPProf" env:"ENABLE_HTTP_PROF" long:"enable-http-prof" description:"enable prof over http, depends on httpd"`
 	EnableWebProf        bool   `yaml:"enableWebProf"  env:"ENABLE_WEB_PROF"  long:"enable-web-prof"  description:"enable prof over web, depends on httpd"`
 	EnableWebPrettyTrace bool   `yaml:"enableWebPrettyTrace" env:"=ENABLE_WEB_PRETTY_TRACE" long:"enable-web-pretty-trace" description:"enable pretty trace over web, depends on httpd"`
-	WebAuthUser          string `yaml:"webAuthUser" env:"WEB_AUTH_USER" long:"web-auth-user" description:"web auth username"`
-	WebAuthPwd           string `yaml:"webAuthPwd" env:"WEB_AUTH_PWD" long:"web-auth-pwd" description:"web auth password"`
+	WebAuthUser          string `yaml:"webAuthUser" env:"WEB_AUTH_USER"`
+	WebAuthPwd           string `yaml:"webAuthPwd" env:"WEB_AUTH_PWD"`
 
 	EnableGoPs bool   `yaml:"enableGoPs" env:"ENABLE_GOPS" long:"enable-gops" =description:"enable gops agent"`
 	GoPsAddr   string `yaml:"goPsAddr"   env:"GOPS_ADDR"   long:"gops-addr"   =description:"gops agent listen addr"`
