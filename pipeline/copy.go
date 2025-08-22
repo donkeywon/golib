@@ -48,10 +48,16 @@ func (c *Copy) Start() error {
 	bs := make([]byte, bufSize)
 
 	w := c.Writer()
+	if w == nil {
+		return errs.New("writer is nil")
+	}
 	if ww, ok := w.(Writer); ok {
 		w = ww.DirectWriter()
 	}
 	r := c.Reader()
+	if r == nil {
+		return errs.New("reader is nil")
+	}
 	if rr, ok := r.(Reader); ok {
 		r = rr.DirectReader()
 	}
