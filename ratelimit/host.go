@@ -3,6 +3,7 @@ package ratelimit
 import (
 	"context"
 	"fmt"
+	"sync/atomic"
 	"time"
 
 	"github.com/donkeywon/golib/errs"
@@ -41,6 +42,13 @@ type HostRateLimiter struct {
 
 	rxRL *rate.Limiter
 	txRL *rate.Limiter
+
+	selfRxPass      uint64
+	selfTxPass      uint64
+	selfLastRxPass  uint64
+	selfLastTxPass  uint64
+	selfRxSpeedMBps float64
+	selfTxSpeedMBps float64
 
 	lastNicRxBytes uint64
 	lastNicTxBytes uint64
@@ -114,7 +122,11 @@ func (h *HostRateLimiter) RxWaitN(ctx context.Context, n int, timeout time.Durat
 		ctx, cancel = context.WithTimeout(h.Ctx(), timeout)
 		defer cancel()
 	}
-	return h.rxRL.WaitN(ctx, n)
+	err := h.rxRL.WaitN(ctx, n)
+	if err == nil {
+		atomic.AddUint64(&h.selfRxPass, uint64(n))
+	}
+	return err
 }
 
 func (h *HostRateLimiter) TxWaitN(ctx context.Context, n int, timeout time.Duration) error {
@@ -126,7 +138,11 @@ func (h *HostRateLimiter) TxWaitN(ctx context.Context, n int, timeout time.Durat
 		ctx, cancel = context.WithTimeout(h.Ctx(), timeout)
 		defer cancel()
 	}
-	return h.txRL.WaitN(ctx, n)
+	err := h.txRL.WaitN(ctx, n)
+	if err == nil {
+		atomic.AddUint64(&h.selfTxPass, uint64(n))
+	}
+	return err
 }
 
 func (h *HostRateLimiter) monitor() {
@@ -139,6 +155,8 @@ func (h *HostRateLimiter) monitor() {
 		case <-h.Stopping():
 			return
 		case <-t.C:
+			h.monitorSelfSpeed()
+
 			stats, err := eth.GetNetDevStats()
 			if err != nil {
 				h.setRxTxLimit(float64(h.MinMBps), float64(h.MinMBps))
@@ -155,6 +173,15 @@ func (h *HostRateLimiter) monitor() {
 			h.handleNetDevStats(stats[nic])
 		}
 	}
+}
+
+func (h *HostRateLimiter) monitorSelfSpeed() {
+	rxPass := atomic.LoadUint64(&h.selfRxPass)
+	txPass := atomic.LoadUint64(&h.selfTxPass)
+	h.selfRxSpeedMBps = float64(rxPass-h.selfLastRxPass) / 1048576 / float64(h.MonitorInterval)
+	h.selfTxSpeedMBps = float64(txPass-h.selfLastTxPass) / 1048576 / float64(h.MonitorInterval)
+	h.selfLastRxPass = rxPass
+	h.selfLastTxPass = txPass
 }
 
 func (h *HostRateLimiter) setRxTxLimit(rxL float64, txL float64) {
@@ -194,8 +221,8 @@ func (h *HostRateLimiter) handleNetDevStats(stat *eth.NetDevStats) {
 
 	rxMBps := float64(rxSub) / float64(1048576) / float64(h.MonitorInterval)
 	txMBps := float64(txSub) / float64(1048576) / float64(h.MonitorInterval)
-	rxLimit := calcLimit(rxMBps, h.maxMBps, h.MinMBps)
-	txLimit := calcLimit(txMBps, h.maxMBps, h.MinMBps)
+	rxLimit := calcLimit(rxMBps, h.maxMBps, h.MinMBps, h.nicSpeedMBps, h.selfRxSpeedMBps)
+	txLimit := calcLimit(txMBps, h.maxMBps, h.MinMBps, h.nicSpeedMBps, h.selfTxSpeedMBps)
 	h.Info("nic limit",
 		"nic_speed", i2MBps(h.nicSpeedMBps), "rx_speed", f2MBps(rxMBps), "tx_speed", f2MBps(txMBps),
 		"rx_limit", f2MBps(rxLimit), "tx_limit", f2MBps(txLimit),
@@ -216,10 +243,28 @@ func i2MBps(i int) string {
 	return fmt.Sprintf("%d MB/s", i)
 }
 
-func calcLimit(cur float64, max int, min int) float64 {
-	limit := float64(max) - cur
+func calcLimit(cur float64, max int, min int, nic int, self float64) float64 {
+	// cur = self + others
+
+	maxOthers := nic - max
+	speedOthers := cur - self
+	if speedOthers <= float64(maxOthers) {
+		// speedOthers is smaller than nicSpeed - max, so I can use max
+		return float64(max)
+	}
+
+	// speedOthers is larger than maxOthers
+	// if cur is 95% of nic (in fact, cur is always close to nic but not equal, because cur is calculated),
+	// we think nic bandwidth is fully used, so I use min
+	if cur >= float64(nic)*0.95 {
+		return float64(min)
+	}
+
+	// if nic bandwidth is not full, I can use nic - cur
+	limit := float64(nic) - cur
 	if limit <= float64(min) {
 		return float64(min)
 	}
+
 	return limit
 }
