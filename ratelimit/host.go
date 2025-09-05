@@ -221,8 +221,8 @@ func (h *HostRateLimiter) handleNetDevStats(stat *eth.NetDevStats) {
 
 	rxMBps := float64(rxSub) / float64(1048576) / float64(h.MonitorInterval)
 	txMBps := float64(txSub) / float64(1048576) / float64(h.MonitorInterval)
-	rxLimit := calcLimit(rxMBps, h.maxMBps, h.MinMBps, h.nicSpeedMBps, h.selfRxSpeedMBps)
-	txLimit := calcLimit(txMBps, h.maxMBps, h.MinMBps, h.nicSpeedMBps, h.selfTxSpeedMBps)
+	rxLimit := calcLimit(rxMBps, float64(h.maxMBps), float64(h.MinMBps), float64(h.nicSpeedMBps), h.selfRxSpeedMBps)
+	txLimit := calcLimit(txMBps, float64(h.maxMBps), float64(h.MinMBps), float64(h.nicSpeedMBps), h.selfTxSpeedMBps)
 	h.Info("nic limit",
 		"nic_speed", i2MBps(h.nicSpeedMBps), "rx_speed", f2MBps(rxMBps), "tx_speed", f2MBps(txMBps),
 		"rx_limit", f2MBps(rxLimit), "tx_limit", f2MBps(txLimit),
@@ -243,28 +243,28 @@ func i2MBps(i int) string {
 	return fmt.Sprintf("%d MB/s", i)
 }
 
-func calcLimit(cur float64, max int, min int, nic int, self float64) float64 {
+func calcLimit(cur float64, max float64, min float64, nic float64, self float64) float64 {
 	// cur = self + others
 
-	maxOthers := nic - max
-	speedOthers := cur - self
-	if speedOthers <= float64(maxOthers) {
-		// speedOthers is smaller than nicSpeed - max, so I can use max
-		return float64(max)
-	}
-
-	// speedOthers is larger than maxOthers
 	// if cur is 95% of nic (in fact, cur is always close to nic but not equal, because cur is calculated),
 	// we think nic bandwidth is fully used, so I use min
-	if cur >= float64(nic)*0.95 {
-		return float64(min)
+	nic = nic * 0.95
+	if cur >= nic {
+		return min
 	}
 
-	// if nic bandwidth is not full, I can use nic - cur
-	limit := float64(nic) - cur
-	if limit <= float64(min) {
-		return float64(min)
+	// nic bandwidth is not fully used
+	// speedOthers is greater than nic - max; I use (nic-cur)/2,
+	speedOthers := cur - self
+	if speedOthers >= nic-max {
+		limit := (nic - cur) / 2
+		if limit <= min {
+			limit = min
+		}
+
+		return limit
 	}
 
-	return limit
+	// speedOthers is smaller than nic - max，I can use max
+	return max
 }

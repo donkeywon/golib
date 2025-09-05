@@ -41,7 +41,7 @@ var (
 	_daemonTypes       []DaemonType // dependencies in order
 	_additionalCfgKeys []string
 	_additionalCfgMap  = make(map[string]any)
-	_b                 *Booter
+	_b                 runner.Runner
 )
 
 func Boot(opt ...Option) {
@@ -98,7 +98,7 @@ type options struct {
 	onConfigLoaded OnConfigLoadedFunc
 }
 
-type Booter struct {
+type booter struct {
 	runner.Runner
 	*options
 	cfgMap     map[string]any
@@ -107,8 +107,8 @@ type Booter struct {
 	daemons    []Daemon
 }
 
-func New(opt ...Option) *Booter {
-	b := &Booter{
+func New(opt ...Option) runner.Runner {
+	b := &booter{
 		Runner:  runner.Create("boot"),
 		logCfg:  log.NewCfg(),
 		options: &options{},
@@ -121,7 +121,7 @@ func New(opt ...Option) *Booter {
 	return b
 }
 
-func (b *Booter) Init() error {
+func (b *booter) Init() error {
 	var err error
 
 	// use default logger as temp logger
@@ -183,7 +183,7 @@ func (b *Booter) Init() error {
 	return b.Runner.Init()
 }
 
-func (b *Booter) Start() error {
+func (b *booter) Start() error {
 	b.Info("starting", "version", buildinfo.Version, "build_time", buildinfo.BuildTime, "revision", buildinfo.Revision)
 
 	errg, ctx := errgroup.WithContext(b.Ctx())
@@ -239,7 +239,7 @@ func (b *Booter) Start() error {
 	return nil
 }
 
-func (b *Booter) Stop() error {
+func (b *booter) Stop() error {
 	select {
 	case <-b.Ctx().Done():
 		// Booter cancelled, all daemons are stopping now
@@ -252,7 +252,7 @@ func (b *Booter) Stop() error {
 	return nil
 }
 
-func (b *Booter) initDaemons(ctx context.Context) error {
+func (b *booter) initDaemons(ctx context.Context) error {
 	var err error
 	b.daemons = make([]Daemon, len(_daemonTypes))
 	for i, daemonType := range _daemonTypes {
@@ -268,12 +268,12 @@ func (b *Booter) initDaemons(ctx context.Context) error {
 	return nil
 }
 
-func (b *Booter) loadCfgFromFlags() error {
+func (b *booter) loadCfgFromFlags() error {
 	_, err := b.flagParser.Parse()
 	return err
 }
 
-func (b *Booter) loadCfgFromFile() error {
+func (b *booter) loadCfgFromFile() error {
 	cfgPath := b.options.CfgPath
 	if cfgPath == "" {
 		cfgPath = consts.CfgPath
@@ -317,11 +317,11 @@ func (b *Booter) loadCfgFromFile() error {
 	return nil
 }
 
-func (b *Booter) loadCfg() error {
+func (b *booter) loadCfg() error {
 	return errors.Join(b.loadCfgFromFile(), b.loadCfgFromFlags())
 }
 
-func (b *Booter) validateCfg() error {
+func (b *booter) validateCfg() error {
 	for name, cfg := range b.cfgMap {
 		if !reflects.IsStructPointer(cfg) {
 			continue
@@ -334,11 +334,11 @@ func (b *Booter) validateCfg() error {
 	return nil
 }
 
-func (b *Booter) buildLogger() (log.Logger, error) {
+func (b *booter) buildLogger() (log.Logger, error) {
 	return b.logCfg.Build()
 }
 
-func (b *Booter) buildCfgMap() (map[string]any, []string) {
+func (b *booter) buildCfgMap() (map[string]any, []string) {
 	cfgKeys := make([]string, 0, len(_daemonTypes)+len(_additionalCfgKeys)+1)
 	cfgKeys = append(cfgKeys, "log")
 
