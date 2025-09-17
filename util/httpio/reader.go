@@ -53,7 +53,7 @@ type Reader struct {
 
 func NewReader(ctx context.Context, timeout time.Duration, url string, opts ...Option) *Reader {
 	if ctx == nil {
-		ctx = context.Background()
+		panic("nil context")
 	}
 
 	r := &Reader{

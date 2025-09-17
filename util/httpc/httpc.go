@@ -50,7 +50,7 @@ func Do(ctx context.Context, timeout time.Duration, method string, url string, o
 
 func DoWithClient(ctx context.Context, client *http.Client, timeout time.Duration, method string, url string, opts ...Option) (*http.Response, error) {
 	if ctx == nil {
-		ctx = context.Background()
+		panic("nil context")
 	}
 	if timeout > 0 {
 		var cancel context.CancelFunc
