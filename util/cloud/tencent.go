@@ -2,6 +2,7 @@ package cloud
 
 import (
 	"bytes"
+	"context"
 	"net/http"
 	"strconv"
 
@@ -43,7 +44,7 @@ func GetTencentCvmNetworkSpeed() (int, error) {
 
 func getTencentMetadata(url string) (*bytes.Buffer, error) {
 	resp := bytes.NewBuffer(nil)
-	_, err := httpc.Get(nil, cloudMetadataReqTimeout, url,
+	_, err := httpc.Get(context.Background(), cloudMetadataReqTimeout, url,
 		httpc.CheckStatusCode(http.StatusOK),
 		httpc.ToBytesBuffer(resp),
 	)

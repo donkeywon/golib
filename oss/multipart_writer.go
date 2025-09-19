@@ -444,7 +444,7 @@ func (w *MultiPartWriter) abort() error {
 	_, err := retry.DoWithData(
 		func() (*http.Response, error) {
 			respBody.Reset()
-			return httpc.Delete(context.TODO(), w.timeout, w.cfg.URL+"?uploadId="+w.uploadID,
+			return httpc.Delete(context.Background(), w.timeout, w.cfg.URL+"?uploadId="+w.uploadID,
 				httpc.ReqOptionFunc(w.addAuth),
 				httpc.ToStatus(&respStatus),
 				httpc.ToBytesBuffer(respBody),

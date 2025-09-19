@@ -2,6 +2,7 @@ package cloud
 
 import (
 	"bytes"
+	"context"
 	"net/http"
 
 	"github.com/donkeywon/golib/errs"
@@ -234,7 +235,7 @@ func GetEC2InstanceType() (*bytes.Buffer, error) {
 	}
 
 	body := bytes.NewBuffer(nil)
-	_, err = httpc.Get(nil, cloudMetadataReqTimeout, "http://169.254.169.254/latest/meta-data/instance-type",
+	_, err = httpc.Get(context.Background(), cloudMetadataReqTimeout, "http://169.254.169.254/latest/meta-data/instance-type",
 		httpc.WithHeaders("X-aws-ec2-metadata-token", token.String()),
 		httpc.CheckStatusCode(http.StatusOK),
 		httpc.ToBytesBuffer(body),
@@ -259,7 +260,7 @@ func GetAwsEc2NetSpeed() (int, error) {
 
 func GetEC2IMDSv2Token() (*bytes.Buffer, error) {
 	body := bytes.NewBuffer(nil)
-	_, err := httpc.Put(nil, cloudMetadataReqTimeout, "http://169.254.169.254/latest/api/token",
+	_, err := httpc.Put(context.Background(), cloudMetadataReqTimeout, "http://169.254.169.254/latest/api/token",
 		httpc.WithHeaders("X-aws-ec2-metadata-token-ttl-seconds", "30"),
 		httpc.CheckStatusCode(http.StatusOK),
 		httpc.ToBytesBuffer(body),

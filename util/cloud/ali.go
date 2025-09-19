@@ -2,6 +2,7 @@ package cloud
 
 import (
 	"bytes"
+	"context"
 	"strconv"
 
 	"github.com/donkeywon/golib/util/httpc"
@@ -18,7 +19,7 @@ func IsAliyun() bool {
 func GetAliEcsMetadataToken() (*bytes.Buffer, error) {
 	respBody := bytes.NewBuffer(nil)
 
-	_, err := httpc.Put(nil, cloudMetadataReqTimeout, "http://100.100.100.200/latest/api/token",
+	_, err := httpc.Put(context.Background(), cloudMetadataReqTimeout, "http://100.100.100.200/latest/api/token",
 		httpc.WithHeaders("X-aliyun-ecs-metadata-token-ttl-seconds", "30"),
 		httpc.ToBytesBuffer(respBody))
 
@@ -57,7 +58,7 @@ func getAliEcsInstanceMetadata(typ string) (*bytes.Buffer, error) {
 	}
 
 	respBody := bytes.NewBuffer(nil)
-	_, err = httpc.Get(nil, cloudMetadataReqTimeout, "http://100.100.100.200/latest/meta-data/instance/"+typ,
+	_, err = httpc.Get(context.Background(), cloudMetadataReqTimeout, "http://100.100.100.200/latest/meta-data/instance/"+typ,
 		httpc.WithHeaders("X-aliyun-ecs-metadata-token", token.String()),
 		httpc.ToBytesBuffer(respBody))
 
