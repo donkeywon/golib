@@ -24,6 +24,7 @@ var (
 	ErrTaskAlreadyStopping = errors.New("task already stopping")
 	ErrTaskNotStarted      = errors.New("task not started")
 	ErrTaskNotPaused       = errors.New("task not paused")
+	ErrPoolNotExists       = errors.New("pool not exists")
 )
 
 var D Taskd = New()
@@ -117,11 +118,7 @@ func (td *taskd) Stop() error {
 }
 
 func (td *taskd) getPool(taskCfg *task.Cfg) pond.Pool {
-	p := td.pools[taskCfg.Pool]
-	if p == nil {
-		panic("task pool not exists: " + taskCfg.Pool)
-	}
-	return p
+	return td.pools[taskCfg.Pool]
 }
 
 func (td *taskd) SetCfg(cfg any) {
@@ -283,11 +280,12 @@ func (td *taskd) submit(t *task.Task, wait bool) {
 
 	f := func() {
 		td.markTaskRunning(t.Cfg.ID)
-		td.hookTask(t, nil, td.startHooks, "start", extra)
 
+		td.hookTask(t, nil, td.startHooks, "start", extra)
 		err := runner.Run(t)
-		td.unmarkTaskAndTaskID(t.Cfg.ID)
 		td.hookTask(t, err, td.doneHooks, "done", extra)
+
+		td.unmarkTaskAndTaskID(t.Cfg.ID)
 	}
 
 	td.markTask(t)
@@ -305,6 +303,10 @@ func (td *taskd) createInitSubmit(ctx context.Context, taskCfg *task.Cfg, wait b
 	case <-td.Stopping():
 		return nil, ErrStopping
 	default:
+	}
+
+	if taskCfg.Pool == "" || td.getPool(taskCfg) == nil {
+		return nil, ErrPoolNotExists
 	}
 
 	hookExtra := &task.HookExtraData{Wait: wait}

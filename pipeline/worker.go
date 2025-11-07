@@ -343,9 +343,7 @@ func closeWriter(idx int, w io.Writer) (err error) {
 	case flusher:
 		e := c.Flush()
 		if e != nil {
-			if e != nil {
-				err = errs.Wrapf(e, "failed to flush-on-close writer(%d) %s", idx, getName(w))
-			}
+			err = errs.Wrapf(e, "failed to flush-on-close writer(%d) %s", idx, getName(w))
 		}
 	case flusher2:
 		c.Flush()

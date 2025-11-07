@@ -17,8 +17,8 @@ require (
 	github.com/petermattis/goid v0.0.0-20250904145737-900bdf8bb490
 	github.com/pierrec/lz4/v4 v4.1.22
 	github.com/pkg/profile v1.7.0
-	github.com/prometheus/procfs v0.19.1
-	github.com/shirou/gopsutil/v4 v4.25.9
+	github.com/prometheus/procfs v0.19.2
+	github.com/shirou/gopsutil/v4 v4.25.10
 	github.com/stretchr/testify v1.11.1
 	github.com/tidwall/gjson v1.18.0
 	github.com/zeebo/xxh3 v1.0.2
@@ -34,9 +34,9 @@ require (
 
 require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
-	github.com/ebitengine/purego v0.9.0 // indirect
+	github.com/ebitengine/purego v0.9.1 // indirect
 	github.com/felixge/fgprof v0.9.5 // indirect
-	github.com/gabriel-vasile/mimetype v1.4.10 // indirect
+	github.com/gabriel-vasile/mimetype v1.4.11 // indirect
 	github.com/go-ole/go-ole v1.3.0 // indirect
 	github.com/go-playground/locales v0.14.1 // indirect
 	github.com/go-playground/universal-translator v0.18.1 // indirect
