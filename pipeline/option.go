@@ -182,10 +182,12 @@ func LogRead(getFields func() []any) Option {
 type hasher struct {
 	c        Common
 	h        hash.Hash
+	written  int
 	checksum string
 }
 
 func (h *hasher) Write(p []byte) (int, error) {
+	h.written += len(p)
 	return h.h.Write(p)
 }
 
@@ -204,7 +206,7 @@ func (h *hasher) Close() error {
 	}
 	hash := hex.EncodeToString(bs)
 	if len(h.checksum) > 0 {
-		if h.checksum != hash {
+		if h.checksum != hash && h.written > 0 {
 			return errs.Errorf("checksum mismatch, expected: %s, actual: %s", h.checksum, hash)
 		}
 	}
