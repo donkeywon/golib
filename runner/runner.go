@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"sync/atomic"
 
 	"github.com/donkeywon/golib/errs"
 	"github.com/donkeywon/golib/kvs"
@@ -76,12 +77,24 @@ func Init(r Runner) (err error) {
 
 // Run a runner and wait it done.
 func Run(r Runner) error {
+	if r == nil {
+		panic("nil runner")
+	}
+	if r.Ctx() == nil {
+		panic("nil runner context")
+	}
 	run(r)
 	return r.Err()
 }
 
 // Start a runner in the background.
 func Start(r Runner) {
+	if r == nil {
+		panic("nil runner")
+	}
+	if r.Ctx() == nil {
+		panic("nil runner context")
+	}
 	go run(r)
 }
 
@@ -143,7 +156,7 @@ func run(r Runner) {
 	r.AppendError(r.Start())
 }
 
-// Stop runner, in most scenario, Stop is notification action, used to notify the Runner to stop.
+// Stop runner, in most scenario, Stop is notification action to notify the Runner to stop.
 func Stop(r Runner) {
 	stop(r, false)
 }
@@ -197,7 +210,7 @@ type baseRunner struct {
 	kvs.NoErrKVS
 	log.Logger
 
-	initialized  bool
+	initialized  atomic.Bool
 	ctx          context.Context
 	cancel       context.CancelFunc
 	err          error
@@ -228,8 +241,12 @@ func newBase(name string) Runner {
 	return br
 }
 
+func (br *baseRunner) markInitialized() bool {
+	return br.initialized.CompareAndSwap(false, true)
+}
+
 func (br *baseRunner) SetName(n string) {
-	if br.initialized {
+	if br.initialized.Load() {
 		panic("set name after initialized")
 	}
 	br.name = n
@@ -240,7 +257,7 @@ func (br *baseRunner) Name() string {
 }
 
 func (br *baseRunner) Init() error {
-	if br.initialized {
+	if !br.markInitialized() {
 		panic("init twice")
 	}
 	if br.Logger == nil {
@@ -261,7 +278,6 @@ func (br *baseRunner) Init() error {
 	if br.NoErrKVS == nil {
 		br.NoErrKVS = kvs.NewMapKVS()
 	}
-	br.initialized = true
 	return nil
 }
 
@@ -278,7 +294,7 @@ func (br *baseRunner) Inherit(r Runner) {
 	if br.parent != nil {
 		panic("inherit twice")
 	}
-	if br.initialized {
+	if br.initialized.Load() {
 		panic("inherit after initialized")
 	}
 	br.WithLoggerFrom(r)
@@ -293,7 +309,7 @@ func (br *baseRunner) Parent() Runner {
 }
 
 func (br *baseRunner) SetCtx(ctx context.Context) {
-	if br.initialized {
+	if br.initialized.Load() {
 		panic("set context after initialized")
 	}
 	if ctx == nil {

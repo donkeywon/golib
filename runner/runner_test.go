@@ -1,9 +1,12 @@
 package runner
 
 import (
+	"context"
 	"strconv"
 	"testing"
 	"time"
+
+	"github.com/donkeywon/golib/errs"
 )
 
 type runA struct {
@@ -11,7 +14,7 @@ type runA struct {
 }
 
 func (ra *runA) Init() error {
-	return nil
+	return ra.Runner.Init()
 }
 
 func (ra *runA) Start() error {
@@ -19,6 +22,8 @@ func (ra *runA) Start() error {
 	defer t.Stop()
 	for i := 0; i < 5; i++ {
 		select {
+		case <-ra.Ctx().Done():
+			return context.Canceled
 		case <-ra.Stopping():
 			return nil
 		case <-t.C:
@@ -37,7 +42,7 @@ type runB struct {
 }
 
 func (rb *runB) Init() error {
-	return nil
+	return rb.Runner.Init()
 }
 
 func (rb *runB) Start() error {
@@ -63,7 +68,7 @@ type runC struct {
 }
 
 func (rc *runC) Init() error {
-	return nil
+	return rc.Runner.Init()
 }
 
 func (rc *runC) Start() error {
@@ -100,8 +105,13 @@ func init() {
 	ra.SetLogLevel("debug")
 }
 
-func TestSimpleRun(_ *testing.T) {
-	Start(ra)
+func TestSimpleRun(t *testing.T) {
+	ra.SetCtx(t.Context())
+	Init(ra)
+	err := Run(ra)
+	if err != nil {
+		println(errs.ErrToStackString(err))
+	}
 }
 
 func TestStopBeforeStart(_ *testing.T) {

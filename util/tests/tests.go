@@ -36,12 +36,10 @@ func init() {
 
 // DebugInit for test case only, with debug log level.
 func DebugInit(to runner.Runner) {
-	to.WithLoggerFrom(debugRunner)
-	to.SetCtx(debugRunner.Ctx())
+	to.Inherit(debugRunner)
 }
 
 // Init for test case only, with info log level.
 func Init(to runner.Runner) {
-	to.WithLoggerFrom(defaultRunner)
-	to.SetCtx(defaultRunner.Ctx())
+	to.Inherit(defaultRunner)
 }

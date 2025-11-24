@@ -101,8 +101,8 @@ func ToString(v any) (string, error) {
 	return vs, err
 }
 
-func MustToString(any interface{}) string {
-	v, err := ToString(any)
+func MustToString(a any) string {
+	v, err := ToString(a)
 	if err != nil {
 		panic(err)
 	}
