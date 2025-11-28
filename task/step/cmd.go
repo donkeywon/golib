@@ -1,14 +1,12 @@
 package step
 
 import (
-	"context"
 	"os/exec"
 
 	"github.com/donkeywon/golib/consts"
 	"github.com/donkeywon/golib/errs"
 	"github.com/donkeywon/golib/plugin"
 	"github.com/donkeywon/golib/util/cmd"
-	"github.com/donkeywon/golib/util/proc"
 	"github.com/donkeywon/golib/util/v"
 )
 
@@ -26,7 +24,6 @@ type CmdStep struct {
 	Step
 	*cmd.Cfg
 
-	cmd         *exec.Cmd
 	beforeStart []func(cmd *exec.Cmd)
 }
 
@@ -42,8 +39,6 @@ func (c *CmdStep) Init() error {
 	if err != nil {
 		return err
 	}
-
-	c.cmd = exec.CommandContext(c.Ctx(), c.Command[0], c.Command[1:]...)
 	c.WithLoggerFields("cmd", c.Command[0])
 
 	return c.Step.Init()
@@ -54,8 +49,7 @@ func (c *CmdStep) Start() error {
 
 	c.Cfg.SetPgid = true
 
-	result := cmd.Start(c.Ctx(), c.cmd, c.Cfg, c.beforeStart...)
-	<-result.Done()
+	result := cmd.Run(c.Ctx(), c.Cfg, c.beforeStart...)
 	err = result.Err()
 	c.Info("cmd exit", "result", result.String())
 
@@ -85,7 +79,8 @@ func (c *CmdStep) Start() error {
 }
 
 func (c *CmdStep) Stop() error {
-	return cmd.MustStopGroup(context.Background(), c.cmd, 5, proc.MustKillSignals...)
+	c.Cancel()
+	return nil
 }
 
 func (c *CmdStep) SetCfg(cfg any) {

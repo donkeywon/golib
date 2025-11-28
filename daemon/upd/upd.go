@@ -1,6 +1,7 @@
 package upd
 
 import (
+	"context"
 	"os"
 	"sync/atomic"
 	"time"
@@ -150,7 +151,7 @@ func (u *upd) upgrade(vi *VerInfo) bool {
 
 	u.Info("start deploy new package")
 	var cmdResult *cmd.Result
-	cmdResult = cmd.Run(deployCmd...)
+	cmdResult = cmd.Exec(context.Background(), deployCmd...)
 	if cmdResult.Err() != nil {
 		u.Error("deploy new package failed", err, "cmd_result", cmdResult)
 		os.Exit(1)
@@ -158,7 +159,7 @@ func (u *upd) upgrade(vi *VerInfo) bool {
 	u.Info("deploy new package done")
 
 	u.Info("start new version")
-	cmdResult = cmd.Run(startCmd...)
+	cmdResult = cmd.Exec(context.Background(), startCmd...)
 	if cmdResult.Err() != nil {
 		u.Error("start new version failed", err, "cmd_result", cmdResult)
 		os.Exit(1)

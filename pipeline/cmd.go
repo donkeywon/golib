@@ -1,14 +1,12 @@
 package pipeline
 
 import (
-	"context"
 	"os/exec"
 
 	"github.com/donkeywon/golib/consts"
 	"github.com/donkeywon/golib/errs"
 	"github.com/donkeywon/golib/plugin"
 	"github.com/donkeywon/golib/util/cmd"
-	"github.com/donkeywon/golib/util/proc"
 )
 
 func init() {
@@ -20,8 +18,6 @@ const WorkerCmd Type = "cmd"
 type Cmd struct {
 	Worker
 	*cmd.Cfg
-
-	c *exec.Cmd
 }
 
 func NewCmd() *Cmd {
@@ -29,12 +25,6 @@ func NewCmd() *Cmd {
 		Worker: CreateWorker(string(WorkerCmd)),
 		Cfg:    &cmd.Cfg{},
 	}
-}
-
-func (c *Cmd) Init() error {
-	c.c = exec.CommandContext(c.Ctx(), c.Cfg.Command[0], c.Cfg.Command[1:]...)
-
-	return c.Worker.Init()
 }
 
 func (c *Cmd) Start() error {
@@ -46,7 +36,7 @@ func (c *Cmd) Start() error {
 
 	c.Debug("starting pipeline cmd", "commands", c.Cfg.Command)
 
-	result := cmd.Start(context.Background(), c.c, c.Cfg, func(cmd *exec.Cmd) {
+	result := cmd.Run(c.Ctx(), c.Cfg, func(cmd *exec.Cmd) {
 		if c.Writer() != nil {
 			switch w := c.Writer().(type) {
 			case Writer:
@@ -65,7 +55,6 @@ func (c *Cmd) Start() error {
 			}
 		}
 	})
-	<-result.Done()
 
 	c.Info("cmd exit", "result", result)
 	if result != nil {
@@ -94,11 +83,8 @@ func (c *Cmd) Start() error {
 }
 
 func (c *Cmd) Stop() error {
-	defer c.Cancel()
-	if c.c == nil || c.c.Process == nil {
-		return nil
-	}
-	return cmd.MustStopGroup(context.Background(), c.c, 5, proc.MustKillSignals...)
+	c.Cancel()
+	return nil
 }
 
 func (c *Cmd) SetCfg(cfg any) {
