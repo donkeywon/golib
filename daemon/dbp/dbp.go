@@ -1,4 +1,4 @@
-package db
+package dbp
 
 import (
 	"database/sql"
@@ -10,10 +10,10 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
-const DaemonTypeDB boot.DaemonType = "db"
+const DaemonTypeDB boot.DaemonType = "dbp"
 
 var (
-	D DB = New()
+	D DBP = New()
 
 	fqNamespace    = string(DaemonTypeDB)
 	fqSubsystem    = "pool_stats"
@@ -31,30 +31,30 @@ var (
 	maxLifetimeClosedDesc = prometheus.NewDesc(prometheus.BuildFQName(fqNamespace, fqSubsystem, "max_life_time_closed"), "The total number of connections closed due to SetConnMaxLifeTime.", variableLabels, nil)
 )
 
-type DB interface {
+type DBP interface {
 	boot.Daemon
 	Get(string) *sql.DB
 }
 
-type db struct {
+type dbp struct {
 	runner.Runner
 	*Cfg
 
 	dbs map[string]*sql.DB
 }
 
-func New() DB {
-	return &db{
+func New() DBP {
+	return &dbp{
 		Runner: runner.Create(string(DaemonTypeDB)),
 		dbs:    make(map[string]*sql.DB),
 	}
 }
 
-func (d *db) Init() error {
+func (d *dbp) Init() error {
 	for _, dbCfg := range d.Cfg.Pools {
 		db, err := sql.Open(dbCfg.Type, dbCfg.DSN)
 		if err != nil {
-			return errs.Wrapf(err, "open datasource fail, name: %s, type: %s, dsn: %s", dbCfg.Name, dbCfg.Type, dbCfg.DSN)
+			return errs.Wrapf(err, "open db failed, name: %s, type: %s", dbCfg.Name, dbCfg.Type)
 		}
 
 		db.SetMaxIdleConns(dbCfg.MaxIdle)
@@ -69,7 +69,7 @@ func (d *db) Init() error {
 	return d.Runner.Init()
 }
 
-func (d *db) Stop() error {
+func (d *dbp) Stop() error {
 	for _, dbCfg := range d.Cfg.Pools {
 		db := d.dbs[dbCfg.Name]
 		err := db.Close()
@@ -80,7 +80,7 @@ func (d *db) Stop() error {
 	return nil
 }
 
-func (d *db) Describe(ch chan<- *prometheus.Desc) {
+func (d *dbp) Describe(ch chan<- *prometheus.Desc) {
 	ch <- maxOpenConnectionsDesc
 	ch <- openConnectionsDesc
 	ch <- inUseConnectionsDesc
@@ -92,7 +92,7 @@ func (d *db) Describe(ch chan<- *prometheus.Desc) {
 	ch <- maxLifetimeClosedDesc
 }
 
-func (d *db) Collect(ch chan<- prometheus.Metric) {
+func (d *dbp) Collect(ch chan<- prometheus.Metric) {
 	for _, dbCfg := range d.Cfg.Pools {
 		db := d.dbs[dbCfg.Name]
 		stats := db.Stats()
@@ -110,6 +110,6 @@ func (d *db) Collect(ch chan<- prometheus.Metric) {
 	}
 }
 
-func (d *db) Get(name string) *sql.DB {
+func (d *dbp) Get(name string) *sql.DB {
 	return d.dbs[name]
 }
