@@ -10,12 +10,12 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
-const DaemonTypeDB boot.DaemonType = "dbp"
+const DaemonTypeDBP boot.DaemonType = "dbp"
 
 var (
 	D DBP = New()
 
-	fqNamespace    = string(DaemonTypeDB)
+	fqNamespace    = string(DaemonTypeDBP)
 	fqSubsystem    = "pool_stats"
 	variableLabels = []string{"name", "type"}
 
@@ -45,7 +45,7 @@ type dbp struct {
 
 func New() DBP {
 	return &dbp{
-		Runner: runner.Create(string(DaemonTypeDB)),
+		Runner: runner.Create(string(DaemonTypeDBP)),
 		dbs:    make(map[string]*sql.DB),
 	}
 }
