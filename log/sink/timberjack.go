@@ -37,6 +37,5 @@ func pathToTimberJackLogger(path string, cfg string) (*timberjack.Logger, error)
 		Compression: DefaultCompression,
 	}
 	err := json.Unmarshal([]byte(cfg), l)
-	l.Filename = path
 	return l, err
 }

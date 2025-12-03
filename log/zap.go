@@ -255,7 +255,8 @@ func buildOutputs(c *Cfg) ([]string, error) {
 			if err != nil {
 				return nil, errors.New("timberjack config invalid")
 			}
-			outputs = append(outputs, "timberjack://"+fp+"?"+string(bs))
+			// all cfg in bs, so path in url is useless, leave it empty
+			outputs = append(outputs, "timberjack://?"+string(bs))
 		}
 	}
 	return outputs, nil
