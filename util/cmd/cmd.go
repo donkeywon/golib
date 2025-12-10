@@ -17,7 +17,7 @@ import (
 const defaultWaitSecBetweenKillSignals = 5
 
 type Cfg struct {
-	Command                   []string          `json:"command"                   validate:"required" yaml:"command"`
+	Command                   []string          `json:"command"                   yaml:"command"  validate:"required"`
 	Env                       map[string]string `json:"env"                       yaml:"env"`
 	RunAsUser                 string            `json:"runAsUser"                 yaml:"runAsUser"`
 	WorkingDir                string            `json:"workingDir"                yaml:"workingDir"`

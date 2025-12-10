@@ -2,7 +2,9 @@ package upd
 
 import (
 	"context"
+	"errors"
 	"os"
+	"os/exec"
 	"sync/atomic"
 	"time"
 
@@ -20,9 +22,13 @@ const DaemonTypeUpd boot.DaemonType = "upd"
 
 var D Upd = New()
 
+var (
+	ErrAlreadyUpgrading = errors.New("already upgrading")
+)
+
 type Upd interface {
 	boot.Daemon
-	Upgrade(vi *VerInfo)
+	Upgrade(vi *VerInfo) error
 }
 
 // upd must be first daemon
@@ -65,12 +71,32 @@ func (u *upd) isUpgrading() bool {
 	return u.upgrading.Load()
 }
 
-func (u *upd) Upgrade(vi *VerInfo) {
-	go func() {
-		success := u.upgrade(vi)
+func (u *upd) Upgrade(vi *VerInfo) error {
+	if !u.markUpgrading() {
+		return ErrAlreadyUpgrading
+	}
 
-		// at this point, success is always fail, current process will exit if upgrade success
-		if !success {
+	err := u.prepareUpgrade(vi)
+	if err != nil {
+		u.unmarkUpgrading()
+		return errs.Wrap(err, "prepare upgrade failed")
+	}
+
+	go func() {
+		defer func() {
+			u.unmarkUpgrading()
+
+			err := recover()
+			if err != nil {
+				u.Error("panic on upgrade", errs.PanicToErr(err))
+			}
+		}()
+
+		downloadSuccessfully := u.upgrade(vi)
+
+		if !downloadSuccessfully {
+			// download failed, just return for next upgrade
+			return
 		}
 
 		select {
@@ -80,63 +106,64 @@ func (u *upd) Upgrade(vi *VerInfo) {
 		default:
 		}
 	}()
+	return nil
 }
 
-func (u *upd) upgrade(vi *VerInfo) bool {
-	if !u.markUpgrading() {
-		u.Warn("already upgrading")
-		return false
-	}
-	defer u.unmarkUpgrading()
-
+func (u *upd) prepareUpgrade(vi *VerInfo) error {
 	err := v.Struct(vi)
 	if err != nil {
-		u.Error("version info is invalid", err, "new_ver_info", vi)
-		return false
+		return errs.Wrap(err, "version info is invalid")
 	}
 
-	deployCmd := vi.DeployCmd
-	if len(deployCmd) == 0 {
-		deployCmd = u.Cfg.DeployCmd
+	upgradeCmd := vi.UpgradeCmd
+	if len(upgradeCmd) == 0 {
+		upgradeCmd = u.Cfg.UpgradeCmd
 	}
-	if len(deployCmd) == 0 {
-		u.Error("deploy cmd is empty", nil)
-		return false
-	}
-
-	startCmd := vi.StartCmd
-	if len(startCmd) == 0 {
-		startCmd = u.Cfg.StartCmd
-	}
-	if len(startCmd) == 0 {
-		u.Error("start cmd is empty", nil)
-		return false
+	if len(upgradeCmd) == 0 {
+		return errs.New("upgrade cmd is empty")
 	}
 
-	u.Info("start upgrade", "cur_ver", buildinfo.Version, "new_ver_info", vi)
+	upgradeOutputPath := vi.UpgradeOutputPath
+	if upgradeOutputPath == "" {
+		upgradeOutputPath = u.Cfg.UpgradeOutputPath
+	}
+	if upgradeOutputPath == "" {
+		return errs.New("upgrade output path is empty")
+	}
+	upgradeOutputFile, err := os.OpenFile(upgradeOutputPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
+	if err != nil {
+		return errs.Wrapf(err, "create upgrade output file failed: %s", upgradeOutputPath)
+	}
+	err = upgradeOutputFile.Close()
+	if err != nil {
+		return errs.Wrapf(err, "close upgrade output file failed: %s", upgradeOutputPath)
+	}
 
 	if paths.DirExist(vi.DownloadDstPath) {
-		u.Error("downloaded dst path is dir, use another path", nil)
-		return false
+		return errs.Errorf("downloaded dst path is dir, use another path: %s", vi.DownloadDstPath)
 	}
 
 	if paths.FileExist(vi.DownloadDstPath) {
 		u.Info("download dst path exists, remove it", "path", vi.DownloadDstPath)
 		err = os.Remove(vi.DownloadDstPath)
 		if err != nil {
-			u.Error("remove exists download dst path failed", err)
-			return false
+			return errs.Wrapf(err, "remove exists download dst path failed")
 		}
 	}
 
-	u.Info("start download new package")
-	err = downloadPackage(vi.DownloadDstPath, vi.StoreCfg)
+	return nil
+}
+
+func (u *upd) upgrade(vi *VerInfo) bool {
+	u.Info("start download new package", "ver", vi.Ver)
+	err := downloadPackage(vi.DownloadDstPath, vi.StoreCfg)
 	if err != nil {
 		u.Error("download new package failed", err)
 		return false
 	}
-	u.Info("download new package done")
+	u.Info("download new package done, start upgrade", "cur_ver", buildinfo.Version, "new_ver", vi.Ver)
 
+	// 没有退路可言，no going back
 	go func() {
 		u.Info("stopping all")
 		runner.StopAndWait(u.Parent())
@@ -144,27 +171,38 @@ func (u *upd) upgrade(vi *VerInfo) bool {
 
 	select {
 	case <-time.After(time.Minute):
-		u.Error("stop all timeout", u.Parent().Err())
+		u.Error("stop all daemon timeout", u.Parent().Err())
 	case <-u.allDoneExceptMe:
-		u.Info("all stopped")
+		u.Info("all daemon stopped except me")
 	}
 
-	u.Info("start deploy new package")
-	var cmdResult *cmd.Result
-	cmdResult = cmd.Exec(context.Background(), deployCmd...)
-	if cmdResult.Err() != nil {
-		u.Error("deploy new package failed", err, "cmd_result", cmdResult)
-		os.Exit(1)
+	upgradeCmd := vi.UpgradeCmd
+	if len(upgradeCmd) == 0 {
+		upgradeCmd = u.Cfg.UpgradeCmd
 	}
-	u.Info("deploy new package done")
+	upgradeOutputPath := vi.UpgradeOutputPath
+	if upgradeOutputPath == "" {
+		upgradeOutputPath = u.Cfg.UpgradeOutputPath
+	}
+	upgradeOutputFile, err := os.OpenFile(upgradeOutputPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
+	if err != nil {
+		u.Error("open upgrade output file failed", err, "path", upgradeOutputPath)
+	}
 
-	u.Info("start new version")
-	cmdResult = cmd.Exec(context.Background(), startCmd...)
-	if cmdResult.Err() != nil {
-		u.Error("start new version failed", err, "cmd_result", cmdResult)
+	u.Info("start exec upgrade cmd")
+	cmdCfg := cmd.NewCfg()
+	cmdCfg.Command = upgradeCmd
+	cmdCfg.SetPgid = true
+	cmdResult := cmd.Start(context.Background(), cmdCfg, func(cmd *exec.Cmd) {
+		cmd.Stdout = upgradeOutputFile
+		cmd.Stderr = upgradeOutputFile
+	})
+	if cmdResult.Pid <= 0 {
+		u.Error("exec upgrade cmd failed", cmdResult.Err(), "result", cmdResult.String())
 		os.Exit(1)
 	}
-	u.Info("start new version done, exit now")
+
+	u.Info("upgrade cmd started, exit now")
 	os.Exit(0)
 	return true
 }

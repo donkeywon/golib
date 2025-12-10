@@ -236,6 +236,7 @@ func (b *booter) Start() error {
 	}
 
 	errg.Wait()
+	b.Info("all daemon done")
 	return nil
 }
 
@@ -246,8 +247,8 @@ func (b *booter) Stop() error {
 		return nil
 	default:
 	}
-	for _, daemon := range b.daemons {
-		runner.StopAndWait(daemon)
+	for i := len(b.daemons) - 1; i >= 0; i-- {
+		runner.StopAndWait(b.daemons[i])
 	}
 	return nil
 }

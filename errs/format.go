@@ -107,7 +107,10 @@ func ErrToStack(err error, w io.Writer, errsDepth int) {
 			}
 		}
 	case wrappedErr:
-		ErrToStack(terr.Unwrap(), w, errsDepth)
+		werr := terr.Unwrap()
+		if werr != nil {
+			ErrToStack(werr, w, errsDepth)
+		}
 
 		if emsg, ok := err.(*withMessage); ok {
 			w.Write(newLineBytes)

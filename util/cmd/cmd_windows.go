@@ -2,9 +2,11 @@ package cmd
 
 import (
 	"os/exec"
+	"syscall"
 
 	"github.com/donkeywon/golib/errs"
 	"github.com/donkeywon/golib/util/paths"
+	"golang.org/x/sys/windows"
 )
 
 func beforeStartFromCfg(cfg *Cfg) ([]func(cmd *exec.Cmd), error) {
@@ -30,5 +32,14 @@ func beforeStartFromCfg(cfg *Cfg) ([]func(cmd *exec.Cmd), error) {
 	if cfg.RunAsUser != "" {
 		// not support
 	}
+	if cfg.SetPgid {
+		beforeRun = append(beforeRun, func(cmd *exec.Cmd) {
+			if cmd.SysProcAttr == nil {
+				cmd.SysProcAttr = &syscall.SysProcAttr{}
+			}
+			cmd.SysProcAttr.CreationFlags |= windows.CREATE_NEW_PROCESS_GROUP
+		})
+	}
+
 	return beforeRun, nil
 }

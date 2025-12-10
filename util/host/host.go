@@ -25,7 +25,14 @@ func GetHostIP(v4 bool) (string, error) {
 		return "", err
 	}
 
-	ip, err := GetHostIPByHostname(h)
+	var ip string
+	v4Ips, v6Ips, err := GetHostIPByHostname(h)
+	if v4 && len(v4Ips) > 0 {
+		ip = v4Ips[0]
+	}
+	if !v4 && len(v6Ips) > 0 {
+		ip = v6Ips[0]
+	}
 	if ip != "" {
 		return ip, nil
 	}
@@ -40,13 +47,42 @@ func GetHostIP(v4 bool) (string, error) {
 	return GetAnyAvailableIP(v4)
 }
 
-func GetHostIPByHostname(h string) (string, error) {
+func GetHostIPByHostname(h string) ([]string, []string, error) {
 	addrs, err := net.LookupHost(h)
 	if err != nil {
-		return "", err
+		return nil, nil, err
 	}
+	
+	var (
+		v4 []string
+		v6 []string
+	)
+	
+	for _, addr := range addrs {
+		isv4, isv6 := isIp(addr)
+		if isv4 {
+			v4 = append(v4, addr)
+		} else if isv6 {
+			v6 = append(v6, addr)
+		}
+	}
+	
 
-	return addrs[0], nil
+	return v4, v6, nil
+}
+
+func isIp(s string) (isv4 bool, isv6 bool) {
+	ip := net.ParseIP(s)
+	if ip == nil {
+		return false, false
+	}
+	if ip.To4() != nil {
+		return true, false
+	}
+	if ip.To16() != nil {
+		return false, true
+	}
+	return false, false
 }
 
 func GetHostIPByInterface(iface string, v4 bool) (string, error) {

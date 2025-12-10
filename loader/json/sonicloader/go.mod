@@ -1,6 +1,6 @@
 module github.com/donkeywon/golib/loader/json/sonicloader
 
-go 1.24.0
+go 1.25.0
 
 require (
 	github.com/bytedance/sonic v1.14.2
@@ -14,7 +14,7 @@ require (
 	github.com/klauspost/cpuid/v2 v2.3.0 // indirect
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
 	golang.org/x/arch v0.23.0 // indirect
-	golang.org/x/sys v0.38.0 // indirect
+	golang.org/x/sys v0.39.0 // indirect
 )
 
 replace github.com/donkeywon/golib => ../../../

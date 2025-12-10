@@ -5,8 +5,8 @@ type Cfg struct {
 	Ak       string `json:"ak"             yaml:"ak"`
 	Sk       string `json:"sk"             yaml:"sk"`
 	Region   string `json:"region"         yaml:"region"`
-	Retry    int    `json:"retry"          yaml:"retry"   validate:"gte=1"`
-	Timeout  int    `json:"timeout"        yaml:"timeout" validate:"gte=1"`
+	Retry    int    `json:"retry"          yaml:"retry"`
+	Timeout  int    `json:"timeout"        yaml:"timeout"`
 	Offset   int64  `json:"offset"         yaml:"offset"`
 	PartSize int64  `json:"partSize"       yaml:"partSize"`
 	Parallel int    `json:"parallel"       yaml:"parallel"`
