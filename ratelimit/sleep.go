@@ -10,7 +10,7 @@ import (
 )
 
 func init() {
-	plugin.RegWithCfg(TypeSleep, func() RxTxRateLimiter { return NewSleepRateLimiter() }, func() any { return NewSleepRateLimiterCfg() })
+	plugin.Reg(TypeSleep, func() RxTxRateLimiter { return NewSleepRateLimiter() }, func() any { return NewSleepRateLimiterCfg() })
 }
 
 const TypeSleep Type = "sleep"

@@ -14,7 +14,7 @@ import (
 )
 
 func init() {
-	plugin.RegWithCfg(PluginTypePipeline, New, func() any { return NewCfg() })
+	plugin.Reg(PluginTypePipeline, New, func() any { return NewCfg() })
 }
 
 const PluginTypePipeline plugin.Type = "ppl"

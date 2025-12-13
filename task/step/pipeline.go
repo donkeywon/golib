@@ -10,7 +10,7 @@ import (
 )
 
 func init() {
-	plugin.RegWithCfg(TypePipeline, func() Step { return NewPipelineStep() }, func() any { return NewPipelineCfg() })
+	plugin.Reg(TypePipeline, func() Step { return NewPipelineStep() }, func() any { return NewPipelineCfg() })
 }
 
 const TypePipeline Type = "pipeline"

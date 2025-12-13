@@ -58,7 +58,7 @@ func (c *CommonCfg) customUnmarshal(data []byte, unmarshaler func([]byte, any) e
 	cv := commonCfgWithoutType{}
 	cv.Cfg = plugin.CreateCfg(c.Type)
 	if cv.Cfg == nil {
-		return errs.Errorf("unknown type: %s", typ.Str)
+		return nil
 	}
 	err := unmarshaler(data, &cv)
 	if err != nil {

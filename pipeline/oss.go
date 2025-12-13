@@ -9,8 +9,8 @@ import (
 )
 
 func init() {
-	plugin.RegWithCfg(ReaderOSS, func() Reader { return NewOSSReader() }, func() any { return NewOSSCfg() })
-	plugin.RegWithCfg(WriterOSS, func() Writer { return NewOSSWriter() }, func() any { return NewOSSCfg() })
+	plugin.Reg(ReaderOSS, func() Reader { return NewOSSReader() }, func() any { return NewOSSCfg() })
+	plugin.Reg(WriterOSS, func() Writer { return NewOSSWriter() }, func() any { return NewOSSCfg() })
 }
 
 const (

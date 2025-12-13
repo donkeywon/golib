@@ -11,7 +11,7 @@ import (
 )
 
 func init() {
-	plugin.RegWithCfg(TypeCmd, func() Step { return NewCmdStep() }, func() any { return NewCmdStepCfg() })
+	plugin.Reg(TypeCmd, func() Step { return NewCmdStep() }, func() any { return NewCmdStepCfg() })
 }
 
 const TypeCmd Type = "cmd"

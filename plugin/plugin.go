@@ -20,7 +20,7 @@ type CfgSetter[C any] interface {
 	SetCfg(cfg C)
 }
 
-type Plugin interface{}
+type Plugin any
 
 var (
 	_pluginCreators    = make(map[any]any)
@@ -30,23 +30,67 @@ var (
 // 推荐自定义plugin的类型，不要直接使用基础类型，例如
 // type DaemonType string
 // const DaemonTypeHttpd DaemonType = "httpd"
-// Reg(DaemonTypeHttpd, func() any { return NewHttpd() }).
-func Reg[T any, P Plugin](typ T, creator Creator[P]) {
-	var p P
-	rt := reflect.TypeOf(p)
-	if rt != nil && rt.Kind() != reflect.Ptr {
-		panic(fmt.Sprintf("plugin %s is not interface or ptr", rt.String()))
-	}
+// Reg(DaemonTypeHttpd, func() Daemon { return NewHttpd() }, func() any { return NewHttpdCfg() }).
+func Reg[T any, P Plugin](typ T, creator Creator[P], cfgCreator CfgCreator[any]) {
+	validate(typ, creator, cfgCreator)
+
 	_pluginCreators[typ] = creator
+	if cfgCreator != nil {
+		_pluginCfgCreators[typ] = cfgCreator
+	}
 }
 
-func RegCfg[T any](typ T, creator CfgCreator[any]) {
-	_pluginCfgCreators[typ] = creator
+func validate[T any, P Plugin](typ T, creator Creator[P], cfgCreator CfgCreator[any]) {
+	if creator == nil {
+		panic("nil plugin creator")
+	}
+	if isNil(typ) {
+		panic("nil plugin type")
+	}
+	_, exists := _pluginCreators[typ]
+	if exists {
+		panic("duplicate reg")
+	}
+
+	typRT := reflect.TypeOf(typ)
+
+	sample := creator()
+	pRT := reflect.TypeOf(sample)
+	if pRT == nil {
+		panic(fmt.Sprintf("plugin %s(%v) creator return nil", typRT.String(), typ))
+	}
+	pRV := reflect.ValueOf(sample)
+	if !isStruct(pRV) && !isStructPointer(pRV) {
+		panic(fmt.Sprintf("plugin %s(%v) is not struct or struct pointer", typRT.String(), typ))
+	}
+
+	if cfgCreator != nil {
+		sampleCfg := cfgCreator()
+		if sampleCfg != nil {
+			cRV := reflect.ValueOf(sampleCfg)
+			if !isStruct(cRV) && !isStructPointer(cRV) {
+				panic(fmt.Sprintf("plugin %s(%v) cfg %s is not struct or struct pointer", typRT.String(), typ, cRV.Type().String()))
+			}
+		}
+	}
 }
 
-func RegWithCfg[T any, P Plugin](typ T, creator Creator[P], cfgCreator CfgCreator[any]) {
-	Reg(typ, creator)
-	RegCfg(typ, cfgCreator)
+func isNil(a any) bool {
+	return a == nil
+}
+
+func isStruct(rv reflect.Value) bool {
+	return rv.Kind() == reflect.Struct
+}
+
+func isStructPointer(rv reflect.Value) bool {
+	if rv.Kind() != reflect.Pointer {
+		return false
+	}
+	if rv.Elem().Kind() != reflect.Struct {
+		return false
+	}
+	return true
 }
 
 // 创建一个注册的Plugin

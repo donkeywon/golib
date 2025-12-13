@@ -8,7 +8,7 @@ import (
 )
 
 func init() {
-	plugin.RegWithCfg(TypeMap, NewMapKVS, func() any { return NewMapKVSCfg() })
+	plugin.Reg(TypeMap, NewMapKVS, func() any { return NewMapKVSCfg() })
 }
 
 type MapKVSCfg struct{}

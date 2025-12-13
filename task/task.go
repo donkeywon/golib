@@ -14,7 +14,7 @@ import (
 )
 
 func init() {
-	plugin.RegWithCfg(PluginTypeTask, New, func() any { return NewCfg() })
+	plugin.Reg(PluginTypeTask, New, func() any { return NewCfg() })
 }
 
 const PluginTypeTask plugin.Type = "task"

@@ -8,7 +8,7 @@ import (
 )
 
 func init() {
-	plugin.RegWithCfg(WorkerCopy, func() Worker { return NewCopy() }, func() any { return NewCopyCfg() })
+	plugin.Reg(WorkerCopy, func() Worker { return NewCopy() }, func() any { return NewCopyCfg() })
 }
 
 const WorkerCopy Type = "copy"

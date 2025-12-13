@@ -16,7 +16,7 @@ import (
 )
 
 func init() {
-	plugin.RegWithCfg(TypeHost, func() RxTxRateLimiter { return NewHostRateLimiter() }, func() any { return NewHostRateLimiterCfg() })
+	plugin.Reg(TypeHost, func() RxTxRateLimiter { return NewHostRateLimiter() }, func() any { return NewHostRateLimiterCfg() })
 }
 
 const TypeHost Type = "host"

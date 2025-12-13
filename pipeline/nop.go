@@ -3,8 +3,8 @@ package pipeline
 import "github.com/donkeywon/golib/plugin"
 
 func init() {
-	plugin.RegWithCfg(ReaderNop, func() Reader { return NewNopReader() }, func() any { return NewNopCfg() })
-	plugin.RegWithCfg(WriterNop, func() Writer { return NewNopWriter() }, func() any { return NewNopCfg() })
+	plugin.Reg(ReaderNop, func() Reader { return NewNopReader() }, func() any { return NewNopCfg() })
+	plugin.Reg(WriterNop, func() Writer { return NewNopWriter() }, func() any { return NewNopCfg() })
 }
 
 const (

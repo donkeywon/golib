@@ -74,7 +74,7 @@ func RegDaemon(typ DaemonType, creator plugin.Creator[Daemon], cfgCreator plugin
 	if slices.Contains(_daemonTypes, typ) {
 		panic("duplicate register daemon: " + typ)
 	}
-	plugin.RegWithCfg(typ, creator, cfgCreator)
+	plugin.Reg(typ, creator, cfgCreator)
 	_daemonTypes = append(_daemonTypes, typ)
 }
 

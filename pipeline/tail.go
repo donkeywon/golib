@@ -9,7 +9,7 @@ import (
 )
 
 func init() {
-	plugin.RegWithCfg(ReaderTail, func() Reader { return NewTail() }, func() any { return NewTailCfg() })
+	plugin.Reg(ReaderTail, func() Reader { return NewTail() }, func() any { return NewTailCfg() })
 }
 
 const ReaderTail Type = "tail"

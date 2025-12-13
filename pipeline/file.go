@@ -10,8 +10,8 @@ import (
 )
 
 func init() {
-	plugin.RegWithCfg(ReaderFile, func() Reader { return NewFileReader() }, func() any { return NewFileCfg() })
-	plugin.RegWithCfg(WriterFile, func() Writer { return NewFileWriter() }, func() any { return NewFileCfg() })
+	plugin.Reg(ReaderFile, func() Reader { return NewFileReader() }, func() any { return NewFileCfg() })
+	plugin.Reg(WriterFile, func() Writer { return NewFileWriter() }, func() any { return NewFileCfg() })
 }
 
 const (

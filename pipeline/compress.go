@@ -11,8 +11,8 @@ import (
 )
 
 func init() {
-	plugin.RegWithCfg(ReaderCompress, func() Reader { return NewCompressReader() }, func() any { return NewCompressCfg() })
-	plugin.RegWithCfg(WriterCompress, func() Writer { return NewCompressWriter() }, func() any { return NewCompressCfg() })
+	plugin.Reg(ReaderCompress, func() Reader { return NewCompressReader() }, func() any { return NewCompressCfg() })
+	plugin.Reg(WriterCompress, func() Writer { return NewCompressWriter() }, func() any { return NewCompressCfg() })
 }
 
 const (

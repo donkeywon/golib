@@ -20,7 +20,7 @@ var (
 )
 
 func TestMain(m *testing.M) {
-	plugin.RegWithCfg(stepTypeTick, newTickStep, func() any { return &tickStepCfg{Interval: 1} })
+	plugin.Reg(stepTypeTick, newTickStep, func() any { return &tickStepCfg{Interval: 1} })
 	cfg := NewCfg()
 	cfg.Pools[0].Size = 2
 	cfg.Pools[0].QueueSize = 5
