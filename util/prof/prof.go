@@ -21,6 +21,8 @@ var (
 	stopCh      = make(chan struct{})
 	done        = make(chan struct{})
 	p           interface{ Stop() }
+	
+	ErrUnknownMode = errors.New("unknown mode")
 )
 
 func Start(mode string, dir string, timeoutSec int) (string, <-chan struct{}, error) {
@@ -33,6 +35,8 @@ func Start(mode string, dir string, timeoutSec int) (string, <-chan struct{}, er
 			opts = append(opts, profile.CPUProfile)
 		case "mem":
 			opts = append(opts, profile.MemProfile)
+		case "heap":
+			opts = append(opts, profile.MemProfileHeap)
 		case "allocs":
 			opts = append(opts, profile.MemProfileAllocs)
 		case "mutex":
@@ -49,8 +53,7 @@ func Start(mode string, dir string, timeoutSec int) (string, <-chan struct{}, er
 		case "clock":
 			opts = append(opts, profile.ClockProfile)
 		default:
-			opts = append(opts, profile.CPUProfile)
-			filename = "cpu.pprof"
+			return "", done, ErrUnknownMode
 		}
 	}
 
