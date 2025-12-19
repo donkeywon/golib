@@ -21,7 +21,7 @@ var (
 	stopCh      = make(chan struct{})
 	done        = make(chan struct{})
 	p           interface{ Stop() }
-	
+
 	ErrUnknownMode = errors.New("unknown mode")
 )
 
@@ -34,9 +34,7 @@ func Start(mode string, dir string, timeoutSec int) (string, <-chan struct{}, er
 		case "cpu":
 			opts = append(opts, profile.CPUProfile)
 		case "mem":
-			opts = append(opts, profile.MemProfile)
-		case "heap":
-			opts = append(opts, profile.MemProfileHeap)
+			opts = append(opts, profile.MemProfile, profile.MemProfileHeap)
 		case "allocs":
 			opts = append(opts, profile.MemProfileAllocs)
 		case "mutex":
