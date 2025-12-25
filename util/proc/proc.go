@@ -3,11 +3,15 @@ package proc
 import (
 	"context"
 	"errors"
+	"math"
 	"os"
+	"sync/atomic"
 	"syscall"
 	"time"
+	"unsafe"
 
 	"github.com/shirou/gopsutil/v4/process"
+	"golang.org/x/sync/errgroup"
 )
 
 var MustKillSignals = []syscall.Signal{syscall.SIGINT, syscall.SIGKILL}
@@ -49,16 +53,16 @@ func WaitProcExit(ctx context.Context, pid int, interval time.Duration, count in
 	}
 }
 
-func GetSelfAndAllChildrenProcess() ([]*process.Process, error) {
+func GetSelfProcTree(ctx context.Context) ([]*process.Process, error) {
 	all := make([]*process.Process, 0, 4)
 
-	self, err := process.NewProcess(int32(os.Getpid()))
+	self, err := process.NewProcessWithContext(ctx, int32(os.Getpid()))
 	if err != nil {
 		return nil, err
 	}
 	all = append(all, self)
 
-	allChildren, err := ListAllChildrenProcess(self)
+	allChildren, err := FindAllChildrenProcess(ctx, self)
 	if err != nil {
 		return nil, err
 	}
@@ -67,73 +71,86 @@ func GetSelfAndAllChildrenProcess() ([]*process.Process, error) {
 	return all, nil
 }
 
-func ListAllChildrenProcess(p *process.Process) ([]*process.Process, error) {
-	children, err := p.Children()
-	if err != nil {
-		return nil, err
-	}
-
-	var allChildren []*process.Process
-	for _, child := range children {
-		allChildren = append(allChildren, child)
-		subChildren, err := ListAllChildrenProcess(child)
-		if err != nil {
-			return nil, err
-		}
-		allChildren = append(allChildren, subChildren...)
-	}
-
-	return allChildren, nil
+func CalcSelfCPUPercent(ctx context.Context, interval time.Duration) (float64, error) {
+	return CalcProcCPUPercent(ctx, os.Getpid(), interval)
 }
 
-func CalcSelfCPUPercent() (float64, error) {
-	self, err := process.NewProcess(int32(os.Getpid()))
+func CalcSelfProcTreeCPUPercent(ctx context.Context, interval time.Duration) (float64, error) {
+	return CalcProcTreeCPUPercent(ctx, os.Getpid(), interval)
+}
+
+func CalcSelfMemoryUsage(ctx context.Context) (uint64, error) {
+	return CalcProcMemoryUsage(ctx, os.Getpid())
+}
+
+func CalcSelfProcTreeMemoryUsage(ctx context.Context) (uint64, error) {
+	return CalcProcTreeMemoryUsage(ctx, os.Getpid())
+}
+
+func CalcProcCPUPercent(ctx context.Context, pid int, interval time.Duration) (float64, error) {
+	ps, err := pidsToProcess(ctx, true, pid)
 	if err != nil {
 		return 0, err
 	}
-	return CalcCPUPercent([]*process.Process{self})
+
+	return CalcProcessesCPUPercent(ctx, interval, ps...)
 }
 
-func CalcSelfAndAllChildrenCPUPercent() (float64, error) {
-	ps, err := GetSelfAndAllChildrenProcess()
+func CalcProcTreeCPUPercent(ctx context.Context, pid int, interval time.Duration) (float64, error) {
+	procTree, err := pidToProcessTree(ctx, true, pid)
 	if err != nil {
 		return 0, err
 	}
-	return CalcCPUPercent(ps)
+
+	return CalcProcessesCPUPercent(ctx, interval, procTree...)
 }
 
-func CalcSelfMemoryUsage() (uint64, error) {
-	self, err := process.NewProcess(int32(os.Getpid()))
+func CalcProcMemoryUsage(ctx context.Context, pid int) (uint64, error) {
+	ps, err := pidsToProcess(ctx, true, pid)
 	if err != nil {
 		return 0, err
 	}
-	return CalcMemoryUsage([]*process.Process{self})
+
+	return CalcProcessesMemoryUsage(ps...)
 }
 
-func CalcSelfAndAllChildrenMemoryUsage() (uint64, error) {
-	ps, err := GetSelfAndAllChildrenProcess()
+func CalcProcTreeMemoryUsage(ctx context.Context, pid int) (uint64, error) {
+	procTree, err := pidToProcessTree(ctx, true, pid)
 	if err != nil {
 		return 0, err
 	}
-	return CalcMemoryUsage(ps)
+
+	return CalcProcessesMemoryUsage(procTree...)
 }
 
-func CalcCPUPercent(ps []*process.Process) (float64, error) {
+func CalcProcessesCPUPercent(ctx context.Context, interval time.Duration, ps ...*process.Process) (float64, error) {
 	var totalCPU float64
+
+	eg, ctx := errgroup.WithContext(ctx)
 	for _, p := range ps {
-		cpuPercent, err := p.CPUPercent()
-		if errors.Is(err, os.ErrNotExist) {
-			continue
-		}
-		if err != nil {
-			return 0, err
-		}
-		totalCPU += cpuPercent
+		eg.Go(func() error {
+			cpuPercent, err := p.PercentWithContext(ctx, interval)
+			if errors.Is(err, os.ErrNotExist) {
+				return nil
+			}
+			if err != nil {
+				return err
+			}
+
+			atomicAddFloat64(&totalCPU, cpuPercent)
+			return nil
+		})
 	}
+
+	err := eg.Wait()
+	if err != nil {
+		return 0, err
+	}
+
 	return totalCPU, nil
 }
 
-func CalcMemoryUsage(ps []*process.Process) (uint64, error) {
+func CalcProcessesMemoryUsage(ps ...*process.Process) (uint64, error) {
 	var totalMemory uint64
 	for _, p := range ps {
 		memInfo, err := p.MemoryInfo()
@@ -146,4 +163,54 @@ func CalcMemoryUsage(ps []*process.Process) (uint64, error) {
 		totalMemory += memInfo.RSS
 	}
 	return totalMemory, nil
+}
+
+func atomicAddFloat64(addr *float64, delta float64) (newVal float64) {
+	addrUint64 := (*uint64)(unsafe.Pointer(addr))
+	for {
+		oldBits := atomic.LoadUint64(addrUint64)
+		oldVal := math.Float64frombits(oldBits)
+		newVal = oldVal + delta
+		newBits := math.Float64bits(newVal)
+		if atomic.CompareAndSwapUint64(addrUint64, oldBits, newBits) {
+			return newVal
+		}
+	}
+}
+
+func pidsToProcess(ctx context.Context, skipNotExists bool, pids ...int) ([]*process.Process, error) {
+	if len(pids) == 0 {
+		return nil, nil
+	}
+
+	ps := make([]*process.Process, 0, len(pids))
+	for _, pid := range pids {
+		p, err := process.NewProcessWithContext(ctx, int32(pid))
+		if err != nil {
+			if skipNotExists && errors.Is(err, process.ErrorProcessNotRunning) {
+				continue
+			}
+			return nil, err
+		}
+		ps = append(ps, p)
+	}
+	return ps, nil
+}
+
+func pidToProcessTree(ctx context.Context, skipNotExists bool, pid int) ([]*process.Process, error) {
+	children, err := FindAllChildrenPid(ctx, pid)
+	if err != nil {
+		return nil, err
+	}
+
+	all := make([]int, 0, 1+len(children))
+	all = append(all, pid)
+	all = append(all, children...)
+
+	procTree, err := pidsToProcess(ctx, skipNotExists, all...)
+	if err != nil {
+		return nil, err
+	}
+
+	return procTree, nil
 }

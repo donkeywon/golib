@@ -29,8 +29,7 @@ var D Svcd = &svcd{
 type Svcd interface {
 	boot.Daemon
 	Get(ns Namespace, m Module, n Name) Svc
-	Reg(ns Namespace, m Module, n Name, creator Creator)
-	RegWithCfg(ns Namespace, m Module, n Name, creator Creator, cfgCreator CfgCreator)
+	Reg(ns Namespace, m Module, n Name, creator Creator, cfgCreator CfgCreator)
 }
 
 type svcCreatorWithFQN struct {
@@ -69,7 +68,7 @@ func (s *svcd) Init() error {
 		}
 
 		if cfg, hasCfg := s.svcCfgMap[fqn]; hasCfg {
-			s.Debug("apply cfg to svc", "fqn", fqn, "cfg", cfg)
+			s.Debug("set cfg to svc", "fqn", fqn, "cfg", cfg)
 			if cs, ok := ins.(plugin.CfgSetter[any]); ok {
 				cs.SetCfg(cfg)
 			} else {
@@ -84,24 +83,19 @@ func (s *svcd) Init() error {
 	return s.Runner.Init()
 }
 
-func (s *svcd) Reg(ns Namespace, m Module, n Name, creator Creator) {
-	checkValid(ns, m, n)
+func (s *svcd) Reg(ns Namespace, m Module, n Name, creator Creator, cfgCreator CfgCreator) {
+	s.validate(ns, m, n, creator, cfgCreator)
 
 	fqn := buildFQN(ns, m, n)
 	s.svcCreators = append(s.svcCreators, svcCreatorWithFQN{fqn: fqn, creator: creator})
-}
 
-func (s *svcd) RegWithCfg(ns Namespace, m Module, n Name, creator Creator, cfgCreator CfgCreator) {
-	s.Reg(ns, m, n, creator)
-
-	fqn := buildFQN(ns, m, n)
-	cfg := cfgCreator()
-	if cfg == nil {
-		panic(fmt.Errorf("cfg is nil, FQN: %s", fqn))
+	if cfgCreator != nil {
+		cfg := cfgCreator()
+		if cfg != nil {
+			s.svcCfgMap[fqn] = cfg
+			boot.RegCfg(fqn, cfg)
+		}
 	}
-
-	s.svcCfgMap[fqn] = cfg
-	boot.RegCfg(fqn, cfg)
 }
 
 func (s *svcd) Get(ns Namespace, m Module, n Name) Svc {
@@ -111,18 +105,39 @@ func (s *svcd) Get(ns Namespace, m Module, n Name) Svc {
 		panic(fmt.Errorf("svc not exists, maybe dependencies order is invalid, FQN: %s", fqn))
 	}
 
-	return ins.(Svc)
+	return ins
 }
 
 func buildFQN(ns Namespace, m Module, n Name) string {
 	return fmt.Sprintf("%s.%s.%s", ns, m, n)
 }
 
-func checkValid(ns Namespace, m Module, n Name) {
+func (s *svcd) validate(ns Namespace, m Module, n Name, creator Creator, cfgCreator CfgCreator) {
+	if creator == nil {
+		panic("nil svc creator")
+	}
+
 	if strings.Contains(string(ns), ".") || strings.Contains(string(m), ".") || strings.Contains(string(n), ".") {
 		panic("namespace or module or name must not contain dot(.) character")
 	}
-	if string(ns) == "" || string(m) == "" || n == "" {
-		panic("namespace and module and name must not empty")
+	if string(ns) == "" {
+		panic("empty svc namespace")
+	}
+	if string(m) == "" {
+		panic("empty svc module")
+	}
+	if string(n) == "" {
+		panic("empty svc name")
+	}
+
+	fqn := buildFQN(ns, m, n)
+	_, exists := s.svcMap[fqn]
+	if exists {
+		panic("duplicate reg")
+	}
+
+	sample := creator()
+	if sample == nil {
+		panic(fmt.Sprintf("svc %s creator return nil", fqn))
 	}
 }
