@@ -147,7 +147,7 @@ func run(r Runner) {
 				return
 			default:
 			}
-			r.Info("received cancel, stopping")
+			r.Info("canceling")
 			stop(r, false)
 		}
 	}()

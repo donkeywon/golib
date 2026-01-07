@@ -97,7 +97,7 @@ func isStructPointer(rv reflect.Value) bool {
 // 这里不返回错误而是直接panic的原因是：
 // Create函数只是把plugin创建出来，并把cfg设置到plugin中对应的一个字段里。
 // 这里的panic分为两种情况
-// 1. plugin不存在，说明没有注册，大部分情况是没有调用RegisterPlugin
+// 1. plugin不存在，说明没有注册，大部分情况是没有调用Reg
 // 2. cfg设置失败，说明plugin本身定义的有问题
 // 这两种情况下说明代码本身有问题，所以直接panic.
 func CreateWithCfg[T any, P Plugin](typ T, cfg any) P {
@@ -142,16 +142,16 @@ func SetCfg[C any](p any, cfg C) {
 		panic(fmt.Sprintf("plugin(%+v) must be a pointer", pValue.Type()))
 	}
 
-	cfgType := reflect.TypeOf(cfg)
-	if cfgType.Kind() != reflect.Pointer {
-		panic(fmt.Sprintf("plugin(%s) cfg must be a pointer: %s", pValue.Type(), cfgType))
+	cfgValue := reflect.ValueOf(cfg)
+	if !isStruct(cfgValue) && !isStructPointer(cfgValue) {
+		panic(fmt.Sprintf("plugin(%s) cfg must be a struct or struct pointer: %s", pValue.Type(), cfgValue.Type()))
 	}
 
 	found := false
-	i := 0
-	for ; i < pValue.Elem().NumField(); i++ {
+	for i := range pValue.Elem().NumField() {
 		f := pValue.Elem().Field(i)
-		if f.CanSet() && f.Type() == cfgType {
+		if f.CanSet() && cfgValue.Type().AssignableTo(f.Type()) {
+			f.Set(cfgValue)
 			found = true
 			break
 		}
@@ -159,6 +159,4 @@ func SetCfg[C any](p any, cfg C) {
 	if !found {
 		panic(fmt.Sprintf("plugin(%+v) must has a exported cfg field", pValue.Type()))
 	}
-
-	pValue.Elem().Field(i).Set(reflect.ValueOf(cfg))
 }

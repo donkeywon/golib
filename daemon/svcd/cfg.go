@@ -1,4 +1,4 @@
-package svc
+package svcd
 
 type Cfg struct{}
 

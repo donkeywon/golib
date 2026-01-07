@@ -7,7 +7,7 @@ require (
 	github.com/avast/retry-go/v4 v4.7.0
 	github.com/earthboundkid/versioninfo/v2 v2.24.1
 	github.com/fsnotify/fsnotify v1.9.0
-	github.com/go-playground/validator/v10 v10.29.0
+	github.com/go-playground/validator/v10 v10.30.1
 	github.com/goccy/go-yaml v1.19.1
 	github.com/icza/backscanner v0.0.0-20241124160932-dff01ac50250
 	github.com/jessevdk/go-flags v1.6.1
@@ -18,7 +18,7 @@ require (
 	github.com/pierrec/lz4/v4 v4.1.23
 	github.com/pkg/profile v1.7.0
 	github.com/prometheus/procfs v0.19.2
-	github.com/shirou/gopsutil/v4 v4.25.11
+	github.com/shirou/gopsutil/v4 v4.25.12
 	github.com/stretchr/testify v1.11.1
 	github.com/tidwall/gjson v1.18.0
 	github.com/zeebo/xxh3 v1.0.2
