@@ -19,16 +19,61 @@ var (
 	fqSubsystem    = "pool_stats"
 	variableLabels = []string{"name", "type"}
 
-	maxOpenConnectionsDesc = prometheus.NewDesc(prometheus.BuildFQName(fqNamespace, fqSubsystem, "max_open_connections"), "Maximum number of open connections to the database.", variableLabels, nil)
-	openConnectionsDesc    = prometheus.NewDesc(prometheus.BuildFQName(fqNamespace, fqSubsystem, "open_connections"), "The number of established connections both in use and idle.", variableLabels, nil)
-	inUseConnectionsDesc   = prometheus.NewDesc(prometheus.BuildFQName(fqNamespace, fqSubsystem, "in_use"), "The number of connections currently in use.", variableLabels, nil)
-	idleConnectionsDesc    = prometheus.NewDesc(prometheus.BuildFQName(fqNamespace, fqSubsystem, "idle"), "The number of idle connections.", variableLabels, nil)
+	maxOpenConnectionsDesc = prometheus.NewDesc(
+		prometheus.BuildFQName(fqNamespace, fqSubsystem, "max_open_connections"),
+		"Maximum number of open connections to the database.",
+		variableLabels,
+		nil,
+	)
+	openConnectionsDesc = prometheus.NewDesc(
+		prometheus.BuildFQName(fqNamespace, fqSubsystem, "open_connections"),
+		"The number of established connections both in use and idle.",
+		variableLabels,
+		nil,
+	)
+	inUseConnectionsDesc = prometheus.NewDesc(
+		prometheus.BuildFQName(fqNamespace, fqSubsystem, "in_use"),
+		"The number of connections currently in use.",
+		variableLabels,
+		nil,
+	)
+	idleConnectionsDesc = prometheus.NewDesc(
+		prometheus.BuildFQName(fqNamespace, fqSubsystem, "idle"),
+		"The number of idle connections.",
+		variableLabels,
+		nil,
+	)
 
-	waitCountDesc         = prometheus.NewDesc(prometheus.BuildFQName(fqNamespace, fqSubsystem, "wait_count"), "The total number of connections waited for.", variableLabels, nil)
-	waitDurationDesc      = prometheus.NewDesc(prometheus.BuildFQName(fqNamespace, fqSubsystem, "wait_duration"), "The total time blocked waiting for a new connection.", variableLabels, nil)
-	maxIdleClosedDesc     = prometheus.NewDesc(prometheus.BuildFQName(fqNamespace, fqSubsystem, "max_idle_closed"), "The total number of connections closed due to SetMaxIdleConns.", variableLabels, nil)
-	maxIdleTimeClosedDesc = prometheus.NewDesc(prometheus.BuildFQName(fqNamespace, fqSubsystem, "max_idle_time_closed"), "The total number of connections closed due to SetConnMaxIdleTime.", variableLabels, nil)
-	maxLifetimeClosedDesc = prometheus.NewDesc(prometheus.BuildFQName(fqNamespace, fqSubsystem, "max_life_time_closed"), "The total number of connections closed due to SetConnMaxLifeTime.", variableLabels, nil)
+	waitCountDesc = prometheus.NewDesc(
+		prometheus.BuildFQName(fqNamespace, fqSubsystem, "wait_count"),
+		"The total number of connections waited for.",
+		variableLabels,
+		nil,
+	)
+	waitDurationDesc = prometheus.NewDesc(
+		prometheus.BuildFQName(fqNamespace, fqSubsystem, "wait_duration"),
+		"The total time blocked waiting for a new connection.",
+		variableLabels,
+		nil,
+	)
+	maxIdleClosedDesc = prometheus.NewDesc(
+		prometheus.BuildFQName(fqNamespace, fqSubsystem, "max_idle_closed"),
+		"The total number of connections closed due to SetMaxIdleConns.",
+		variableLabels,
+		nil,
+	)
+	maxIdleTimeClosedDesc = prometheus.NewDesc(
+		prometheus.BuildFQName(fqNamespace, fqSubsystem, "max_idle_time_closed"),
+		"The total number of connections closed due to SetConnMaxIdleTime.",
+		variableLabels,
+		nil,
+	)
+	maxLifetimeClosedDesc = prometheus.NewDesc(
+		prometheus.BuildFQName(fqNamespace, fqSubsystem, "max_life_time_closed"),
+		"The total number of connections closed due to SetConnMaxLifeTime.",
+		variableLabels,
+		nil,
+	)
 )
 
 type DBP interface {
@@ -61,6 +106,13 @@ func (d *dbp) Init() error {
 		db.SetMaxOpenConns(dbCfg.MaxOpen)
 		db.SetConnMaxLifetime(dbCfg.MaxLifeTime)
 		db.SetConnMaxIdleTime(dbCfg.MaxIdleTime)
+
+		err = db.PingContext(d.Ctx())
+		if err != nil {
+			d.closeAll()
+			return errs.Wrapf(err, "ping db failed, name: %s, type: %s", dbCfg.Name, dbCfg.Type)
+		}
+
 		d.dbs[dbCfg.Name] = db
 	}
 	if d.Cfg.EnableExportMetrics {
@@ -70,14 +122,21 @@ func (d *dbp) Init() error {
 }
 
 func (d *dbp) Stop() error {
+	d.closeAll()
+	return nil
+}
+
+func (d *dbp) closeAll() {
 	for _, dbCfg := range d.Cfg.Pools {
 		db := d.dbs[dbCfg.Name]
+		if db == nil {
+			continue
+		}
 		err := db.Close()
 		if err != nil {
 			d.Error("close db failed", err, "name", dbCfg.Name, "type", dbCfg.Type)
 		}
 	}
-	return nil
 }
 
 func (d *dbp) Describe(ch chan<- *prometheus.Desc) {

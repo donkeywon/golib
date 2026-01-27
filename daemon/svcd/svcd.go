@@ -103,11 +103,6 @@ func validate(ns Namespace, m Module, n Name, creator Creator, cfgCreator CfgCre
 	if exists {
 		panic("duplicate reg")
 	}
-
-	sample := creator()
-	if sample == nil {
-		panic(fmt.Sprintf("svc %s creator return nil", fqn))
-	}
 }
 
 func Get[S Svc](ns Namespace, m Module, n Name) S {

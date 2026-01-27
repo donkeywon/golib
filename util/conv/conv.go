@@ -94,6 +94,8 @@ func ToString(v any) (string, error) {
 		vs = vv.String()
 	case *time.Duration:
 		vs = vv.String()
+	case fmt.Stringer:
+		vs = vv.String()
 	default:
 		vs, err = jsons.MarshalString(vv)
 	}
