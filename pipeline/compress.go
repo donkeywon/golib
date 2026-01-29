@@ -2,7 +2,10 @@ package pipeline
 
 import (
 	"io"
+	"strconv"
+	"strings"
 
+	"github.com/donkeywon/golib/errs"
 	"github.com/donkeywon/golib/plugin"
 	"github.com/klauspost/compress/s2"
 	"github.com/klauspost/compress/zstd"
@@ -38,11 +41,23 @@ type CompressLevel string
 type CompressCfg struct {
 	Type        CompressType  `json:"type"        validate:"required" yaml:"type"`
 	Level       CompressLevel `json:"level"       validate:"required" yaml:"level"`
-	Concurrency int           `json:"concurrency" yaml:"concurrency"`
+	Concurrency int           `json:"concurrency"                     yaml:"concurrency"`
 }
 
 func NewCompressCfg() *CompressCfg {
 	return &CompressCfg{}
+}
+
+func (c *CompressCfg) String() string {
+	var sb strings.Builder
+	sb.WriteString(`{"type":"`)
+	sb.WriteString(string(c.Type))
+	sb.WriteString(`","level":"`)
+	sb.WriteString(string(c.Level))
+	sb.WriteString(`","concurrency":`)
+	sb.WriteString(strconv.Itoa(c.Concurrency))
+	sb.WriteString("}")
+	return sb.String()
 }
 
 type CompressReader struct {
@@ -109,7 +124,7 @@ func (c *CompressWriter) Init() error {
 	var compressWriter io.WriteCloser
 	switch c.CompressCfg.Type {
 	case CompressTypeGzip:
-		compressWriter = NewGzipWritter(c.w, c.CompressCfg)
+		compressWriter = NewGzipWriter(c.w, c.CompressCfg)
 	case CompressTypeSnappy:
 		compressWriter = NewSnappyWriter(c.w, c.CompressCfg)
 	case CompressTypeZstd:
@@ -152,7 +167,10 @@ func NewZstdWriter(w io.Writer, cfg *CompressCfg) io.WriteCloser {
 	default:
 		opts = append(opts, zstd.WithEncoderLevel(zstd.SpeedDefault))
 	}
-	ze, _ := zstd.NewWriter(w, opts...)
+	ze, err := zstd.NewWriter(w, opts...)
+	if err != nil {
+		panic(errs.Wrapf(err, "create zstd writer failed: %s", cfg.String()))
+	}
 	return ze
 }
 
@@ -175,20 +193,29 @@ func NewSnappyWriter(w io.Writer, cfg *CompressCfg) io.WriteCloser {
 	return sw
 }
 
-func NewGzipWritter(w io.Writer, cfg *CompressCfg) io.WriteCloser {
-	var gw *pgzip.Writer
+func NewGzipWriter(w io.Writer, cfg *CompressCfg) io.WriteCloser {
+	var (
+		gw  *pgzip.Writer
+		err error
+	)
 	switch cfg.Level {
 	case CompressLevelFast:
-		gw, _ = pgzip.NewWriterLevel(w, pgzip.BestSpeed)
+		gw, err = pgzip.NewWriterLevel(w, pgzip.BestSpeed)
 	case CompressLevelBetter:
-		gw, _ = pgzip.NewWriterLevel(w, pgzip.DefaultCompression)
+		gw, err = pgzip.NewWriterLevel(w, pgzip.DefaultCompression)
 	case CompressLevelBest:
-		gw, _ = pgzip.NewWriterLevel(w, pgzip.BestCompression)
+		gw, err = pgzip.NewWriterLevel(w, pgzip.BestCompression)
 	default:
-		gw, _ = pgzip.NewWriterLevel(w, pgzip.DefaultCompression)
+		gw, err = pgzip.NewWriterLevel(w, pgzip.DefaultCompression)
+	}
+	if err != nil {
+		panic(errs.Wrapf(err, "create gzip writer failed: %s", cfg.String()))
 	}
 	if cfg.Concurrency > 0 {
-		_ = gw.SetConcurrency(gzipDefaultBlockSize, cfg.Concurrency)
+		err = gw.SetConcurrency(gzipDefaultBlockSize, cfg.Concurrency)
+		if err != nil {
+			panic(errs.Wrapf(err, "set gzip concurrency failed: %s", cfg.String()))
+		}
 	}
 	return gw
 }
@@ -210,7 +237,10 @@ func NewLz4Writer(w io.Writer, cfg *CompressCfg) io.WriteCloser {
 	}
 
 	lw := lz4.NewWriter(w)
-	_ = lw.Apply(opts...)
+	err := lw.Apply(opts...)
+	if err != nil {
+		panic(errs.Wrapf(err, "apply lz4 writer options failed: %s", cfg.String()))
+	}
 	return lw
 }
 
@@ -224,11 +254,17 @@ func (z *zstdReader) Close() error {
 }
 
 func NewZstdReader(r io.Reader, cfg *CompressCfg) io.ReadCloser {
-	var zr *zstd.Decoder
+	var (
+		zr  *zstd.Decoder
+		err error
+	)
 	if cfg.Concurrency > 0 {
-		zr, _ = zstd.NewReader(r, zstd.WithDecoderConcurrency(cfg.Concurrency))
+		zr, err = zstd.NewReader(r, zstd.WithDecoderConcurrency(cfg.Concurrency))
 	} else {
-		zr, _ = zstd.NewReader(r)
+		zr, err = zstd.NewReader(r)
+	}
+	if err != nil {
+		panic(errs.Wrapf(err, "create zstd reader failed: %s", cfg.String()))
 	}
 
 	return &zstdReader{Decoder: zr}
@@ -247,11 +283,17 @@ func NewSnappyReader(r io.Reader, _ *CompressCfg) io.ReadCloser {
 }
 
 func NewGzipReader(r io.Reader, cfg *CompressCfg) io.ReadCloser {
-	var gr *pgzip.Reader
+	var (
+		gr  *pgzip.Reader
+		err error
+	)
 	if cfg.Concurrency > 0 {
-		gr, _ = pgzip.NewReaderN(r, gzipDefaultBlockSize, cfg.Concurrency)
+		gr, err = pgzip.NewReaderN(r, gzipDefaultBlockSize, cfg.Concurrency)
 	} else {
-		gr, _ = pgzip.NewReader(r)
+		gr, err = pgzip.NewReader(r)
+	}
+	if err != nil {
+		panic(errs.Wrapf(err, "create gzip reader failed: %s", cfg.String()))
 	}
 	return gr
 }
@@ -267,7 +309,10 @@ func (l *lz4Reader) Close() error {
 func NewLz4Reader(r io.Reader, cfg *CompressCfg) io.ReadCloser {
 	lr := lz4.NewReader(r)
 	if cfg.Concurrency > 0 {
-		_ = lr.Apply(lz4.ConcurrencyOption(cfg.Concurrency))
+		err := lr.Apply(lz4.ConcurrencyOption(cfg.Concurrency))
+		if err != nil {
+			panic(errs.Wrapf(err, "set lz4 reader concurrency option failed: %s", cfg.String()))
+		}
 	}
 	return &lz4Reader{Reader: lr}
 }
