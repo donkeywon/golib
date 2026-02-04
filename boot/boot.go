@@ -9,7 +9,6 @@ import (
 	"runtime"
 	"slices"
 	"strings"
-	"time"
 
 	"github.com/donkeywon/golib/buildinfo"
 	"github.com/donkeywon/golib/consts"
@@ -92,8 +91,8 @@ func UnRegDaemon(typ ...DaemonType) {
 }
 
 type options struct {
-	CfgPath        string `env:"CFG_PATH" description:"config file path"        long:"config"     short:"c"`
-	PrintVersion   bool   `description:"print version info"                     long:"version"    short:"v"`
+	CfgPath        string `env:"CFG_PATH" description:"config file path"   long:"config"  short:"c"`
+	PrintVersion   bool   `               description:"print version info" long:"version" short:"v"`
 	envPrefix      string
 	onConfigLoaded OnConfigLoadedFunc
 }
@@ -309,7 +308,7 @@ func (b *booter) loadCfgFromFile() error {
 			continue
 		}
 
-		err = yaml.NodeToValue(node, cfg, yaml.CustomUnmarshaler(durationUnmarshaler))
+		err = yaml.NodeToValue(node, cfg)
 		if err != nil {
 			return errs.Wrapf(err, "unmarshal cfg fail: %s", name)
 		}
@@ -355,16 +354,6 @@ func (b *booter) buildCfgMap() (map[string]any, []string) {
 	}
 	cfgMap["log"] = b.logCfg
 	return cfgMap, cfgKeys
-}
-
-func durationUnmarshaler(d *time.Duration, b []byte) error {
-	tmp, err := time.ParseDuration(string(b))
-	if err != nil {
-		return err
-	}
-
-	*d = tmp
-	return nil
 }
 
 func buildFlagParser(base *options, cfgMap map[string]any, cfgKeys []string) (*flags.Parser, error) {
