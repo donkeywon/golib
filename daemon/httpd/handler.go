@@ -1,7 +1,6 @@
 package httpd
 
 import (
-	"context"
 	"net/http"
 
 	"github.com/donkeywon/golib/errs"
@@ -21,7 +20,11 @@ func (ah APIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	httpu.RespOk(ah(w, r), w)
 }
 
-type RESTHandler[I any, O any] func(context.Context, I) (O, error)
+type validateStruct struct {
+	Any any `validate:"dive"`
+}
+
+type RESTHandler[I any, O any] func(http.ResponseWriter, *http.Request, I) (O, error)
 
 func (rh RESTHandler[I, O]) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	defer func() {
@@ -29,7 +32,7 @@ func (rh RESTHandler[I, O]) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if p != nil {
 			httpu.RespJSONFail(w, &Resp{
 				Code: RespCodeFail,
-				Msg:  errs.PanicToErr(p).Error(),
+				Msg:  errs.ErrToStackString(errs.PanicToErr(p)),
 			})
 		}
 	}()
@@ -39,25 +42,27 @@ func (rh RESTHandler[I, O]) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		httpu.RespJSON(w, http.StatusBadRequest, &Resp{
 			Code: RespCodeFail,
-			Msg:  "parse request fail: " + err.Error(),
+			Msg:  errs.ErrToStackString(errs.Wrap(err, "parse request failed")),
 		})
 		return
 	}
 
-	err = v.Struct(i)
-	if err != nil {
-		httpu.RespJSON(w, http.StatusBadRequest, &Resp{
-			Code: RespCodeFail,
-			Msg:  "validate request fail: " + err.Error(),
-		})
-		return
+	if !isNil(i) {
+		err = v.Struct(&validateStruct{i})
+		if err != nil {
+			httpu.RespJSON(w, http.StatusBadRequest, &Resp{
+				Code: RespCodeFail,
+				Msg:  errs.ErrToStackString(errs.Wrap(err, "invalid request")),
+			})
+			return
+		}
 	}
 
-	o, err := rh(r.Context(), i)
+	o, err := rh(w, r, i)
 	if err != nil {
 		httpu.RespJSONFail(w, &Resp{
 			Code: RespCodeFail,
-			Msg:  err.Error(),
+			Msg:  errs.ErrToStackString(errs.Wrap(err, "handle request failed")),
 		})
 		return
 	}
@@ -66,4 +71,8 @@ func (rh RESTHandler[I, O]) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		Code: RespCodeOk,
 		Data: o,
 	})
+}
+
+func isNil(a any) bool {
+	return a == nil
 }
