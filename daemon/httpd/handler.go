@@ -11,13 +11,13 @@ import (
 type RawHandler func(http.ResponseWriter, *http.Request) []byte
 
 func (rh RawHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	httpu.RespRawOk(rh(w, r), w)
+	httpu.RespRawOk(w, rh(w, r))
 }
 
 type APIHandler func(http.ResponseWriter, *http.Request) any
 
 func (ah APIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	httpu.RespOk(ah(w, r), w)
+	httpu.RespOk(w, ah(w, r))
 }
 
 type validateStruct struct {

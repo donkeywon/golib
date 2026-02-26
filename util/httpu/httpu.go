@@ -65,11 +65,11 @@ type Decoder interface {
 
 type NewDecoder func(r io.Reader) Decoder
 
-func RespOk(data any, w http.ResponseWriter, headersKV ...string) {
+func RespOk(w http.ResponseWriter, data any, headersKV ...string) {
 	Resp(w, http.StatusOK, data, headersKV...)
 }
 
-func RespFail(data any, w http.ResponseWriter, headersKV ...string) {
+func RespFail(w http.ResponseWriter, data any, headersKV ...string) {
 	Resp(w, http.StatusInternalServerError, data, headersKV...)
 }
 
@@ -86,11 +86,11 @@ func Resp(w http.ResponseWriter, statusCode int, data any, headersKV ...string) 
 	RespRaw(w, statusCode, conv.String2Bytes(s), headersKV...)
 }
 
-func RespRawOk(data []byte, w http.ResponseWriter, headersKV ...string) {
+func RespRawOk(w http.ResponseWriter, data []byte, headersKV ...string) {
 	RespRaw(w, http.StatusOK, data, headersKV...)
 }
 
-func RespRawFail(data []byte, w http.ResponseWriter, headersKV ...string) {
+func RespRawFail(w http.ResponseWriter, data []byte, headersKV ...string) {
 	RespRaw(w, http.StatusInternalServerError, data, headersKV...)
 }
 
