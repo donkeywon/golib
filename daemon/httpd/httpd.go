@@ -19,6 +19,7 @@ type HTTPD interface {
 	HandleFunc(pattern string, handler http.HandlerFunc)
 	RegMiddleware(mid ...MiddlewareFunc)
 	Mux() *http.ServeMux
+	Cfg() Cfg
 }
 
 func init() {
@@ -35,8 +36,8 @@ var (
 
 type httpd struct {
 	runner.Runner
-	*Cfg
 
+	cfg         *Cfg
 	s           *http.Server
 	mux         *http.ServeMux
 	middlewares []MiddlewareFunc
@@ -60,7 +61,7 @@ func New() HTTPD {
 }
 
 func (h *httpd) Start() error {
-	h.s = newHTTPServer(h.Cfg)
+	h.s = newHTTPServer(h.cfg)
 	h.setMuxToHTTPHandler()
 	return h.s.ListenAndServe()
 }
@@ -83,6 +84,14 @@ func (h *httpd) RegMiddleware(mf ...MiddlewareFunc) {
 
 func (h *httpd) Mux() *http.ServeMux {
 	return h.mux
+}
+
+func (h *httpd) Cfg() Cfg {
+	return *h.cfg
+}
+
+func (h *httpd) SetCfg(cfg any) {
+	h.cfg = cfg.(*Cfg)
 }
 
 func (h *httpd) setMuxToHTTPHandler() {
