@@ -1,7 +1,9 @@
 package dbp
 
 import (
+	"context"
 	"database/sql"
+	"time"
 
 	"github.com/donkeywon/golib/boot"
 	"github.com/donkeywon/golib/daemon/metricsd"
@@ -107,10 +109,10 @@ func (d *dbp) Init() error {
 		db.SetConnMaxLifetime(dbCfg.MaxLifeTime)
 		db.SetConnMaxIdleTime(dbCfg.MaxIdleTime)
 
-		err = db.PingContext(d.Ctx())
+		err = d.waitDBReady(db, dbCfg.Name, dbCfg.Type, dbCfg.MaxWaitReadyTime, dbCfg.ReadyQuery)
 		if err != nil {
 			d.closeAll()
-			return errs.Wrapf(err, "ping db failed, name: %s, type: %s", dbCfg.Name, dbCfg.Type)
+			return errs.Wrapf(err, "wait db ready timed out, name: %s, type: %s", dbCfg.Name, dbCfg.Type)
 		}
 
 		d.dbs[dbCfg.Name] = db
@@ -119,6 +121,42 @@ func (d *dbp) Init() error {
 		metricsd.D.MustRegister(d)
 	}
 	return d.Runner.Init()
+}
+
+func (d *dbp) waitDBReady(db *sql.DB, name string, typ string, maxWait time.Duration, readyQuery string) error {
+	if maxWait == 0 {
+		return d.checkDBReady(db, readyQuery)
+	}
+
+	ctx, cancel := context.WithTimeout(d.Ctx(), maxWait)
+	defer cancel()
+
+	var err error
+	t := time.NewTimer(0)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return errs.Wrap(err, "check db ready failed")
+		case <-t.C:
+			err = d.checkDBReady(db, readyQuery)
+			if err == nil {
+				return nil
+			}
+
+			t.Reset(time.Second)
+			d.Warn("check db ready failed", "err", err, "name", name, "type", typ)
+		}
+	}
+}
+
+func (d *dbp) checkDBReady(db *sql.DB, query string) error {
+	if query == "" {
+		return db.PingContext(d.Ctx())
+	}
+
+	_, err := db.ExecContext(d.Ctx(), query)
+	return err
 }
 
 func (d *dbp) Stop() error {
