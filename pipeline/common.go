@@ -69,15 +69,16 @@ func (c *CommonCfg) customUnmarshal(data []byte, unmarshaler func([]byte, any) e
 }
 
 type CommonOption struct {
-	BufSize             int            `json:"bufSize" yaml:"bufSize"`
-	QueueSize           int            `json:"queueSize" yaml:"queueSize"`
-	Deadline            int            `json:"deadline" yaml:"deadline"`
-	Async               bool           `json:"async" yaml:"async"`
-	ProgressLogInterval int            `json:"progressLogInterval" yaml:"progressLogInterval"`
-	Hash                string         `json:"hash" yaml:"hash"`
-	Checksum            string         `json:"checksum" yaml:"checksum"`
-	RateLimitCfg        *ratelimit.Cfg `json:"rateLimitCfg" yaml:"rateLimitCfg"`
-	Count               bool           `json:"count" yaml:"count"`
+	BufSize              int            `json:"bufSize"              yaml:"bufSize"`
+	QueueSize            int            `json:"queueSize"            yaml:"queueSize"`
+	Deadline             int            `json:"deadline"             yaml:"deadline"`
+	DeadlineFlushMinSize int            `json:"deadlineFlushMinSize" yaml:"deadlineFlushMinSize"`
+	Async                bool           `json:"async"                yaml:"async"`
+	ProgressLogInterval  int            `json:"progressLogInterval"  yaml:"progressLogInterval"`
+	Hash                 string         `json:"hash"                 yaml:"hash"`
+	Checksum             string         `json:"checksum"             yaml:"checksum"`
+	RateLimitCfg         *ratelimit.Cfg `json:"rateLimitCfg"         yaml:"rateLimitCfg"`
+	Count                bool           `json:"count"                yaml:"count"`
 }
 
 func (ito *CommonOption) toOptions(write bool) []Option {
@@ -87,7 +88,7 @@ func (ito *CommonOption) toOptions(write bool) []Option {
 	opts := make([]Option, 0, 2)
 	if ito.Async && ito.BufSize > 0 {
 		if write {
-			opts = append(opts, EnableAsyncWrite(ito.BufSize, ito.QueueSize, time.Second*time.Duration(ito.Deadline)))
+			opts = append(opts, EnableAsyncWrite(ito.BufSize, ito.QueueSize, time.Second*time.Duration(ito.Deadline), ito.DeadlineFlushMinSize))
 		} else {
 			opts = append(opts, EnableAsyncRead(ito.BufSize, ito.QueueSize))
 		}

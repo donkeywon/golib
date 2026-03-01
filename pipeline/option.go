@@ -117,9 +117,9 @@ func EnableAsyncRead(bufSize int, queueSize int) Option {
 	})
 }
 
-func EnableAsyncWrite(bufSize int, queueSize int, deadline time.Duration) Option {
+func EnableAsyncWrite(bufSize int, queueSize int, deadline time.Duration, deadlineFlushMinSize int) Option {
 	return WrapWriter(func(w io.Writer) io.Writer {
-		return aio.NewAsyncWriter(w, aio.BufSize(bufSize), aio.QueueSize(queueSize), aio.Deadline(deadline))
+		return aio.NewAsyncWriter(w, aio.BufSize(bufSize), aio.QueueSize(queueSize), aio.Deadline(deadline), aio.DeadlineFlushMinSize(deadlineFlushMinSize))
 	})
 }
 

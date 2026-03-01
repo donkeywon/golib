@@ -9,9 +9,10 @@ func (o Option) apply(r *option) {
 }
 
 type option struct {
-	bufSize   int
-	queueSize int
-	deadline  time.Duration
+	bufSize              int
+	queueSize            int
+	deadline             time.Duration
+	deadlineFlushMinSize int
 }
 
 func newOption() *option {
@@ -41,6 +42,14 @@ func Deadline(deadline time.Duration) Option {
 	return func(o *option) {
 		if deadline > 0 {
 			o.deadline = deadline
+		}
+	}
+}
+
+func DeadlineFlushMinSize(n int) Option {
+	return func(o *option) {
+		if n > 0 {
+			o.deadlineFlushMinSize = n
 		}
 	}
 }

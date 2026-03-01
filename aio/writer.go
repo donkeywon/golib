@@ -173,21 +173,36 @@ func (aw *AsyncWriter) Flush() {
 	aw.flushNoLock()
 }
 
+func (aw *AsyncWriter) resetDeadline() {
+	if aw.deadlineTimer != nil {
+		aw.deadlineTimer.Reset(aw.opt.deadline)
+	}
+}
+
+func (aw *AsyncWriter) flushMinSize(n int) {
+	aw.mu.Lock()
+	defer aw.mu.Unlock()
+
+	if aw.off < n {
+		return
+	}
+
+	aw.flushNoLock()
+}
+
 func (aw *AsyncWriter) flushNoLock() {
 	if aw.err.Has() {
 		return
 	}
 
-	if aw.buf == nil || len(aw.buf) == 0 {
+	if aw.buf == nil || aw.off == 0 {
 		return
 	}
 
 	aw.buf = aw.buf[:aw.off]
 	aw.queue <- aw.buf
 	aw.buf = nil
-	if aw.deadlineTimer != nil {
-		aw.deadlineTimer.Reset(aw.opt.deadline)
-	}
+	aw.resetDeadline()
 }
 
 func (aw *AsyncWriter) prepareBuf() {
@@ -253,7 +268,8 @@ func (aw *AsyncWriter) deadline() {
 		case <-aw.closed:
 			return
 		case <-aw.deadlineTimer.C:
-			aw.Flush()
+			aw.flushMinSize(aw.opt.deadlineFlushMinSize)
+			aw.resetDeadline()
 		}
 	}
 }
