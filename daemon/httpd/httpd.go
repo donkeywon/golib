@@ -13,26 +13,7 @@ import (
 	"github.com/donkeywon/golib/util/httpu"
 )
 
-type HTTPD interface {
-	boot.Daemon
-	Handle(pattern string, handler http.Handler)
-	HandleFunc(pattern string, handler http.HandlerFunc)
-	RegMiddleware(mid ...MiddlewareFunc)
-	Mux() *http.ServeMux
-	Cfg() Cfg
-}
-
-func init() {
-	D.RegMiddleware(logAndRecoverMiddleware)
-}
-
 const DaemonTypeHTTPd boot.DaemonType = "httpd"
-
-type MiddlewareFunc func(http.Handler) http.Handler
-
-var (
-	D HTTPD = New()
-)
 
 type httpd struct {
 	runner.Runner
@@ -40,7 +21,7 @@ type httpd struct {
 	cfg         *Cfg
 	s           *http.Server
 	mux         *http.ServeMux
-	middlewares []MiddlewareFunc
+	middlewares []func(http.Handler) http.Handler
 }
 
 func newHTTPServer(cfg *Cfg) *http.Server {
@@ -53,11 +34,13 @@ func newHTTPServer(cfg *Cfg) *http.Server {
 	}
 }
 
-func New() HTTPD {
-	return &httpd{
+func New() boot.Daemon {
+	h := &httpd{
 		Runner: runner.Create(string(DaemonTypeHTTPd)),
 		mux:    http.NewServeMux(),
 	}
+	h.Use(h.logAndRecoverMiddleware)
+	return h
 }
 
 func (h *httpd) Start() error {
@@ -78,16 +61,12 @@ func (h *httpd) AppendError(err ...error) {
 	}
 }
 
-func (h *httpd) RegMiddleware(mf ...MiddlewareFunc) {
+func (h *httpd) Use(mf ...func(http.Handler) http.Handler) {
 	h.middlewares = append(h.middlewares, mf...)
 }
 
 func (h *httpd) Mux() *http.ServeMux {
 	return h.mux
-}
-
-func (h *httpd) Cfg() Cfg {
-	return *h.cfg
 }
 
 func (h *httpd) SetCfg(cfg any) {
@@ -106,18 +85,6 @@ func (h *httpd) buildHandlerChain(next http.Handler) http.Handler {
 	return handler
 }
 
-func logFields(r *http.Request, w *recordResponseWriter, startTs int64, endTs int64) []any {
-	return []any{
-		"status", w.statusCode,
-		"uri", r.RequestURI,
-		"remote", r.RemoteAddr,
-		"req_method", r.Method,
-		"req_body_size", r.ContentLength,
-		"resp_body_size", w.nw,
-		"cost", fmt.Sprintf("%.6fms", float64(endTs-startTs)/float64(time.Millisecond)),
-	}
-}
-
 func (h *httpd) Handle(pattern string, handler http.Handler) {
 	h.mux.Handle(pattern, h.buildHandlerChain(handler))
 }
@@ -126,15 +93,15 @@ func (h *httpd) HandleFunc(pattern string, handler http.HandlerFunc) {
 	h.mux.HandleFunc(pattern, h.buildHandlerChain(handler).ServeHTTP)
 }
 
-func HandleREST[I any, O any](pattern string, handler RESTHandler[I, O]) {
-	D.Handle(pattern, handler)
-}
-
-func logAndRecoverMiddleware(next http.Handler) http.Handler {
+func (h *httpd) logAndRecoverMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w = newWriteOnceRecordResponseWriter(w)
+		rpw := &recordResponseWriter{
+			ResponseWriter: w,
+			nw:             -1,
+			statusCode:     http.StatusOK,
+		}
 
-		D.Debug("begin handle req",
+		h.Debug("begin handle req",
 			"uri", r.RequestURI,
 			"remote", r.RemoteAddr,
 			"req_method", r.Method,
@@ -147,10 +114,24 @@ func logAndRecoverMiddleware(next http.Handler) http.Handler {
 			e := recover()
 			if e != nil {
 				err := errs.PanicToErr(e)
-				D.Error("panic on handle req", err, logFields(r, w.(*recordResponseWriter), start, end)...)
-				httpu.RespRaw(w, http.StatusInternalServerError, conv.String2Bytes(err.Error()))
+				h.Error("panic on handle req", err,
+					"status", rpw.statusCode,
+					"uri", r.RequestURI,
+					"remote", r.RemoteAddr,
+					"req_method", r.Method,
+					"req_body_size", r.ContentLength,
+					"resp_body_size", rpw.nw,
+					"cost", fmt.Sprintf("%.6fms", float64(end-start)/float64(time.Millisecond)))
+				httpu.RespBytes(w, http.StatusInternalServerError, conv.String2Bytes(err.Error()))
 			} else {
-				D.Debug("end handle req", logFields(r, w.(*recordResponseWriter), start, end)...)
+				h.Debug("end handle req",
+					"status", rpw.statusCode,
+					"uri", r.RequestURI,
+					"remote", r.RemoteAddr,
+					"req_method", r.Method,
+					"req_body_size", r.ContentLength,
+					"resp_body_size", rpw.nw,
+					"cost", fmt.Sprintf("%.6fms", float64(end-start)/float64(time.Millisecond)))
 			}
 		}()
 

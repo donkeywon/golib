@@ -11,9 +11,7 @@ import (
 	"github.com/donkeywon/golib/util/reflects"
 )
 
-const (
-	DaemonTypeSvcd boot.DaemonType = "svcd"
-)
+const DaemonTypeSvcd boot.DaemonType = "svcd"
 
 type Namespace string
 type Module string
@@ -23,11 +21,10 @@ var (
 	_svcCreators = make([]*svcCreatorWithFQN, 0, 64)
 	_svcMap      = make(map[string]Svc)
 	_svcCfgMap   = make(map[string]any)
+	_svcd        = &svcd{
+		Runner: runner.Create("svc"),
+	}
 )
-
-var D boot.Daemon = &svcd{
-	Runner: runner.Create("svc"),
-}
 
 type svcCreatorWithFQN struct {
 	fqn     string
@@ -37,6 +34,10 @@ type svcCreatorWithFQN struct {
 type svcd struct {
 	runner.Runner
 	*Cfg
+}
+
+func New() boot.Daemon {
+	return _svcd
 }
 
 func (s *svcd) Init() error {

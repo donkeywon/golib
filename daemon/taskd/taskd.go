@@ -28,38 +28,6 @@ var (
 	ErrPoolNotExists       = errors.New("pool not exists")
 )
 
-var D Taskd = New()
-
-type Taskd interface {
-	boot.Daemon
-	SubmitTask(taskCfg *task.Cfg) (*task.Task, error)
-	SubmitTaskAndWait(context.Context, *task.Cfg) (*task.Task, error)
-	StopTask(taskID string) error
-	PauseTask(taskID string) error
-	ResumeTask(taskID string) (*task.Task, error)
-	IsTaskExists(taskID string) bool
-	IsTaskPending(taskID string) bool
-	IsTaskRunning(taskID string) bool
-	IsTaskPaused(taskID string) bool
-	ListTasks() []*task.Task
-	ListTasksCfg() []*task.Cfg
-	ListTaskIDs() []string
-	ListPendingTaskIDs() []string
-	ListRunningTaskIDs() []string
-	ListPausingTaskIDs() []string
-	ListPausedTaskIDs() []string
-	GetTaskCfg(taskID string) (*task.Cfg, error)
-	OnTaskCreate(hooks ...task.Hook)
-	OnTaskInit(hooks ...task.Hook)
-	OnTaskSubmit(hooks ...task.Hook)
-	OnTaskStart(hooks ...task.Hook)
-	OnTaskPausing(hooks ...task.Hook)
-	OnTaskPaused(hooks ...task.Hook)
-	OnTaskDone(hooks ...task.Hook)
-	OnTaskStepDone(hooks ...task.StepHook)
-	OnTaskDeferStepDone(hooks ...task.StepHook)
-}
-
 type taskd struct {
 	runner.Runner
 
@@ -85,7 +53,7 @@ type taskd struct {
 	deferStepDoneHooks []task.StepHook
 }
 
-func New() Taskd {
+func New() boot.Daemon {
 	return &taskd{
 		Runner:           runner.Create(string(DaemonTypeTaskd)),
 		taskMap:          make(map[string]*task.Task),
@@ -351,7 +319,7 @@ func (td *taskd) createTask(cfg *task.Cfg) (t *task.Task, err error) {
 			err = errs.PanicToErrWithMsg(e, "panic on create task")
 		}
 	}()
-	return plugin.CreateWithCfg[plugin.Type, *task.Task](task.PluginTypeTask, cfg), nil
+	return plugin.CreateWithCfg[*task.Task](task.PluginTypeTask, cfg), nil
 }
 
 func (td *taskd) initTask(t *task.Task) (err error) {

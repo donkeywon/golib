@@ -20,18 +20,11 @@ import (
 
 const DaemonTypeUpd boot.DaemonType = "upd"
 
-var D Upd = New()
-
 var (
 	ErrAlreadyUpgrading = errors.New("already upgrading")
 )
 
-type Upd interface {
-	boot.Daemon
-	Upgrade(vi *VerInfo) error
-}
-
-// upd must be first daemon
+// upd must be first daemon if need
 type upd struct {
 	runner.Runner
 	*Cfg
@@ -41,7 +34,7 @@ type upd struct {
 	allDoneExceptMe    chan struct{}
 }
 
-func New() Upd {
+func New() boot.Daemon {
 	return &upd{
 		Runner:             runner.Create(string(DaemonTypeUpd)),
 		upgradingBlockChan: make(chan struct{}),
@@ -156,7 +149,7 @@ func (u *upd) prepareUpgrade(vi *VerInfo) error {
 
 func (u *upd) upgrade(vi *VerInfo) bool {
 	u.Info("start download new package", "ver", vi.Ver)
-	err := downloadPackage(vi.DownloadDstPath, vi.StoreCfg)
+	err := u.downloadPackage(vi.DownloadDstPath, vi.StoreCfg)
 	if err != nil {
 		u.Error("download new package failed", err)
 		return false
@@ -207,7 +200,7 @@ func (u *upd) upgrade(vi *VerInfo) bool {
 	return true
 }
 
-func downloadPackage(downloadDstPath string, storeCfg *pipeline.ReaderCfg) error {
+func (u *upd) downloadPackage(downloadDstPath string, storeCfg *pipeline.ReaderCfg) error {
 	cfg := pipeline.NewCfg()
 	cfg.Add(pipeline.WorkerCopy, pipeline.NewCopyCfg(), &pipeline.CommonOption{}).
 		ReadFromReader(storeCfg.CommonCfgWithOption).
@@ -215,7 +208,7 @@ func downloadPackage(downloadDstPath string, storeCfg *pipeline.ReaderCfg) error
 
 	p := pipeline.New()
 	p.SetCfg(cfg)
-	p.Inherit(D)
+	p.Inherit(u)
 	err := runner.Init(p)
 	if err != nil {
 		return errs.Wrap(err, "init download pipeline failed")

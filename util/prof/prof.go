@@ -19,7 +19,7 @@ var (
 	profSwitch  uint32
 	profTimeout = 300
 	stopCh      = make(chan struct{})
-	done        = make(chan struct{})
+	done        chan struct{}
 	p           interface{ Stop() }
 
 	ErrUnknownMode = errors.New("unknown mode")
@@ -51,7 +51,7 @@ func Start(mode string, dir string, timeoutSec int) (string, <-chan struct{}, er
 		case "clock":
 			opts = append(opts, profile.ClockProfile)
 		default:
-			return "", done, ErrUnknownMode
+			return "", nil, ErrUnknownMode
 		}
 	}
 
@@ -62,13 +62,17 @@ func Start(mode string, dir string, timeoutSec int) (string, <-chan struct{}, er
 	}
 	opts = append(opts, profile.ProfilePath(dir))
 
-	err := start(timeoutSec, opts...)
-	return filepath.Join(dir, filename), done, err
+	done, err := start(timeoutSec, opts...)
+	if err != nil {
+		return "", nil, err
+	}
+
+	return filepath.Join(dir, filename), done, nil
 }
 
-func start(timeoutSec int, options ...func(*profile.Profile)) error {
+func start(timeoutSec int, options ...func(*profile.Profile)) (<-chan struct{}, error) {
 	if !atomic.CompareAndSwapUint32(&profSwitch, 0, 1) {
-		return errors.New("already profiling")
+		return nil, errors.New("already profiling")
 	}
 
 	opts := []func(*profile.Profile){profile.Quiet}
@@ -93,7 +97,7 @@ func start(timeoutSec int, options ...func(*profile.Profile)) error {
 		close(done)
 	}(timeoutSec)
 
-	return nil
+	return done, nil
 }
 
 func Stop() error {

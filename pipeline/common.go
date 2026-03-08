@@ -56,7 +56,7 @@ func (c *CommonCfg) customUnmarshal(data []byte, unmarshaler func([]byte, any) e
 	c.Type = Type(typ.Str)
 
 	cv := commonCfgWithoutType{}
-	cv.Cfg = plugin.CreateCfg(c.Type)
+	cv.Cfg = plugin.CreateCfg[any](c.Type)
 	if cv.Cfg == nil {
 		return nil
 	}

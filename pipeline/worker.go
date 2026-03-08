@@ -104,7 +104,7 @@ func (wc *WorkerCfg) customUnmarshal(data []byte, unmarshal func([]byte, any) er
 }
 
 func (wc *WorkerCfg) build() Worker {
-	worker := plugin.CreateWithCfg[Type, Worker](wc.Type, wc.Cfg)
+	worker := plugin.CreateWithCfg[Worker](wc.Type, wc.Cfg)
 
 	for _, readerCfg := range wc.Readers {
 		worker.ReadFrom(readerCfg.build())

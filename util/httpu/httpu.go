@@ -1,6 +1,7 @@
 package httpu
 
 import (
+	"bytes"
 	"encoding/xml"
 	"errors"
 	"io"
@@ -65,36 +66,24 @@ type Decoder interface {
 
 type NewDecoder func(r io.Reader) Decoder
 
-func RespOk(w http.ResponseWriter, data any, headersKV ...string) {
-	Resp(w, http.StatusOK, data, headersKV...)
-}
-
-func RespFail(w http.ResponseWriter, data any, headersKV ...string) {
-	Resp(w, http.StatusInternalServerError, data, headersKV...)
-}
-
-func Resp(w http.ResponseWriter, statusCode int, data any, headersKV ...string) {
+func RespData(w http.ResponseWriter, statusCode int, data any, headersKV ...string) {
 	if data == nil {
-		RespRaw(w, statusCode, nil, headersKV...)
+		RespBytes(w, statusCode, nil, headersKV...)
 		return
 	}
 	s, err := conv.ToString(data)
 	if err != nil {
-		RespRaw(w, http.StatusInternalServerError, conv.String2Bytes("convert response data to string failed: "+err.Error()), headersKV...)
+		var buf bytes.Buffer
+		buf.Grow(128)
+		buf.WriteString("convert response data to string failed: ")
+		buf.WriteString(err.Error())
+		RespBytes(w, http.StatusInternalServerError, buf.Bytes(), headersKV...)
 		return
 	}
-	RespRaw(w, statusCode, conv.String2Bytes(s), headersKV...)
+	RespBytes(w, statusCode, conv.String2Bytes(s), headersKV...)
 }
 
-func RespRawOk(w http.ResponseWriter, data []byte, headersKV ...string) {
-	RespRaw(w, http.StatusOK, data, headersKV...)
-}
-
-func RespRawFail(w http.ResponseWriter, data []byte, headersKV ...string) {
-	RespRaw(w, http.StatusInternalServerError, data, headersKV...)
-}
-
-func RespRaw(w http.ResponseWriter, statusCode int, data []byte, headersKV ...string) {
+func RespBytes(w http.ResponseWriter, statusCode int, data []byte, headersKV ...string) {
 	setHeaders(w, headersKV...)
 	w.WriteHeader(statusCode)
 	_, err := w.Write(data)
@@ -103,12 +92,8 @@ func RespRaw(w http.ResponseWriter, statusCode int, data []byte, headersKV ...st
 	}
 }
 
-func RespReaderOk(w http.ResponseWriter, r io.Reader, headersKV ...string) {
-	RespReader(w, http.StatusOK, r, headersKV...)
-}
-
-func RespReaderFail(w http.ResponseWriter, r io.Reader, headersKV ...string) {
-	RespReader(w, http.StatusInternalServerError, r, headersKV...)
+func RespString(w http.ResponseWriter, statusCode int, data string, headersKV ...string) {
+	RespBytes(w, statusCode, conv.String2Bytes(data), headersKV...)
 }
 
 func RespReader(w http.ResponseWriter, statusCode int, r io.Reader, headersKV ...string) {
@@ -120,22 +105,18 @@ func RespReader(w http.ResponseWriter, statusCode int, r io.Reader, headersKV ..
 	}
 }
 
-func RespJSONOk(w http.ResponseWriter, data any, headersKV ...string) {
-	RespJSON(w, http.StatusOK, data, headersKV...)
-}
-
-func RespJSONFail(w http.ResponseWriter, data any, headersKV ...string) {
-	RespJSON(w, http.StatusInternalServerError, data, headersKV...)
-}
-
 func RespJSON(w http.ResponseWriter, statusCode int, data any, headersKV ...string) {
 	RespEncoder(w, statusCode, data, MIMEJSON, func(w io.Writer) Encoder { return jsons.NewEncoder(w) }, headersKV...)
+}
+
+func RespYAML(w http.ResponseWriter, statusCode int, data any, headersKV ...string) {
+	RespEncoder(w, statusCode, data, MIMEYAML, func(w io.Writer) Encoder { return yamls.NewEncoder(w) }, headersKV...)
 }
 
 func RespEncoder(w http.ResponseWriter, statusCode int, data any, mime string, newEncoder NewEncoder, headersKV ...string) {
 	setContentTypeHeader(w, mime)
 	if data == nil {
-		RespRaw(w, statusCode, nil, headersKV...)
+		RespBytes(w, statusCode, nil, headersKV...)
 		return
 	}
 
@@ -144,7 +125,7 @@ func RespEncoder(w http.ResponseWriter, statusCode int, data any, mime string, n
 	enc := newEncoder(w)
 	err := enc.Encode(data)
 	if err != nil {
-		panic(errs.Wrap(err, "encode http response data fail"))
+		panic(errs.Wrap(err, "encode http response data failed"))
 	}
 }
 

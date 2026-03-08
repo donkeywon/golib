@@ -13,14 +13,6 @@ type recordResponseWriter struct {
 	nw         int
 }
 
-func newWriteOnceRecordResponseWriter(w http.ResponseWriter) *recordResponseWriter {
-	return &recordResponseWriter{
-		ResponseWriter: w,
-		nw:             -1,
-		statusCode:     http.StatusOK,
-	}
-}
-
 func (rp *recordResponseWriter) Write(data []byte) (int, error) {
 	rp.writeHeader()
 	nw, err := rp.ResponseWriter.Write(data)

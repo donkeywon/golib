@@ -11,6 +11,8 @@ const (
 	DefaultEnableWebProf          = false
 	DefaultEnableWebPrettyTrace   = false
 	DefaultEnableStatsViz         = false
+	DefaultSkipStartupErr         = false
+	DefaultPrefix                 = ""
 )
 
 type Cfg struct {
@@ -29,6 +31,9 @@ type Cfg struct {
 	GoPsAddr   string `yaml:"goPsAddr"   env:"GOPS_ADDR"   long:"gops-addr"   =description:"gops agent listen addr"`
 
 	EnableStatsViz bool `yaml:"enableStatsViz" env:"ENABLE_STATS_VIZ" long:"enable-stats-viz" description:"enable statsviz, need httpd"`
+
+	Prefix         string `yaml:"prefix"         env:"PREFIX"           long:"prefix"           description:"url prefix"`
+	SkipStartupErr bool   `yaml:"skipStartupErr" env:"SKIP_STARTUP_ERR" long:"skip-startup-err" description:"skip startup err, boot will failed if false"`
 }
 
 func NewCfg() *Cfg {
@@ -43,5 +48,7 @@ func NewCfg() *Cfg {
 		EnableWebProf:          DefaultEnableWebProf,
 		EnableWebPrettyTrace:   DefaultEnableWebPrettyTrace,
 		EnableStatsViz:         DefaultEnableStatsViz,
+		SkipStartupErr:         DefaultSkipStartupErr,
+		Prefix:                 DefaultPrefix,
 	}
 }

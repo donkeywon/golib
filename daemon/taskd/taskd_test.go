@@ -16,7 +16,7 @@ import (
 )
 
 var (
-	td = New().(*taskd)
+	td = New()
 )
 
 func TestMain(m *testing.M) {

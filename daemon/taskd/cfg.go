@@ -7,8 +7,8 @@ const (
 )
 
 type PoolCfg struct {
-	Name      string `json:"name" yaml:"name" validate:"required"`
-	Size      int    `json:"size" yaml:"size" validate:"required"`
+	Name      string `json:"name"      yaml:"name"      validate:"required"`
+	Size      int    `json:"size"      yaml:"size"      validate:"required"`
 	QueueSize int    `json:"queueSize" yaml:"queueSize" validate:"required"`
 }
 

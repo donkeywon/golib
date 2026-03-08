@@ -10,8 +10,8 @@ var (
 )
 
 type Cfg struct {
-	UpgradeCmd        []string `yaml:"upgradeCmd"`
-	UpgradeOutputPath string   `yaml:"upgradeOutputPath"`
+	UpgradeCmd        []string `env:"UPGRADE_CMD"         long:"upgrade-cmd"         yaml:"upgradeCmd"        description:"exec cmd after download completed" validate:"required"`
+	UpgradeOutputPath string   `env:"UPGRADE_OUTPUT_PATH" long:"upgrade-output-path" yaml:"upgradeOutputPath" description:"upgrade cmd output path"`
 }
 
 func NewCfg() *Cfg {

@@ -37,7 +37,7 @@ func (wc *WriterCfg) UnmarshalYAML(data []byte) error {
 }
 
 func (wc *WriterCfg) build() Writer {
-	w := plugin.CreateWithCfg[Type, Writer](wc.Type, wc.Cfg)
+	w := plugin.CreateWithCfg[Writer](wc.Type, wc.Cfg)
 	w.WithOptions(wc.toOptions(true)...)
 	return w
 }
