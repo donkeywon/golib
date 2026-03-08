@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"reflect"
 	"runtime"
 	"slices"
 	"strings"
@@ -98,7 +99,7 @@ func Get[D Daemon](typ DaemonType) D {
 	}
 	dd, ok := d.(D)
 	if !ok {
-		panic(fmt.Errorf("daemon %s is not type of %T", typ, d))
+		panic(fmt.Errorf("daemon %s is not type of %s", typ, reflect.TypeOf((*D)(nil)).Elem()))
 	}
 	return dd
 }
