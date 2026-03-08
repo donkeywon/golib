@@ -96,7 +96,11 @@ func Get[D Daemon](typ DaemonType) D {
 	if !exists {
 		panic(fmt.Errorf("daemon %s not exists, register first or get after created", typ))
 	}
-	return d.(D)
+	dd, ok := d.(D)
+	if !ok {
+		panic(fmt.Errorf("daemon %s is not type of %T", typ, d))
+	}
+	return dd
 }
 
 type options struct {

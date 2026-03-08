@@ -16,7 +16,7 @@ import (
 )
 
 var (
-	td = New()
+	tdtest = New().(*taskd)
 )
 
 func TestMain(m *testing.M) {
@@ -25,25 +25,25 @@ func TestMain(m *testing.M) {
 	cfg.Pools[0].Size = 2
 	cfg.Pools[0].QueueSize = 5
 
-	td.cfg = cfg
-	tests.Init(td)
+	tdtest.cfg = cfg
+	tests.Init(tdtest)
 
-	runner.Init(td)
+	runner.Init(tdtest)
 
 	os.Exit(m.Run())
 }
 
 func TestTaskd(t *testing.T) {
-	runner.Start(td)
+	runner.Start(tdtest)
 
 	maxNum := 10
 	for i := range maxNum {
 		go func(idx int) {
 			r := rands.RandInt(1, maxNum)
 			taskID := fmt.Sprintf("test-abc-%d", r)
-			_, err := td.SubmitTask(createTaskCfg(taskID, r))
+			_, err := tdtest.SubmitTask(createTaskCfg(taskID, r))
 			if err != nil {
-				td.Error("submit task failed", err, "task_id", taskID)
+				tdtest.Error("submit task failed", err, "task_id", taskID)
 			}
 		}(i)
 	}
@@ -60,21 +60,21 @@ func TestPause(t *testing.T) {
 		Count: 5,
 	})
 
-	tsk, err := td.SubmitTask(cfg)
+	tsk, err := tdtest.SubmitTask(cfg)
 	require.NoError(t, err)
 
 	time.Sleep(time.Second * 5)
-	err = td.PauseTask(tsk.Cfg.ID)
+	err = tdtest.PauseTask(tsk.Cfg.ID)
 	require.NoError(t, err)
 
-	td.Info("task result", "result", tsk.Result())
+	tdtest.Info("task result", "result", tsk.Result())
 
 	time.Sleep(time.Second)
-	tsk, err = td.ResumeTask(tsk.Cfg.ID)
+	tsk, err = tdtest.ResumeTask(tsk.Cfg.ID)
 	require.NoError(t, err)
 
 	<-tsk.Done()
-	td.Info("task result", "result", tsk.Result())
+	tdtest.Info("task result", "result", tsk.Result())
 }
 
 const stepTypeTick step.Type = "tick"
