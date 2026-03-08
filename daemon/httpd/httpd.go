@@ -111,6 +111,11 @@ func (h *httpd) logAndRecoverMiddleware(next http.Handler) http.Handler {
 		defer func() {
 			end := time.Now().UnixNano()
 
+			nw := rpw.nw
+			if nw < 0 {
+				nw = 0
+			}
+
 			e := recover()
 			if e != nil {
 				err := errs.PanicToErr(e)
@@ -120,7 +125,7 @@ func (h *httpd) logAndRecoverMiddleware(next http.Handler) http.Handler {
 					"remote", r.RemoteAddr,
 					"req_method", r.Method,
 					"req_body_size", r.ContentLength,
-					"resp_body_size", rpw.nw,
+					"resp_body_size", nw,
 					"cost", fmt.Sprintf("%.6fms", float64(end-start)/float64(time.Millisecond)))
 				httpu.RespBytes(w, http.StatusInternalServerError, conv.String2Bytes(err.Error()))
 			} else {
@@ -130,7 +135,7 @@ func (h *httpd) logAndRecoverMiddleware(next http.Handler) http.Handler {
 					"remote", r.RemoteAddr,
 					"req_method", r.Method,
 					"req_body_size", r.ContentLength,
-					"resp_body_size", rpw.nw,
+					"resp_body_size", nw,
 					"cost", fmt.Sprintf("%.6fms", float64(end-start)/float64(time.Millisecond)))
 			}
 		}()
