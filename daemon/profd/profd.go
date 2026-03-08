@@ -10,6 +10,7 @@ import (
 
 	"github.com/arl/statsviz"
 	"github.com/donkeywon/golib/boot"
+	"github.com/donkeywon/golib/daemon/httpd"
 	"github.com/donkeywon/golib/errs"
 	"github.com/donkeywon/golib/runner"
 	"github.com/donkeywon/golib/util/httpu"
@@ -20,9 +21,9 @@ import (
 
 const DaemonTypeProfd boot.DaemonType = "profd"
 
-type needHTTPd interface {
+type Profd interface {
 	boot.Daemon
-	Handle(string, http.Handler)
+	SetAllowedIPsGetter(func() map[string]struct{})
 }
 
 type profd struct {
@@ -38,7 +39,7 @@ type profd struct {
 
 	statsvizServer *statsviz.Server
 
-	httpd needHTTPd
+	httpd httpd.HTTPd
 }
 
 func New() boot.Daemon {
@@ -48,7 +49,7 @@ func New() boot.Daemon {
 }
 
 func (p *profd) Init() error {
-	p.httpd = boot.Get[needHTTPd](boot.DaemonType("httpd"))
+	p.httpd = boot.Get[httpd.HTTPd](boot.DaemonType("httpd"))
 
 	var err error
 	if p.cfg.EnableStartupProfiling {

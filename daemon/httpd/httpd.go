@@ -15,6 +15,13 @@ import (
 
 const DaemonTypeHTTPd boot.DaemonType = "httpd"
 
+type HTTPd interface {
+	boot.Daemon
+	Use(...func(http.Handler) http.Handler)
+	Handle(string, http.Handler)
+	HandleFunc(string, http.HandlerFunc)
+}
+
 type httpd struct {
 	runner.Runner
 

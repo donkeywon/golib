@@ -24,6 +24,11 @@ var (
 	ErrAlreadyUpgrading = errors.New("already upgrading")
 )
 
+type Upd interface {
+	boot.Daemon
+	Upgrade(vi *VerInfo) error
+}
+
 // upd must be first daemon if need
 type upd struct {
 	runner.Runner

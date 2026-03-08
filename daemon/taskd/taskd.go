@@ -28,6 +28,36 @@ var (
 	ErrPoolNotExists       = errors.New("pool not exists")
 )
 
+type Taskd interface {
+	boot.Daemon
+	SubmitTask(taskCfg *task.Cfg) (*task.Task, error)
+	SubmitTaskAndWait(context.Context, *task.Cfg) (*task.Task, error)
+	StopTask(taskID string) error
+	PauseTask(taskID string) error
+	ResumeTask(taskID string) (*task.Task, error)
+	IsTaskExists(taskID string) bool
+	IsTaskPending(taskID string) bool
+	IsTaskRunning(taskID string) bool
+	IsTaskPaused(taskID string) bool
+	ListTasks() []*task.Task
+	ListTasksCfg() []*task.Cfg
+	ListTaskIDs() []string
+	ListPendingTaskIDs() []string
+	ListRunningTaskIDs() []string
+	ListPausingTaskIDs() []string
+	ListPausedTaskIDs() []string
+	GetTaskCfg(taskID string) (*task.Cfg, error)
+	OnTaskCreate(hooks ...task.Hook)
+	OnTaskInit(hooks ...task.Hook)
+	OnTaskSubmit(hooks ...task.Hook)
+	OnTaskStart(hooks ...task.Hook)
+	OnTaskPausing(hooks ...task.Hook)
+	OnTaskPaused(hooks ...task.Hook)
+	OnTaskDone(hooks ...task.Hook)
+	OnTaskStepDone(hooks ...task.StepHook)
+	OnTaskDeferStepDone(hooks ...task.StepHook)
+}
+
 type taskd struct {
 	runner.Runner
 

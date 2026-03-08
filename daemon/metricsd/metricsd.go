@@ -1,11 +1,11 @@
 package metricsd
 
 import (
-	"net/http"
 	"reflect"
 	"sync"
 
 	"github.com/donkeywon/golib/boot"
+	"github.com/donkeywon/golib/daemon/httpd"
 	"github.com/donkeywon/golib/runner"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/collectors"
@@ -14,9 +14,18 @@ import (
 
 const DaemonTypeMetricsd boot.DaemonType = "metricsd"
 
-type needHTTPd interface {
+type Metricsd interface {
 	boot.Daemon
-	Handle(string, http.Handler)
+	Register(prometheus.Collector)
+	MustRegister(...prometheus.Collector)
+	RegisterMetric(prometheus.Metric)
+	SetGauge(string, float64)
+	AddGauge(string, float64)
+	SubGauge(string, float64)
+	IncGauge(string)
+	DecGauge(string)
+	IncCounter(string)
+	AddCounter(string, float64)
 }
 
 type metricsd struct {
@@ -26,7 +35,7 @@ type metricsd struct {
 	mu    sync.RWMutex
 	m     map[string]prometheus.Metric
 	reg   *prometheus.Registry
-	httpd needHTTPd
+	httpd httpd.HTTPd
 }
 
 func New() boot.Daemon {
@@ -45,7 +54,7 @@ func (p *metricsd) Init() error {
 		p.reg.MustRegister(collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
 	}
 
-	p.httpd = boot.Get[needHTTPd](boot.DaemonType("httpd"))
+	p.httpd = boot.Get[httpd.HTTPd](boot.DaemonType("httpd"))
 	p.httpd.Handle(p.cfg.HTTPEndpointPath, promhttp.HandlerFor(p.reg, promhttp.HandlerOpts{Registry: p.reg}))
 
 	return p.Runner.Init()
@@ -53,10 +62,6 @@ func (p *metricsd) Init() error {
 
 func (p *metricsd) SetCfg(cfg any) {
 	p.cfg = cfg.(*Cfg)
-}
-
-func (p *metricsd) Cfg() Cfg {
-	return *p.cfg
 }
 
 func (p *metricsd) SetGauge(name string, v float64) {

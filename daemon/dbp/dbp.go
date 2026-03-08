@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/donkeywon/golib/boot"
+	"github.com/donkeywon/golib/daemon/metricsd"
 	"github.com/donkeywon/golib/errs"
 	"github.com/donkeywon/golib/runner"
 	"github.com/prometheus/client_golang/prometheus"
@@ -13,9 +14,9 @@ import (
 
 const DaemonTypeDBP boot.DaemonType = "dbp"
 
-type needMetricsd interface {
+type DBP interface {
 	boot.Daemon
-	MustRegister(...prometheus.Collector)
+	Get(string) *sql.DB
 }
 
 var (
@@ -85,7 +86,7 @@ type dbp struct {
 
 	cfg      *Cfg
 	dbs      map[string]*sql.DB
-	metricsd needMetricsd
+	metricsd metricsd.Metricsd
 }
 
 func New() boot.Daemon {
@@ -116,7 +117,7 @@ func (d *dbp) Init() error {
 		d.dbs[dbCfg.Name] = db
 	}
 	if d.cfg.EnableExportMetrics {
-		d.metricsd = boot.Get[needMetricsd](boot.DaemonType("metricsd"))
+		d.metricsd = boot.Get[metricsd.Metricsd]("metricsd")
 		d.metricsd.MustRegister(d)
 	}
 	return d.Runner.Init()
