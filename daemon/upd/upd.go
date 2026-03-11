@@ -24,6 +24,8 @@ var (
 	ErrAlreadyUpgrading = errors.New("already upgrading")
 )
 
+var _ Upd = (*upd)(nil)
+
 type Upd interface {
 	boot.Daemon
 	Upgrade(vi *VerInfo) error

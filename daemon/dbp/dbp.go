@@ -14,6 +14,8 @@ import (
 
 const DaemonTypeDBP boot.DaemonType = "dbp"
 
+var _ DBP = (*dbp)(nil)
+
 type DBP interface {
 	boot.Daemon
 	Get(string) *sql.DB

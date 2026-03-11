@@ -28,6 +28,8 @@ var (
 	ErrPoolNotExists       = errors.New("pool not exists")
 )
 
+var _ Taskd = (*taskd)(nil)
+
 type Taskd interface {
 	boot.Daemon
 	SubmitTask(taskCfg *task.Cfg) (*task.Task, error)

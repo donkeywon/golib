@@ -15,6 +15,8 @@ import (
 
 const DaemonTypeHTTPd boot.DaemonType = "httpd"
 
+var _ HTTPd = (*httpd)(nil)
+
 type HTTPd interface {
 	boot.Daemon
 	Use(...func(http.Handler) http.Handler)

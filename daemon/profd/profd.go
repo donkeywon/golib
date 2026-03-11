@@ -21,6 +21,8 @@ import (
 
 const DaemonTypeProfd boot.DaemonType = "profd"
 
+var _ Profd = (*profd)(nil)
+
 type Profd interface {
 	boot.Daemon
 	SetAllowedIPsGetter(func() map[string]struct{})
@@ -30,7 +32,6 @@ type profd struct {
 	runner.Runner
 
 	cfg *Cfg
-	mux *http.ServeMux
 
 	allowedIPsGetter func() map[string]struct{}
 

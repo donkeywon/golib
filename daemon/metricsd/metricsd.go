@@ -14,11 +14,13 @@ import (
 
 const DaemonTypeMetricsd boot.DaemonType = "metricsd"
 
+var _ Metricsd = (*metricsd)(nil)
+
 type Metricsd interface {
 	boot.Daemon
-	Register(prometheus.Collector)
+	Register(prometheus.Collector) error
 	MustRegister(...prometheus.Collector)
-	RegisterMetric(prometheus.Metric)
+	RegisterMetric(prometheus.Metric) error
 	SetGauge(string, float64)
 	AddGauge(string, float64)
 	SubGauge(string, float64)
