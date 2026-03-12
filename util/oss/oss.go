@@ -3,6 +3,7 @@ package oss
 import (
 	"bytes"
 	"context"
+	"encoding/xml"
 	"net/http"
 	"strconv"
 	"strings"
@@ -139,7 +140,7 @@ func Delete(ctx context.Context, timeout time.Duration, url string, ak string, s
 	)
 
 	if err != nil {
-		return errs.Wrapf(err, "do http delete request fail, respStatus: %s, respBody: %s", respStatus, respBody.String())
+		return errs.Wrapf(err, "http delete failed, respStatus: %s, respBody: %s", respStatus, respBody.String())
 	}
 
 	return nil
@@ -161,8 +162,98 @@ func Head(ctx context.Context, timeout time.Duration, url string, ak string, sk 
 	)
 
 	if err != nil {
-		return nil, errs.Wrapf(err, "do http head request fail, respStatus: %s, respBody: %s", respStatus, respBody.String())
+		return nil, errs.Wrapf(err, "http head failed, respStatus: %s, respBody: %s", respStatus, respBody.String())
 	}
 
 	return resp, nil
+}
+
+type ListBucketResult struct {
+	Name        string    `xml:"Name"`
+	Prefix      string    `xml:"Prefix"`
+	KeyCount    int       `xml:"KeyCount"`
+	MaxKeys     int       `xml:"MaxKeys"`
+	IsTruncated bool      `xml:"IsTruncated"`
+	Contents    []Content `xml:"Contents"`
+}
+
+type Content struct {
+	ETag         string `xml:"ETag"`
+	Key          string `xml:"Key"`
+	LastModified string `xml:"LastModified"`
+	Size         int64  `xml:"Size"`
+}
+
+type listBlobResult struct {
+	Blobs         []azblob `xml:"Blobs>Blob"`
+	Prefix        string   `xml:"Prefix"`
+	ContainerName string   `xml:"ContainerName,attr"`
+	MaxResults    int      `xml:"MaxResults"`
+}
+
+type azblob struct {
+	Name       string         `xml:"Name"`
+	Properties blobProperties `xml:"Properties"`
+}
+
+type blobProperties struct {
+	ContentLength int64  `xml:"Content-Length"`
+	LastModified  string `xml:"Last-Modified"`
+	ETag          string `xml:"Etag"`
+}
+
+func List(ctx context.Context, timeout time.Duration, url string, ak string, sk string, region string) (ListBucketResult, error) {
+	var (
+		respStatus string
+		respBody   = bytes.NewBuffer(nil)
+		result     ListBucketResult
+		azResult   listBlobResult
+	)
+
+	_, err := httpc.Get(ctx, timeout, url,
+		httpc.ReqOptionFunc(func(r *http.Request) error {
+			return Sign(r, ak, sk, region)
+		}),
+		httpc.CheckStatusCode(http.StatusOK),
+		httpc.ToStatus(&respStatus),
+		httpc.ToBytesBuffer(respBody),
+	)
+
+	if err != nil {
+		return result, errs.Wrapf(err, "http get failed, respStatus: %s, respBody: %s", respStatus, respBody.String())
+	}
+
+	if !IsAzblob(url) {
+		err = xml.Unmarshal(respBody.Bytes(), &result)
+		if err != nil {
+			return result, errs.Wrapf(err, "parse resp to result failed, respStatus: %s, respBody: %s", respStatus, respBody.String())
+		}
+
+		return result, nil
+
+	}
+
+	err = xml.Unmarshal(respBody.Bytes(), &azResult)
+	if err != nil {
+		return result, errs.Wrapf(err, "parse resp to result failed, respStatus: %s, respBody: %s", respStatus, respBody.String())
+	}
+	result.Name = azResult.ContainerName
+	result.Prefix = azResult.Prefix
+	result.Contents = make([]Content, len(azResult.Blobs))
+	result.KeyCount = len(azResult.Blobs)
+	if azResult.MaxResults == 0 {
+		result.MaxKeys = result.KeyCount
+	} else {
+		result.MaxKeys = azResult.MaxResults
+	}
+
+	for i := range azResult.Blobs {
+		result.Contents[i] = Content{
+			ETag:         azResult.Blobs[i].Properties.ETag,
+			Key:          azResult.Blobs[i].Name,
+			LastModified: azResult.Blobs[i].Properties.LastModified,
+			Size:         azResult.Blobs[i].Properties.ContentLength,
+		}
+	}
+	return result, nil
 }

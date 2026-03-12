@@ -77,7 +77,7 @@ func DoWithClient(ctx context.Context, client *http.Client, timeout time.Duratio
 	var resp *http.Response
 	resp, err = client.Do(r)
 	if err != nil {
-		return resp, errs.Wrap(err, "do http request failed")
+		return resp, errs.Wrap(err, "http request failed")
 	}
 	defer func() {
 		// in case resp.Body was replaced, do not defer resp.Body.Close() directly
