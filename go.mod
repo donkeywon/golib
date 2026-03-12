@@ -3,7 +3,7 @@ module github.com/donkeywon/golib
 go 1.25.0
 
 require (
-	github.com/DeRuina/timberjack v1.3.9
+	github.com/DeRuina/timberjack v1.4.0
 	github.com/alitto/pond/v2 v2.7.0
 	github.com/arl/statsviz v0.8.0
 	github.com/avast/retry-go/v4 v4.7.0
@@ -11,7 +11,7 @@ require (
 	github.com/earthboundkid/versioninfo/v2 v2.24.1
 	github.com/fsnotify/fsnotify v1.9.0
 	github.com/go-playground/validator/v10 v10.30.1
-	github.com/goccy/go-json v0.10.5
+	github.com/goccy/go-json v0.10.6
 	github.com/goccy/go-yaml v1.19.2
 	github.com/google/gops v0.3.29
 	github.com/icza/backscanner v0.0.0-20241124160932-dff01ac50250
@@ -33,7 +33,7 @@ require (
 	golang.org/x/crypto v0.48.0
 	golang.org/x/sync v0.20.0
 	golang.org/x/sys v0.42.0
-	golang.org/x/text v0.34.0
+	golang.org/x/text v0.35.0
 	golang.org/x/time v0.15.0
 	google.golang.org/protobuf v1.36.11
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
