@@ -14,7 +14,7 @@ import (
 // GetNicSpeed
 // get nic speed in Mbps.
 func GetNicSpeed(nic string) (int, error) {
-	result := cmd.Exec(context.Background(), "powershell", "-Command", fmt.Sprintf(`"Get-NetAdapter | Where-Object { $_.Name -eq "%s" } | ForEach-Object { "$($_.Name)|$($_.LinkSpeed)" }"`, nic))
+	result := cmd.Exec(context.Background(), "powershell", "-Command", fmt.Sprintf(`[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; Get-NetAdapter | Where-Object { $_.Name -eq "%s" } | ForEach-Object { "$($_.Name)|$($_.LinkSpeed)" }`, nic))
 	if result.Err() != nil {
 		return 0, errs.Wrap(result.Err(), "exec Get-NetAdapter failed")
 	}
