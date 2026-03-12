@@ -2,6 +2,7 @@ package svcd
 
 import (
 	"fmt"
+	"reflect"
 	"strings"
 
 	"github.com/donkeywon/golib/boot"
@@ -112,7 +113,12 @@ func Get[S Svc](ns Namespace, m Module, n Name) S {
 		panic(fmt.Errorf("svc not exists, maybe dependencies order is invalid, FQN: %s", fqn))
 	}
 
-	return ins.(S)
+	s, ok := ins.(S)
+	if !ok {
+		panic(fmt.Errorf("svc %s is not type of %s", fqn, reflect.TypeOf((*S)(nil)).Elem()))
+	}
+
+	return s
 }
 
 func Reg(ns Namespace, m Module, n Name, creator Creator, cfgCreator CfgCreator) {
