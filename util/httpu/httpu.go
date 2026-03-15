@@ -66,12 +66,12 @@ type Decoder interface {
 
 type NewDecoder func(r io.Reader) Decoder
 
-func RespData(w http.ResponseWriter, statusCode int, data any, headersKV ...string) {
-	if data == nil {
+func RespAny(w http.ResponseWriter, statusCode int, a any, headersKV ...string) {
+	if a == nil {
 		RespBytes(w, statusCode, nil, headersKV...)
 		return
 	}
-	s, err := conv.ToString(data)
+	s, err := conv.ToString(a)
 	if err != nil {
 		var buf bytes.Buffer
 		buf.Grow(128)
@@ -83,17 +83,17 @@ func RespData(w http.ResponseWriter, statusCode int, data any, headersKV ...stri
 	RespBytes(w, statusCode, conv.String2Bytes(s), headersKV...)
 }
 
-func RespBytes(w http.ResponseWriter, statusCode int, data []byte, headersKV ...string) {
+func RespBytes(w http.ResponseWriter, statusCode int, bs []byte, headersKV ...string) {
 	setHeaders(w, headersKV...)
 	w.WriteHeader(statusCode)
-	_, err := w.Write(data)
+	_, err := w.Write(bs)
 	if err != nil {
 		panic(errs.Wrap(err, "http write data to response failed"))
 	}
 }
 
-func RespString(w http.ResponseWriter, statusCode int, data string, headersKV ...string) {
-	RespBytes(w, statusCode, conv.String2Bytes(data), headersKV...)
+func RespString(w http.ResponseWriter, statusCode int, str string, headersKV ...string) {
+	RespBytes(w, statusCode, conv.String2Bytes(str), headersKV...)
 }
 
 func RespReader(w http.ResponseWriter, statusCode int, r io.Reader, headersKV ...string) {

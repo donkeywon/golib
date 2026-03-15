@@ -2,15 +2,10 @@ package httpd
 
 import (
 	"errors"
-	"fmt"
 	"net/http"
-	"time"
 
 	"github.com/donkeywon/golib/boot"
-	"github.com/donkeywon/golib/errs"
 	"github.com/donkeywon/golib/runner"
-	"github.com/donkeywon/golib/util/conv"
-	"github.com/donkeywon/golib/util/httpu"
 )
 
 const DaemonTypeHTTPd boot.DaemonType = "httpd"
@@ -19,42 +14,51 @@ var _ HTTPd = (*httpd)(nil)
 
 type HTTPd interface {
 	boot.Daemon
+	SetRouter(Router)
+	Server() *http.Server
 	Use(...func(http.Handler) http.Handler)
 	Handle(string, http.Handler)
-	HandleFunc(string, http.HandlerFunc)
+	HandleFunc(string, func(http.ResponseWriter, *http.Request))
+}
+
+type Router interface {
+	http.Handler
+	Handle(string, http.Handler)
+	HandleFunc(string, func(http.ResponseWriter, *http.Request))
 }
 
 type httpd struct {
 	runner.Runner
 
-	cfg         *Cfg
-	s           *http.Server
-	mux         *http.ServeMux
+	cfg *Cfg
+	s   *http.Server
+
+	r           Router
+	patterns    []string
+	handlers    []http.Handler
 	middlewares []func(http.Handler) http.Handler
 }
 
-func newHTTPServer(cfg *Cfg) *http.Server {
-	return &http.Server{
-		Addr:              cfg.Addr,
-		ReadTimeout:       cfg.ReadTimeout,
-		ReadHeaderTimeout: cfg.ReadHeaderTimeout,
-		WriteTimeout:      cfg.WriteTimeout,
-		IdleTimeout:       cfg.IdleTimeout,
+func New() boot.Daemon {
+	return &httpd{
+		Runner: runner.Create(string(DaemonTypeHTTPd)),
 	}
 }
 
-func New() boot.Daemon {
-	h := &httpd{
-		Runner: runner.Create(string(DaemonTypeHTTPd)),
-		mux:    http.NewServeMux(),
+func (h *httpd) Init() error {
+	if h.r == nil {
+		h.r = http.NewServeMux()
 	}
-	h.Use(h.logAndRecoverMiddleware)
-	return h
+
+	for i := range h.patterns {
+		h.r.Handle(h.patterns[i], h.buildHandlerChain(h.handlers[i]))
+	}
+
+	h.s.Handler = h.r
+	return h.Runner.Init()
 }
 
 func (h *httpd) Start() error {
-	h.s = newHTTPServer(h.cfg)
-	h.setMuxToHTTPHandler()
 	return h.s.ListenAndServe()
 }
 
@@ -74,16 +78,27 @@ func (h *httpd) Use(mf ...func(http.Handler) http.Handler) {
 	h.middlewares = append(h.middlewares, mf...)
 }
 
-func (h *httpd) Mux() *http.ServeMux {
-	return h.mux
+func (h *httpd) Handle(pattern string, handler http.Handler) {
+	h.patterns = append(h.patterns, pattern)
+	h.handlers = append(h.handlers, handler)
+}
+
+func (h *httpd) HandleFunc(pattern string, handler func(http.ResponseWriter, *http.Request)) {
+	h.patterns = append(h.patterns, pattern)
+	h.handlers = append(h.handlers, http.HandlerFunc(handler))
 }
 
 func (h *httpd) SetCfg(cfg any) {
 	h.cfg = cfg.(*Cfg)
+	h.s = h.cfg.buildHTTPServer()
 }
 
-func (h *httpd) setMuxToHTTPHandler() {
-	h.s.Handler = h.mux
+func (h *httpd) SetRouter(r Router) {
+	h.s.Handler = r
+}
+
+func (h *httpd) Server() *http.Server {
+	return h.s
 }
 
 func (h *httpd) buildHandlerChain(next http.Handler) http.Handler {
@@ -92,63 +107,4 @@ func (h *httpd) buildHandlerChain(next http.Handler) http.Handler {
 		handler = h.middlewares[i](handler)
 	}
 	return handler
-}
-
-func (h *httpd) Handle(pattern string, handler http.Handler) {
-	h.mux.Handle(pattern, h.buildHandlerChain(handler))
-}
-
-func (h *httpd) HandleFunc(pattern string, handler http.HandlerFunc) {
-	h.mux.HandleFunc(pattern, h.buildHandlerChain(handler).ServeHTTP)
-}
-
-func (h *httpd) logAndRecoverMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		rpw := &recordResponseWriter{
-			ResponseWriter: w,
-			nw:             -1,
-			statusCode:     http.StatusOK,
-		}
-
-		h.Debug("begin handle req",
-			"uri", r.RequestURI,
-			"remote", r.RemoteAddr,
-			"req_method", r.Method,
-			"req_body_size", r.ContentLength)
-
-		start := time.Now().UnixNano()
-		defer func() {
-			end := time.Now().UnixNano()
-
-			nw := rpw.nw
-			if nw < 0 {
-				nw = 0
-			}
-
-			e := recover()
-			if e != nil {
-				err := errs.PanicToErr(e)
-				h.Error("panic on handle req", err,
-					"status", rpw.statusCode,
-					"uri", r.RequestURI,
-					"remote", r.RemoteAddr,
-					"req_method", r.Method,
-					"req_body_size", r.ContentLength,
-					"resp_body_size", nw,
-					"cost", fmt.Sprintf("%.6fms", float64(end-start)/float64(time.Millisecond)))
-				httpu.RespBytes(w, http.StatusInternalServerError, conv.String2Bytes(err.Error()))
-			} else {
-				h.Debug("end handle req",
-					"status", rpw.statusCode,
-					"uri", r.RequestURI,
-					"remote", r.RemoteAddr,
-					"req_method", r.Method,
-					"req_body_size", r.ContentLength,
-					"resp_body_size", nw,
-					"cost", fmt.Sprintf("%.6fms", float64(end-start)/float64(time.Millisecond)))
-			}
-		}()
-
-		next.ServeHTTP(w, r)
-	})
 }
