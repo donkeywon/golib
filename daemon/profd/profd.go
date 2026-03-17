@@ -15,6 +15,7 @@ import (
 	"github.com/donkeywon/golib/runner"
 	"github.com/donkeywon/golib/util/httpu"
 	"github.com/donkeywon/golib/util/prof"
+	"github.com/felixge/fgprof"
 	"github.com/google/gops/agent"
 	"github.com/maruel/panicparse/v2/stack/webstack"
 )
@@ -112,6 +113,8 @@ func (p *profd) Init() error {
 		p.httpd.Handle(p.cfg.Prefix+"/debug/pprof/heap", p.midSecure(pprof.Handler("heap").ServeHTTP))
 		p.httpd.Handle(p.cfg.Prefix+"/debug/pprof/mutex", p.midSecure(pprof.Handler("mutex").ServeHTTP))
 		p.httpd.Handle(p.cfg.Prefix+"/debug/pprof/threadcreate", p.midSecure(pprof.Handler("threadcreate").ServeHTTP))
+
+		p.httpd.Handle(p.cfg.Prefix+"/debug/fgprof", fgprof.Handler())
 	}
 
 	if p.cfg.EnableWebPrettyTrace {
