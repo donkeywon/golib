@@ -308,19 +308,17 @@ func (s *SQLiteKVS) Range(f func(k string, v any) bool) error {
 		}
 
 		if len(result) == 0 {
-			break
+			return nil
 		}
 
 		for _, r := range result {
 			if !f(r.K, r.V) {
-				break
+				return nil
 			}
 		}
 
 		startID = result[len(result)-1].RowID
 	}
-
-	return nil
 }
 
 func (s *SQLiteKVS) LoadAllAsString() (map[string]string, error) {
