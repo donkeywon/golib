@@ -11,28 +11,28 @@ import (
 	"github.com/arl/statsviz"
 	"github.com/donkeywon/golib/boot"
 	"github.com/donkeywon/golib/daemon/httpd"
+	"github.com/donkeywon/golib/errs"
 	"github.com/donkeywon/golib/runner"
 	"github.com/donkeywon/golib/util/httpu"
 	"github.com/donkeywon/golib/util/prof"
+	"github.com/felixge/fgprof"
 	"github.com/google/gops/agent"
 	"github.com/maruel/panicparse/v2/stack/webstack"
 )
 
 const DaemonTypeProfd boot.DaemonType = "profd"
 
-var D Profd = New()
+var _ Profd = (*profd)(nil)
 
 type Profd interface {
 	boot.Daemon
-	SetMux(*http.ServeMux)
 	SetAllowedIPsGetter(func() map[string]struct{})
 }
 
 type profd struct {
 	runner.Runner
-	*Cfg
 
-	mux *http.ServeMux
+	cfg *Cfg
 
 	allowedIPsGetter func() map[string]struct{}
 
@@ -40,39 +40,41 @@ type profd struct {
 	prettystackLastTime time.Time
 
 	statsvizServer *statsviz.Server
+
+	httpd httpd.HTTPd
 }
 
-func New() Profd {
+func New() boot.Daemon {
 	return &profd{
 		Runner: runner.Create(string(DaemonTypeProfd)),
 	}
 }
 
 func (p *profd) Init() error {
-	if p.mux == nil {
-		p.mux = httpd.D.Mux()
-	}
+	p.httpd = boot.Get[httpd.HTTPd](boot.DaemonType("httpd"))
 
-	if p.Cfg.EnableStartupProfiling {
-		filepath, done, err := prof.Start(p.Cfg.StartupProfilingMode, p.Cfg.ProfOutputDir, p.Cfg.StartupProfilingSec)
+	var err error
+	if p.cfg.EnableStartupProfiling {
+		filepath, done, err := prof.Start(p.cfg.StartupProfilingMode, p.cfg.ProfOutputDir, p.cfg.StartupProfilingSec)
 		if err != nil {
+			if !p.cfg.SkipStartupErr {
+				return errs.Wrap(err, "startup profiling failed")
+			}
 			p.Error("startup profiling failed", err,
-				"mode", p.Cfg.StartupProfilingMode,
-				"duration", fmt.Sprintf("%ds", p.Cfg.StartupProfilingSec),
+				"mode", p.cfg.StartupProfilingMode,
+				"duration", fmt.Sprintf("%ds", p.cfg.StartupProfilingSec),
 				"filepath", filepath)
 		} else {
 			p.Info("startup profiling",
-				"mode", p.Cfg.StartupProfilingMode,
-				"duration", fmt.Sprintf("%ds", p.Cfg.StartupProfilingSec),
+				"mode", p.cfg.StartupProfilingMode,
+				"duration", fmt.Sprintf("%ds", p.cfg.StartupProfilingSec),
 				"filepath", filepath)
-		}
-		if done != nil {
 			go func() {
 				select {
 				case <-done:
 					p.Info("startup profiling done",
-						"mode", p.Cfg.StartupProfilingMode,
-						"duration", fmt.Sprintf("%ds", p.Cfg.StartupProfilingSec),
+						"mode", p.cfg.StartupProfilingMode,
+						"duration", fmt.Sprintf("%ds", p.cfg.StartupProfilingSec),
 						"filepath", filepath)
 				case <-p.Stopping():
 					return
@@ -81,38 +83,51 @@ func (p *profd) Init() error {
 		}
 	}
 
-	var err error
-	if p.Cfg.EnableStatsViz {
+	if p.cfg.EnableStatsViz {
 		p.statsvizServer, err = statsviz.NewServer()
 		if err != nil {
+			if !p.cfg.SkipStartupErr {
+				return errs.Wrap(err, "init statsviz failed")
+			}
 			p.Error("init statsviz failed", err)
 		} else {
-			p.mux.HandleFunc("/debug/statsviz/", p.statsviz)
-			p.mux.HandleFunc("/debug/statsviz/ws", p.statsvizWS)
+			p.httpd.Handle(p.cfg.Prefix+"/debug/statsviz/", p.midSecure(p.statsvizServer.Index()))
+			p.httpd.Handle(p.cfg.Prefix+"/debug/statsviz/ws", p.midSecure(p.statsvizServer.Ws()))
 		}
 	}
 
-	if p.Cfg.EnableHTTPProf {
-		p.mux.Handle("/debug/prof/start/{mode}", httpd.RawHandler(p.startProf))
-		p.mux.Handle("/debug/prof/stop", httpd.RawHandler(p.stopProf))
+	if p.cfg.EnableHTTPProf {
+		p.httpd.Handle(p.cfg.Prefix+"/debug/prof/start/{mode}", http.HandlerFunc(p.startProf))
+		p.httpd.Handle(p.cfg.Prefix+"/debug/prof/stop", http.HandlerFunc(p.stopProf))
 	}
 
-	if p.Cfg.EnableWebProf {
-		p.mux.HandleFunc("/debug/pprof/", p.pprofIndex)
-		p.mux.HandleFunc("/debug/pprof/cmdline", p.pprofCmdline)
-		p.mux.HandleFunc("/debug/pprof/profile", p.pprofProfile)
-		p.mux.HandleFunc("/debug/pprof/symbol", p.pprofSymbol)
-		p.mux.HandleFunc("/debug/pprof/trace", p.pprofTrace)
+	if p.cfg.EnableWebProf {
+		p.httpd.Handle(p.cfg.Prefix+"/debug/pprof/", p.midSecure(pprof.Index))
+		p.httpd.Handle(p.cfg.Prefix+"/debug/pprof/cmdline", p.midSecure(pprof.Cmdline))
+		p.httpd.Handle(p.cfg.Prefix+"/debug/pprof/profile", p.midSecure(pprof.Profile))
+		p.httpd.Handle(p.cfg.Prefix+"/debug/pprof/symbol", p.midSecure(pprof.Symbol))
+		p.httpd.Handle(p.cfg.Prefix+"/debug/pprof/trace", p.midSecure(pprof.Trace))
+		p.httpd.Handle(p.cfg.Prefix+"/debug/pprof/allocs", p.midSecure(pprof.Handler("allocs").ServeHTTP))
+		p.httpd.Handle(p.cfg.Prefix+"/debug/pprof/block", p.midSecure(pprof.Handler("block").ServeHTTP))
+		p.httpd.Handle(p.cfg.Prefix+"/debug/pprof/goroutine", p.midSecure(pprof.Handler("goroutine").ServeHTTP))
+		p.httpd.Handle(p.cfg.Prefix+"/debug/pprof/heap", p.midSecure(pprof.Handler("heap").ServeHTTP))
+		p.httpd.Handle(p.cfg.Prefix+"/debug/pprof/mutex", p.midSecure(pprof.Handler("mutex").ServeHTTP))
+		p.httpd.Handle(p.cfg.Prefix+"/debug/pprof/threadcreate", p.midSecure(pprof.Handler("threadcreate").ServeHTTP))
+
+		p.httpd.Handle(p.cfg.Prefix+"/debug/fgprof", fgprof.Handler())
 	}
 
-	if p.Cfg.EnableWebPrettyTrace {
-		p.mux.HandleFunc("/debug/prettytrace", p.prettytrace)
+	if p.cfg.EnableWebPrettyTrace {
+		p.httpd.Handle(p.cfg.Prefix+"/debug/prettytrace", p.midSecure(p.prettytrace))
 	}
 
-	if p.Cfg.EnableGoPs {
-		err := agent.Listen(agent.Options{Addr: p.Cfg.GoPsAddr})
+	if p.cfg.EnableGoPs {
+		err := agent.Listen(agent.Options{Addr: p.cfg.GoPsAddr})
 		if err != nil {
-			p.Error("init gops agent failed", err, "addr", p.Cfg.GoPsAddr)
+			if !p.cfg.SkipStartupErr {
+				return errs.Wrap(err, "init gops agent failed")
+			}
+			p.Error("init gops agent failed", err, "addr", p.cfg.GoPsAddr)
 		}
 	}
 
@@ -120,34 +135,39 @@ func (p *profd) Init() error {
 }
 
 func (p *profd) Stop() error {
-	if p.Cfg.EnableStartupProfiling && prof.IsRunning() {
+	if p.cfg.EnableStartupProfiling && prof.IsRunning() {
 		err := prof.Stop()
 		if err != nil {
-			p.Warn("prof stop fail when stopping", "err", err)
+			p.Warn("prof stop failed when stopping", "err", err)
 		}
 	}
 	return nil
 }
 
-func (p *profd) SetMux(mux *http.ServeMux) {
-	p.mux = mux
+func (p *profd) SetCfg(cfg any) {
+	p.cfg = cfg.(*Cfg)
+}
+
+func (p *profd) Cfg() Cfg {
+	return *p.cfg
 }
 
 func (p *profd) SetAllowedIPsGetter(allowedIPsGetter func() map[string]struct{}) {
 	p.allowedIPsGetter = allowedIPsGetter
 }
 
-func (p *profd) startProf(w http.ResponseWriter, r *http.Request) []byte {
+func (p *profd) startProf(w http.ResponseWriter, r *http.Request) {
 	paramDir := r.URL.Query().Get("dir")
 	if paramDir == "" {
-		paramDir = p.Cfg.ProfOutputDir
+		paramDir = p.cfg.ProfOutputDir
 	}
 	paramTimeout := r.URL.Query().Get("timeout")
 	timeout, _ := strconv.Atoi(paramTimeout)
 	mode := r.PathValue("mode")
 	filepath, done, err := prof.Start(mode, paramDir, timeout)
 	if err != nil {
-		return []byte(err.Error())
+		httpu.RespBytes(w, http.StatusInternalServerError, []byte(err.Error()))
+		return
 	}
 	p.Info("start profiling", "mode", mode, "dir", paramDir, "timeout", timeout, "filepath", filepath)
 	if done != nil {
@@ -159,15 +179,26 @@ func (p *profd) startProf(w http.ResponseWriter, r *http.Request) []byte {
 			}
 		}()
 	}
-	return []byte(filepath)
+	httpu.RespBytes(w, http.StatusOK, []byte(filepath))
 }
 
-func (p *profd) stopProf(w http.ResponseWriter, r *http.Request) []byte {
+func (p *profd) stopProf(w http.ResponseWriter, r *http.Request) {
 	err := prof.Stop()
 	if err != nil {
-		return []byte(err.Error())
+		httpu.RespBytes(w, http.StatusInternalServerError, []byte(err.Error()))
+	} else {
+		httpu.RespBytes(w, http.StatusOK, []byte("stopped"))
 	}
-	return []byte("stopped")
+}
+
+func (p *profd) midSecure(f http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !p.secure(w, r) {
+			return
+		}
+
+		f(w, r)
+	}
 }
 
 func (p *profd) secure(w http.ResponseWriter, r *http.Request) bool {
@@ -202,65 +233,20 @@ func (p *profd) ipAllowed(w http.ResponseWriter, r *http.Request) bool {
 }
 
 func (p *profd) auth(w http.ResponseWriter, r *http.Request) bool {
-	if p.Cfg.WebAuthUser == "" && p.Cfg.WebAuthPwd == "" {
+	if p.cfg.WebAuthUser == "" && p.cfg.WebAuthPwd == "" {
 		return true
 	}
 	user, pass, ok := r.BasicAuth()
-	if ok && user == p.Cfg.WebAuthUser && pass == p.Cfg.WebAuthPwd {
+	if ok && user == p.cfg.WebAuthUser && pass == p.cfg.WebAuthPwd {
 		return true
 	}
 
 	w.Header().Set("WWW-Authenticate", `Basic realm="Restricted", charset="UTF-8"`)
 	http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
 	return false
-
-}
-
-func (p *profd) pprofIndex(w http.ResponseWriter, r *http.Request) {
-	if !p.secure(w, r) {
-		return
-	}
-
-	pprof.Index(w, r)
-}
-
-func (p *profd) pprofProfile(w http.ResponseWriter, r *http.Request) {
-	if !p.secure(w, r) {
-		return
-	}
-
-	pprof.Profile(w, r)
-}
-
-func (p *profd) pprofSymbol(w http.ResponseWriter, r *http.Request) {
-	if !p.secure(w, r) {
-		return
-	}
-
-	pprof.Symbol(w, r)
-}
-
-func (p *profd) pprofTrace(w http.ResponseWriter, r *http.Request) {
-	if !p.secure(w, r) {
-		return
-	}
-
-	pprof.Trace(w, r)
-}
-
-func (p *profd) pprofCmdline(w http.ResponseWriter, r *http.Request) {
-	if !p.secure(w, r) {
-		return
-	}
-
-	pprof.Cmdline(w, r)
 }
 
 func (p *profd) prettytrace(w http.ResponseWriter, r *http.Request) {
-	if !p.secure(w, r) {
-		return
-	}
-
 	p.prettystackMu.Lock()
 	defer p.prettystackMu.Unlock()
 
@@ -272,20 +258,4 @@ func (p *profd) prettytrace(w http.ResponseWriter, r *http.Request) {
 
 	webstack.SnapshotHandler(w, r)
 	p.prettystackLastTime = time.Now()
-}
-
-func (p *profd) statsviz(w http.ResponseWriter, r *http.Request) {
-	if !p.secure(w, r) {
-		return
-	}
-
-	p.statsvizServer.Index()(w, r)
-}
-
-func (p *profd) statsvizWS(w http.ResponseWriter, r *http.Request) {
-	if !p.secure(w, r) {
-		return
-	}
-
-	p.statsvizServer.Ws()(w, r)
 }

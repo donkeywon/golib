@@ -28,7 +28,7 @@ var (
 	ErrPoolNotExists       = errors.New("pool not exists")
 )
 
-var D Taskd = New()
+var _ Taskd = (*taskd)(nil)
 
 type Taskd interface {
 	boot.Daemon
@@ -85,7 +85,7 @@ type taskd struct {
 	deferStepDoneHooks []task.StepHook
 }
 
-func New() Taskd {
+func New() boot.Daemon {
 	return &taskd{
 		Runner:           runner.Create(string(DaemonTypeTaskd)),
 		taskMap:          make(map[string]*task.Task),
@@ -351,7 +351,7 @@ func (td *taskd) createTask(cfg *task.Cfg) (t *task.Task, err error) {
 			err = errs.PanicToErrWithMsg(e, "panic on create task")
 		}
 	}()
-	return plugin.CreateWithCfg[plugin.Type, *task.Task](task.PluginTypeTask, cfg), nil
+	return plugin.CreateWithCfg[*task.Task](task.PluginTypeTask, cfg), nil
 }
 
 func (td *taskd) initTask(t *task.Task) (err error) {

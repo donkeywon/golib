@@ -186,7 +186,7 @@ func (t *Task) createStep(idx int, stepCfg *step.Cfg, isDefer bool) step.Step {
 		stepOrDefer = "step"
 	}
 
-	s := plugin.CreateWithCfg[step.Type, step.Step](stepCfg.Type, stepCfg.Cfg)
+	s := plugin.CreateWithCfg[step.Step](stepCfg.Type, stepCfg.Cfg)
 	s.Inherit(t)
 	s.WithLoggerFields(stepOrDefer, idx, stepOrDefer+"_type", s.Name())
 	return s

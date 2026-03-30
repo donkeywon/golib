@@ -49,7 +49,7 @@ func (c *Cfg) customUnmarshal(data []byte, unmarshaler func([]byte, any) error) 
 	c.Type = Type(typ.Str)
 
 	cv := rateLimiterCfgOnlyCfg{}
-	cv.Cfg = plugin.CreateCfg(c.Type)
+	cv.Cfg = plugin.CreateCfg[any](c.Type)
 	if cv.Cfg == nil {
 		return nil
 	}

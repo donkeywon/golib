@@ -14,9 +14,14 @@ import (
 
 const DaemonTypeDBP boot.DaemonType = "dbp"
 
-var (
-	D DBP = New()
+var _ DBP = (*dbp)(nil)
 
+type DBP interface {
+	boot.Daemon
+	Get(string) *sql.DB
+}
+
+var (
 	fqNamespace    = string(DaemonTypeDBP)
 	fqSubsystem    = "pool_stats"
 	variableLabels = []string{"name", "type"}
@@ -78,19 +83,15 @@ var (
 	)
 )
 
-type DBP interface {
-	boot.Daemon
-	Get(string) *sql.DB
-}
-
 type dbp struct {
 	runner.Runner
-	*Cfg
 
-	dbs map[string]*sql.DB
+	cfg      *Cfg
+	dbs      map[string]*sql.DB
+	metricsd metricsd.Metricsd
 }
 
-func New() DBP {
+func New() boot.Daemon {
 	return &dbp{
 		Runner: runner.Create(string(DaemonTypeDBP)),
 		dbs:    make(map[string]*sql.DB),
@@ -98,7 +99,7 @@ func New() DBP {
 }
 
 func (d *dbp) Init() error {
-	for _, dbCfg := range d.Cfg.Pools {
+	for _, dbCfg := range d.cfg.Pools {
 		db, err := sql.Open(dbCfg.Type, dbCfg.DSN)
 		if err != nil {
 			return errs.Wrapf(err, "open db failed, name: %s, type: %s", dbCfg.Name, dbCfg.Type)
@@ -117,10 +118,15 @@ func (d *dbp) Init() error {
 
 		d.dbs[dbCfg.Name] = db
 	}
-	if d.Cfg.EnableExportMetrics {
-		metricsd.D.MustRegister(d)
+	if d.cfg.EnableExportMetrics {
+		d.metricsd = boot.Get[metricsd.Metricsd]("metricsd")
+		d.metricsd.MustRegister(d)
 	}
 	return d.Runner.Init()
+}
+
+func (d *dbp) SetCfg(cfg any) {
+	d.cfg = cfg.(*Cfg)
 }
 
 func (d *dbp) waitDBReady(db *sql.DB, name string, typ string, maxWait time.Duration, readyQuery string) error {
@@ -165,7 +171,7 @@ func (d *dbp) Stop() error {
 }
 
 func (d *dbp) closeAll() {
-	for _, dbCfg := range d.Cfg.Pools {
+	for _, dbCfg := range d.cfg.Pools {
 		db := d.dbs[dbCfg.Name]
 		if db == nil {
 			continue
@@ -190,7 +196,7 @@ func (d *dbp) Describe(ch chan<- *prometheus.Desc) {
 }
 
 func (d *dbp) Collect(ch chan<- prometheus.Metric) {
-	for _, dbCfg := range d.Cfg.Pools {
+	for _, dbCfg := range d.cfg.Pools {
 		db := d.dbs[dbCfg.Name]
 		stats := db.Stats()
 

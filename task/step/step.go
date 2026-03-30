@@ -41,7 +41,7 @@ func (s *Cfg) customUnmarshal(data []byte, unmarshaler func([]byte, any) error) 
 	s.Type = Type(typ.Str)
 
 	cv := stepCfgOnlyCfg{}
-	cv.Cfg = plugin.CreateCfg(s.Type)
+	cv.Cfg = plugin.CreateCfg[any](s.Type)
 	if cv.Cfg == nil {
 		return nil
 	}

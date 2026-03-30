@@ -48,7 +48,7 @@ func (rc *ReaderCfg) UnmarshalYAML(data []byte) error {
 }
 
 func (rc *ReaderCfg) build() Reader {
-	r := plugin.CreateWithCfg[Type, Reader](rc.Type, rc.Cfg)
+	r := plugin.CreateWithCfg[Reader](rc.Type, rc.Cfg)
 	r.WithOptions(rc.toOptions(false)...)
 	return r
 }

@@ -2,6 +2,7 @@ package svcd
 
 import (
 	"fmt"
+	"reflect"
 	"strings"
 
 	"github.com/donkeywon/golib/boot"
@@ -11,40 +12,39 @@ import (
 	"github.com/donkeywon/golib/util/reflects"
 )
 
-const (
-	DaemonTypeSvcd boot.DaemonType = "svcd"
-)
+const DaemonTypeSvcd boot.DaemonType = "svcd"
 
 type Namespace string
 type Module string
 type Name string
 
+const initSize = 64
+
 var (
-	_svcCreators = make([]*svcCreatorWithFQN, 0, 64)
-	_svcMap      = make(map[string]Svc)
-	_svcCfgMap   = make(map[string]any)
+	_svcFQNs        = make([]string, 0, initSize)
+	_svcCreatorsMap = make(map[string]Creator, initSize)
+	_svcMap         = make(map[string]Svc, initSize)
+	_svcCfgMap      = make(map[string]any, initSize)
+	_svcd           = &svcd{
+		Runner: runner.Create("svc"),
+	}
 )
-
-var D boot.Daemon = &svcd{
-	Runner: runner.Create("svc"),
-}
-
-type svcCreatorWithFQN struct {
-	fqn     string
-	creator Creator
-}
 
 type svcd struct {
 	runner.Runner
 	*Cfg
 }
 
+func New() boot.Daemon {
+	return _svcd
+}
+
 func (s *svcd) Init() error {
-	for _, fqnWithCreator := range _svcCreators {
-		fqn := fqnWithCreator.fqn
+	for _, fqn := range _svcFQNs {
+		creator := _svcCreatorsMap[fqn]
 		s.Debug("create svc", "fqn", fqn)
 
-		ins := fqnWithCreator.creator()
+		ins := creator()
 		if ins == nil {
 			return errs.Errorf("svc is nil, FQN: %s", fqn)
 		}
@@ -98,11 +98,12 @@ func validate(ns Namespace, m Module, n Name, creator Creator, cfgCreator CfgCre
 		panic("empty svc name")
 	}
 
-	fqn := buildFQN(ns, m, n)
-	_, exists := _svcMap[fqn]
-	if exists {
-		panic("duplicate reg")
-	}
+	// allow duplicate reg for replacing or testing
+	// fqn := buildFQN(ns, m, n)
+	// _, exists := _svcMap[fqn]
+	// if exists {
+	// 	panic("duplicate reg")
+	// }
 }
 
 func Get[S Svc](ns Namespace, m Module, n Name) S {
@@ -112,14 +113,22 @@ func Get[S Svc](ns Namespace, m Module, n Name) S {
 		panic(fmt.Errorf("svc not exists, maybe dependencies order is invalid, FQN: %s", fqn))
 	}
 
-	return ins.(S)
+	s, ok := ins.(S)
+	if !ok {
+		panic(fmt.Errorf("svc %s is not type of %s", fqn, reflect.TypeOf((*S)(nil)).Elem()))
+	}
+
+	return s
 }
 
 func Reg(ns Namespace, m Module, n Name, creator Creator, cfgCreator CfgCreator) {
 	validate(ns, m, n, creator, cfgCreator)
 
 	fqn := buildFQN(ns, m, n)
-	_svcCreators = append(_svcCreators, &svcCreatorWithFQN{fqn: fqn, creator: creator})
+	if _, exists := _svcCreatorsMap[fqn]; !exists {
+		_svcFQNs = append(_svcFQNs, fqn)
+	}
+	_svcCreatorsMap[fqn] = creator
 
 	if cfgCreator != nil {
 		cfg := cfgCreator()

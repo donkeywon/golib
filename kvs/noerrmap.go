@@ -8,13 +8,13 @@ import (
 )
 
 func init() {
-	plugin.Reg(TypeMap, NewMapKVS, func() any { return NewMapKVSCfg() })
+	plugin.Reg(TypeMap, NewMapKVS, func() MapKVSCfg { return NewMapKVSCfg() })
 }
 
 type MapKVSCfg struct{}
 
-func NewMapKVSCfg() *MapKVSCfg {
-	return &MapKVSCfg{}
+func NewMapKVSCfg() MapKVSCfg {
+	return MapKVSCfg{}
 }
 
 const TypeMap Type = "map"

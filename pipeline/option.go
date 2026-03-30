@@ -389,7 +389,7 @@ func (rl *rateLimit) Close() error {
 
 func (rl *rateLimit) Set(c Common) {
 	rl.Common = c
-	ratelimiter := plugin.CreateWithCfg[ratelimit.Type, ratelimit.RxTxRateLimiter](rl.cfg.Type, rl.cfg.Cfg)
+	ratelimiter := plugin.CreateWithCfg[ratelimit.RxTxRateLimiter](rl.cfg.Type, rl.cfg.Cfg)
 	ratelimiter.Inherit(c)
 	err := runner.Init(ratelimiter)
 	if err != nil {
