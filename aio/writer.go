@@ -19,11 +19,13 @@ func (e *loadOnceError) Load() error {
 	if e.loaded {
 		return nil
 	}
-	e.loaded = true
-	return e.err
+	return e.Err()
 }
 
 func (e *loadOnceError) Err() error {
+	if e.err == nil {
+		return nil
+	}
 	e.loaded = true
 	return e.err
 }

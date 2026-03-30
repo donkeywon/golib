@@ -45,6 +45,9 @@ func (e *loadOnceError) Load() error {
 	if e.loaded {
 		return nil
 	}
+	if len(e.err) == 0 {
+		return nil
+	}
 	e.loaded = true
 	return errors.Join(e.err...)
 }
@@ -53,6 +56,9 @@ func (e *loadOnceError) Err() error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
+	if len(e.err) == 0 {
+		return nil
+	}
 	e.loaded = true
 	return errors.Join(e.err...)
 }
