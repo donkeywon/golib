@@ -195,6 +195,8 @@ func (b *booter) Init() error {
 		panic("boot set logger failed")
 	}
 
+	b.Info("init", "version", buildinfo.Version, "build_time", buildinfo.BuildTime, "revision", buildinfo.Revision)
+
 	for name, cfg := range b.cfgMap {
 		b.Debug("load config", "name", name, "cfg", cfg)
 	}
@@ -225,8 +227,6 @@ func (b *booter) Init() error {
 }
 
 func (b *booter) Start() error {
-	b.Info("starting", "version", buildinfo.Version, "build_time", buildinfo.BuildTime, "revision", buildinfo.Revision)
-
 	for _, daemonType := range _daemonTypes {
 		daemon := b.daemonsMap[daemonType]
 		b.errg.Go(func() error {

@@ -94,7 +94,7 @@ func (h *httpd) SetCfg(cfg any) {
 }
 
 func (h *httpd) SetRouter(r Router) {
-	h.s.Handler = r
+	h.r = r
 }
 
 func (h *httpd) Server() *http.Server {
