@@ -21,15 +21,20 @@ const TypeMap Type = "map"
 
 type MapKVS struct {
 	*MapKVSCfg
-	m sync.Map
+	m  map[string]any
+	mu sync.RWMutex
 }
 
 func NewMapKVS() *MapKVS {
-	return &MapKVS{}
+	return &MapKVS{
+		m: make(map[string]any),
+	}
 }
 
 func (m *MapKVS) Store(k string, v any) {
-	m.m.Store(k, v)
+	m.mu.Lock()
+	m.m[k] = v
+	m.mu.Unlock()
 }
 
 func (m *MapKVS) StoreAsString(k string, v any) {
@@ -37,23 +42,55 @@ func (m *MapKVS) StoreAsString(k string, v any) {
 	if err != nil {
 		panic(err)
 	}
-	m.m.Store(k, s)
+	m.Store(k, s)
 }
 
 func (m *MapKVS) Load(k string) (any, bool) {
-	return m.m.Load(k)
+	m.mu.RLock()
+	v, exists := m.m[k]
+	m.mu.RUnlock()
+	return v, exists
 }
 
 func (m *MapKVS) LoadOrStore(k string, v any) (any, bool) {
-	return m.m.LoadOrStore(k, v)
+	m.mu.RLock()
+	vv, exists := m.m[k]
+	m.mu.RUnlock()
+	if exists {
+		return vv, true
+	}
+
+	m.mu.Lock()
+	vv, exists = m.m[k]
+	if exists {
+		m.mu.Unlock()
+		return vv, true
+	}
+	m.m[k] = v
+
+	m.mu.Unlock()
+	return v, false
 }
 
 func (m *MapKVS) LoadAndDelete(k string) (any, bool) {
-	return m.m.LoadAndDelete(k)
+	m.mu.Lock()
+
+	v, exists := m.m[k]
+	if !exists {
+		m.mu.Unlock()
+		return nil, false
+	}
+
+	delete(m.m, k)
+
+	m.mu.Unlock()
+	return v, true
 }
 
 func (m *MapKVS) Del(k string) {
-	m.m.Delete(k)
+	m.mu.Lock()
+	delete(m.m, k)
+	m.mu.Unlock()
 }
 
 func (m *MapKVS) LoadAsBool(k string) bool {
@@ -115,7 +152,11 @@ func (m *MapKVS) LoadAllAsString() map[string]string {
 }
 
 func (m *MapKVS) Range(f func(k string, v any) bool) {
-	m.m.Range(func(key, value any) bool {
-		return f(key.(string), value)
-	})
+	m.mu.RLock()
+	for k, v := range m.m {
+		if !f(k, v) {
+			break
+		}
+	}
+	m.mu.RUnlock()
 }
