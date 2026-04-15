@@ -1,7 +1,7 @@
 github.com/DeRuina/timberjack v1.4.1 h1:JftM5HN/ITKehAXjtdbGqN5XZIS1biHm7VSjU0Qbtqg=
 github.com/DeRuina/timberjack v1.4.1/go.mod h1:RLoeQrwrCGIEF8gO5nV5b/gMD0QIy7bzQhBUgpp1EqE=
-github.com/alitto/pond/v2 v2.7.0 h1:c76L+yN916m/DRXjGCeUBHHu92uWnh/g1bwVk4zyyXg=
-github.com/alitto/pond/v2 v2.7.0/go.mod h1:xkjYEgQ05RSpWdfSd1nM3OVv7TBhLdy7rMp3+2Nq+yE=
+github.com/alitto/pond/v2 v2.7.1 h1:QxMbcfjcVTa0pyxX5Ib1226mM8u8D7gKUVkCUU4DYIw=
+github.com/alitto/pond/v2 v2.7.1/go.mod h1:xkjYEgQ05RSpWdfSd1nM3OVv7TBhLdy7rMp3+2Nq+yE=
 github.com/arl/statsviz v0.8.0 h1:O6GjjVxEDxcByAucOSl29HaGYLXsuwA3ujJw8H9E7/U=
 github.com/arl/statsviz v0.8.0/go.mod h1:XlrbiT7xYT03xaW9JMMfD8KFUhBOESJwfyNJu83PbB0=
 github.com/avast/retry-go/v4 v4.7.0 h1:yjDs35SlGvKwRNSykujfjdMxMhMQQM0TnIjJaHB+Zio=

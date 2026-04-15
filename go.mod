@@ -4,7 +4,7 @@ go 1.25.0
 
 require (
 	github.com/DeRuina/timberjack v1.4.1
-	github.com/alitto/pond/v2 v2.7.0
+	github.com/alitto/pond/v2 v2.7.1
 	github.com/arl/statsviz v0.8.0
 	github.com/avast/retry-go/v4 v4.7.0
 	github.com/bytedance/sonic v1.15.0

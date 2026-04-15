@@ -46,11 +46,7 @@ func (s *svcd) Init() error {
 
 		ins := creator()
 		if ins == nil {
-			return errs.Errorf("svc is nil, FQN: %s", fqn)
-		}
-
-		if _, exists := _svcMap[fqn]; exists {
-			return errs.Errorf("svc already exists, FQN: %s", fqn)
+			return errs.Errorf("nil svc: %s", fqn)
 		}
 
 		_svcMap[fqn] = ins
@@ -67,7 +63,7 @@ func (s *svcd) Init() error {
 			} else {
 				success = reflects.SetFirstMatchedField(ins, cfg)
 				if !success {
-					return errs.Errorf("svc must have an exported field of type Cfg, FQN: %s", fqn)
+					return errs.Errorf("svc has no exported Cfg field: %s", fqn)
 				}
 			}
 		}
@@ -110,7 +106,7 @@ func Get[S Svc](ns Namespace, m Module, n Name) S {
 	fqn := buildFQN(ns, m, n)
 	ins, exists := _svcMap[fqn]
 	if !exists {
-		panic(fmt.Errorf("svc not exists, maybe dependencies order is invalid, FQN: %s", fqn))
+		panic(fmt.Errorf("svc not exists, register first or incorrect dependencies order, FQN: %s", fqn))
 	}
 
 	s, ok := ins.(S)

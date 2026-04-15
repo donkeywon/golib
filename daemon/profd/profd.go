@@ -51,7 +51,7 @@ func New() boot.Daemon {
 }
 
 func (p *profd) Init() error {
-	p.httpd = boot.Get[httpd.HTTPd](boot.DaemonType("httpd"))
+	p.httpd = boot.Get[httpd.HTTPd](httpd.DaemonTypeHTTPd)
 
 	var err error
 	if p.cfg.EnableStartupProfiling {

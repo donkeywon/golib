@@ -2,7 +2,7 @@ package boot
 
 import "github.com/donkeywon/golib/log"
 
-type OnConfigLoadedFunc func(map[string]any)
+type OnConfigLoadedFunc func(any)
 type OnCreatedFunc func()
 type OnInitializedFunc func()
 
@@ -26,20 +26,20 @@ func DefaultLogCfg(cfg *log.Cfg) Option {
 	}
 }
 
-func OnConfigLoaded(f OnConfigLoadedFunc) Option {
+func OnConfigLoaded(t DaemonType, f OnConfigLoadedFunc) Option {
 	return func(b *booter) {
-		b.options.onConfigLoaded = f
+		b.options.onConfigLoaded[t] = f
 	}
 }
 
-func OnCreated(f OnCreatedFunc) Option {
+func OnCreated(t DaemonType, f OnCreatedFunc) Option {
 	return func(b *booter) {
-		b.options.onCreated = f
+		b.options.onCreated[t] = f
 	}
 }
 
-func OnInitialized(f OnInitializedFunc) Option {
+func OnInitialized(t DaemonType, f OnInitializedFunc) Option {
 	return func(b *booter) {
-		b.options.onInitialized = f
+		b.options.onInitialized[t] = f
 	}
 }

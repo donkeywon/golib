@@ -56,7 +56,7 @@ func validate[P Plugin, C any](typ any, creator Creator[P], cfgCreator CfgCreato
 	sample := creator()
 	pRT := reflect.TypeOf(sample)
 	if pRT == nil {
-		panic(fmt.Sprintf("plugin %s(%v) creator return nil", reflect.TypeOf(typ).String(), typ))
+		panic(fmt.Sprintf("plugin creator returned nil: %s(%v)", reflect.TypeOf(typ).String(), typ))
 	}
 }
 
@@ -83,7 +83,7 @@ func CreateWithCfg[P Plugin, C any](typ any, cfg C) P {
 	} else if ff, ok := f.(Creator[any]); ok {
 		p = ff().(P)
 	} else {
-		panic(fmt.Sprintf("plugin %s(%v) creator type mismatch", reflect.TypeOf(typ).String(), typ))
+		panic(fmt.Sprintf("plugin creator type mismatch: %s(%v)", reflect.TypeOf(typ).String(), typ))
 	}
 
 	SetCfg(p, cfg)
@@ -114,6 +114,9 @@ func Create[P Plugin, C any](typ any) P {
 }
 
 func SetCfg[C any](p any, cfg C) {
+	if p == nil {
+		panic("nil plugin")
+	}
 	if sp, ok := p.(CfgSetter[C]); ok {
 		sp.SetCfg(cfg)
 		return
@@ -129,7 +132,7 @@ func SetCfg[C any](p any, cfg C) {
 
 	pValue := reflect.ValueOf(p)
 	if pValue.Kind() != reflect.Pointer {
-		panic(fmt.Sprintf("plugin(%+v) is not CfgSetter[%+v] or pointer", pValue.Type(), reflect.TypeOf(cfg)))
+		panic(fmt.Sprintf("plugin is not CfgSetter[%+v] or pointer: %+v", reflect.TypeOf(cfg), pValue.Type()))
 	}
 
 	cfgRV := reflect.ValueOf(cfg)
@@ -147,7 +150,7 @@ func SetCfg[C any](p any, cfg C) {
 		}
 	}
 	if !found {
-		panic(fmt.Sprintf("plugin(%+v) has no exported %+v field", pValue.Type(), cfgRV.Type()))
+		panic(fmt.Sprintf("plugin has no exported cfg field: %+v %+v", pValue.Type(), cfgRV.Type()))
 	}
 }
 

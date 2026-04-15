@@ -108,9 +108,17 @@ type options struct {
 	CfgPath        string `env:"CFG_PATH" description:"config file path"   long:"config"  short:"c"`
 	PrintVersion   bool   `               description:"print version info" long:"version" short:"v"`
 	envPrefix      string
-	onConfigLoaded OnConfigLoadedFunc
-	onCreated      OnCreatedFunc
-	onInitialized  OnInitializedFunc
+	onConfigLoaded map[DaemonType]OnConfigLoadedFunc
+	onCreated      map[DaemonType]OnCreatedFunc
+	onInitialized  map[DaemonType]OnInitializedFunc
+}
+
+func createOptions() *options {
+	return &options{
+		onConfigLoaded: make(map[DaemonType]OnConfigLoadedFunc),
+		onCreated:      make(map[DaemonType]OnCreatedFunc),
+		onInitialized:  make(map[DaemonType]OnInitializedFunc),
+	}
 }
 
 type booter struct {
@@ -129,7 +137,7 @@ func create(opt ...Option) *booter {
 	b := &booter{
 		Runner:     runner.Create("boot"),
 		logCfg:     log.NewCfg(),
-		options:    &options{},
+		options:    createOptions(),
 		daemonsMap: make(map[DaemonType]Daemon, len(_daemonTypes)),
 	}
 
@@ -177,8 +185,8 @@ func (b *booter) Init() error {
 		return errs.Wrap(err, "load cfg failed")
 	}
 
-	if b.options.onConfigLoaded != nil {
-		b.options.onConfigLoaded(b.cfgMap)
+	for t, f := range b.options.onConfigLoaded {
+		f(b.cfgMap[string(t)])
 	}
 
 	err = b.validateCfg()
@@ -205,10 +213,6 @@ func (b *booter) Init() error {
 	b.errg, ctx = errgroup.WithContext(b.Ctx())
 	b.createDaemons(ctx)
 
-	if b.options.onCreated != nil {
-		b.options.onCreated()
-	}
-
 	err = b.initDaemons()
 	if err != nil {
 		return errs.Wrap(err, "init daemons failed")
@@ -217,10 +221,6 @@ func (b *booter) Init() error {
 	err = b.Runner.Init()
 	if err != nil {
 		return errs.Wrap(err, "init booter failed")
-	}
-
-	if b.options.onInitialized != nil {
-		b.options.onInitialized()
 	}
 
 	return nil
@@ -294,6 +294,11 @@ func (b *booter) createDaemons(ctx context.Context) {
 		daemon.SetCtx(ctx)
 		daemon.Inherit(b)
 		b.daemonsMap[daemonType] = daemon
+
+		onCreated := b.options.onCreated[daemonType]
+		if onCreated != nil {
+			onCreated()
+		}
 	}
 }
 
@@ -304,6 +309,11 @@ func (b *booter) initDaemons() error {
 		err = runner.Init(daemon)
 		if err != nil {
 			return errs.Wrapf(err, "init daemon %s failed", daemonType)
+		}
+
+		onInitialized := b.options.onInitialized[daemonType]
+		if onInitialized != nil {
+			onInitialized()
 		}
 	}
 	return nil

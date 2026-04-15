@@ -56,7 +56,7 @@ func (p *metricsd) Init() error {
 		p.reg.MustRegister(collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
 	}
 
-	p.httpd = boot.Get[httpd.HTTPd](boot.DaemonType("httpd"))
+	p.httpd = boot.Get[httpd.HTTPd](httpd.DaemonTypeHTTPd)
 	p.httpd.Handle(p.cfg.HTTPEndpointPath, promhttp.HandlerFor(p.reg, promhttp.HandlerOpts{Registry: p.reg}))
 
 	return p.Runner.Init()

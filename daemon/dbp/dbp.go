@@ -119,7 +119,7 @@ func (d *dbp) Init() error {
 		d.dbs[dbCfg.Name] = db
 	}
 	if d.cfg.EnableExportMetrics {
-		d.metricsd = boot.Get[metricsd.Metricsd]("metricsd")
+		d.metricsd = boot.Get[metricsd.Metricsd](metricsd.DaemonTypeMetricsd)
 		d.metricsd.MustRegister(d)
 	}
 	return d.Runner.Init()
