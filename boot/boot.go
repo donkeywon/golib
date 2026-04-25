@@ -425,15 +425,16 @@ func buildFlagParser(base *options, cfgMap map[string]any, cfgKeys []string) (*f
 			continue
 		}
 
-		g, err = parser.AddGroup(cases.Title(language.English).String(name)+" Options", "", cfgMap[name])
+		namespace := strings.ReplaceAll(name, ".", "_")
+		g, err = parser.AddGroup(cases.Title(language.English).String(namespace)+" Options", "", cfgMap[name])
 		if err != nil {
-			return nil, errs.Wrapf(err, "add flags failed: %s", name)
+			return nil, errs.Wrapf(err, "add flags failed: %s", namespace)
 		}
-		g.Namespace = name
+		g.Namespace = namespace
 		if base.envPrefix != "" {
-			g.EnvNamespace = strings.ToUpper(base.envPrefix + parser.EnvNamespaceDelimiter + name)
+			g.EnvNamespace = strings.ToUpper(base.envPrefix + parser.EnvNamespaceDelimiter + namespace)
 		} else {
-			g.EnvNamespace = strings.ToUpper(name)
+			g.EnvNamespace = strings.ToUpper(namespace)
 		}
 	}
 
