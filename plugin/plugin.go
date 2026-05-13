@@ -132,7 +132,7 @@ func SetCfg[C any](p any, cfg C) {
 
 	pValue := reflect.ValueOf(p)
 	if pValue.Kind() != reflect.Pointer {
-		panic(fmt.Sprintf("plugin is not CfgSetter[%+v] or pointer: %+v", reflect.TypeOf(cfg), pValue.Type()))
+		panic(fmt.Sprintf("plugin is not CfgSetter[%T] or pointer: %T", cfg, p))
 	}
 
 	cfgRV := reflect.ValueOf(cfg)
@@ -140,18 +140,14 @@ func SetCfg[C any](p any, cfg C) {
 		return
 	}
 
-	found := false
 	for i := range pValue.Elem().NumField() {
-		f := pValue.Elem().Field(i)
-		if f.CanSet() && cfgRV.Type().AssignableTo(f.Type()) {
-			f.Set(cfgRV)
-			found = true
-			break
+		field := pValue.Elem().Field(i)
+		if field.CanSet() && field.Type() == cfgRV.Type() {
+			field.Set(cfgRV)
+			return
 		}
 	}
-	if !found {
-		panic(fmt.Sprintf("plugin has no exported cfg field: %+v %+v", pValue.Type(), cfgRV.Type()))
-	}
+	panic(fmt.Sprintf("plugin has no exported cfg field: %T %T", p, cfg))
 }
 
 func isNil(v any, rv reflect.Value) bool {
