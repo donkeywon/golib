@@ -159,7 +159,7 @@ func isNil(v any, rv reflect.Value) bool {
 		return true
 	}
 	switch rv.Kind() {
-	case reflect.Ptr, reflect.Map, reflect.Slice, reflect.Interface,
+	case reflect.Pointer, reflect.Map, reflect.Slice, reflect.Interface,
 		reflect.Func, reflect.Chan:
 		return rv.IsNil()
 	}

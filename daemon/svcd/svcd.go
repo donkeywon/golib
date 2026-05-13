@@ -9,7 +9,6 @@ import (
 	"github.com/donkeywon/golib/errs"
 	"github.com/donkeywon/golib/plugin"
 	"github.com/donkeywon/golib/runner"
-	"github.com/donkeywon/golib/util/reflects"
 )
 
 const DaemonTypeSvcd boot.DaemonType = "svcd"
@@ -50,22 +49,8 @@ func (s *svcd) Init() error {
 		}
 
 		_svcMap[fqn] = ins
-		bs := &baseSvc{Logger: s.WithLoggerName(fqn)}
-		success := reflects.SetFirstMatchedField(ins, bs)
-		if !success {
-			return errs.Errorf("svc must have an exported field of type Svc, FQN: %s", fqn)
-		}
-
 		if cfg, hasCfg := _svcCfgMap[fqn]; hasCfg {
-			s.Debug("set cfg to svc", "fqn", fqn, "cfg", cfg)
-			if cs, ok := ins.(plugin.CfgSetter[any]); ok {
-				cs.SetCfg(cfg)
-			} else {
-				success = reflects.SetFirstMatchedField(ins, cfg)
-				if !success {
-					return errs.Errorf("svc has no exported Cfg field: %s", fqn)
-				}
-			}
+			plugin.SetCfg(ins, cfg)
 		}
 	}
 
@@ -111,7 +96,7 @@ func Get[S Svc](ns Namespace, m Module, n Name) S {
 
 	s, ok := ins.(S)
 	if !ok {
-		panic(fmt.Errorf("svc %s is not type of %s", fqn, reflect.TypeOf((*S)(nil)).Elem()))
+		panic(fmt.Errorf("svc %s is not type of %s", fqn, reflect.TypeFor[S]()))
 	}
 
 	return s
