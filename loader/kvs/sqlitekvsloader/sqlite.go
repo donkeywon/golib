@@ -233,51 +233,6 @@ func (s *SQLiteKVS) Del(k string) error {
 	})
 }
 
-func (s *SQLiteKVS) LoadAsBool(k string) (bool, error) {
-	return kvs.LoadAsBool(s, k)
-}
-
-func (s *SQLiteKVS) LoadAsString(k string) (string, error) {
-	return kvs.LoadAsString(s, k)
-}
-
-func (s *SQLiteKVS) LoadAsStringOr(k string, d string) (string, error) {
-	return kvs.LoadAsStringOr(s, k, d)
-}
-
-func (s *SQLiteKVS) LoadAsInt(k string) (int, error) {
-	return kvs.LoadAsInt(s, k)
-}
-
-func (s *SQLiteKVS) LoadAsIntOr(k string, d int) (int, error) {
-	return kvs.LoadAsIntOr(s, k, d)
-}
-
-func (s *SQLiteKVS) LoadAsUint(k string) (uint, error) {
-	return kvs.LoadAsUint(s, k)
-}
-
-func (s *SQLiteKVS) LoadAsUintOr(k string, d uint) (uint, error) {
-	return kvs.LoadAsUintOr(s, k, d)
-}
-
-func (s *SQLiteKVS) LoadAsFloat(k string) (float64, error) {
-	return kvs.LoadAsFloat(s, k)
-}
-
-func (s *SQLiteKVS) LoadAsFloatOr(k string, d float64) (float64, error) {
-	return kvs.LoadAsFloatOr(s, k, d)
-}
-
-func (s *SQLiteKVS) LoadAll() (map[string]any, error) {
-	c := make(map[string]any)
-	err := s.Range(func(k string, v any) bool {
-		c[k] = v
-		return true
-	})
-	return c, err
-}
-
 func (s *SQLiteKVS) Range(f func(k string, v any) bool) error {
 	var startID int64 = -1
 	pageSize := 100
@@ -319,19 +274,6 @@ func (s *SQLiteKVS) Range(f func(k string, v any) bool) error {
 
 		startID = result[len(result)-1].RowID
 	}
-}
-
-func (s *SQLiteKVS) LoadAllAsString() (map[string]string, error) {
-	var er error
-	result := make(map[string]string)
-	err := s.Range(func(k string, v any) bool {
-		result[k], er = conv.ToString(v)
-		return er == nil
-	})
-	if err == nil {
-		err = er
-	}
-	return result, err
 }
 
 func (s *SQLiteKVS) buildDDL() string {
