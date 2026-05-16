@@ -2,94 +2,82 @@ package kvs
 
 import (
 	"sync"
-
-	"github.com/donkeywon/golib/plugin"
 )
 
-func init() {
-	plugin.Reg[KVS, any](TypeMap, func() KVS { return NewMapKVS() }, nil)
-}
-
-const TypeMap Type = "map"
-
 type MapKVS struct {
-	m  map[string]any
+	m  map[any]any
 	mu sync.RWMutex
 }
 
-func NewMapKVS() *MapKVS {
-	return &MapKVS{
-		m: make(map[string]any),
+func (m *MapKVS) init() {
+	if m.m != nil {
+		return
 	}
+	m.mu.Lock()
+	m.m = make(map[any]any)
+	m.mu.Unlock()
 }
 
-func (m *MapKVS) Store(k string, v any) error {
+func (m *MapKVS) Store(k any, v any) {
+	m.init()
 	m.mu.Lock()
 	m.m[k] = v
 	m.mu.Unlock()
-	return nil
 }
 
-func (m *MapKVS) Load(k string) (any, bool, error) {
+func (m *MapKVS) Load(k any) (any, bool) {
+	m.init()
 	m.mu.RLock()
 	v, exists := m.m[k]
 	m.mu.RUnlock()
-	return v, exists, nil
+	return v, exists
 }
 
-func (m *MapKVS) LoadOrStore(k string, v any) (any, bool, error) {
+func (m *MapKVS) LoadOrStore(k any, v any) (any, bool) {
+	m.init()
 	m.mu.RLock()
 	vv, exists := m.m[k]
 	m.mu.RUnlock()
 	if exists {
-		return vv, true, nil
+		return vv, true
 	}
 
 	m.mu.Lock()
 	vv, exists = m.m[k]
 	if exists {
 		m.mu.Unlock()
-		return vv, true, nil
+		return vv, true
 	}
 	m.m[k] = v
 
 	m.mu.Unlock()
-	return v, false, nil
+	return v, false
 }
 
-func (m *MapKVS) LoadAndDelete(k string) (any, bool, error) {
+func (m *MapKVS) LoadAndDelete(k any) (any, bool) {
+	m.init()
 	m.mu.Lock()
-
 	v, exists := m.m[k]
 	if !exists {
 		m.mu.Unlock()
-		return nil, false, nil
+		return nil, false
 	}
 
 	delete(m.m, k)
 
 	m.mu.Unlock()
-	return v, true, nil
+	return v, true
 }
 
-func (m *MapKVS) Del(k string) error {
+func (m *MapKVS) Delete(k any) {
+	m.init()
 	m.mu.Lock()
 	delete(m.m, k)
 	m.mu.Unlock()
-	return nil
 }
 
-func (m *MapKVS) LoadAll() map[string]any {
-	m.mu.RLock()
-	result := make(map[string]any, len(m.m))
-	for k, v := range m.m {
-		result[k] = v
-	}
-	m.mu.RUnlock()
-	return result
-}
-
-func (m *MapKVS) Range(f func(k string, v any) bool) error {
+func (m *MapKVS) Range(f func(k any, v any) bool) {
+	m.init()
 	m.mu.RLock()
 	for k, v := range m.m {
 		if !f(k, v) {
@@ -97,5 +85,4 @@ func (m *MapKVS) Range(f func(k string, v any) bool) error {
 		}
 	}
 	m.mu.RUnlock()
-	return nil
 }
