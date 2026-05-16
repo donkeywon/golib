@@ -14,23 +14,28 @@ import (
 
 var Create = newBase // allow to override
 
-type Runner interface {
-	kvs.NoErrKVS
-	log.Logger
-
+// Lifecycle covers the three-phase run protocol.
+type Lifecycle interface {
 	Init() error
 	Start() error
 	Stop() error
+}
 
+// Namer carries the identity of a runner.
+type Namer interface {
 	Name() string
 	SetName(string)
+}
+
+// Contexter manages the runner's context and cancellation.
+type Contexter interface {
 	Ctx() context.Context
 	SetCtx(context.Context)
 	Cancel()
+}
 
-	Inherit(Runner)
-	Parent() Runner
-
+// Signaler exposes the four lifecycle signals as channels.
+type Signaler interface {
 	MarkStarted() bool
 	MarkStopping() bool
 	MarkStopDone() bool
@@ -39,11 +44,27 @@ type Runner interface {
 	Stopping() <-chan struct{}
 	StopDone() <-chan struct{}
 	Done() <-chan struct{}
+}
 
+// ErrorCollector accumulates non-fatal errors produced during a run.
+type ErrorCollector interface {
 	AppendError(err ...error)
 	Err() error
+}
 
-	WithLoggerFrom(r Runner, kvs ...any)
+// Runner is the full interface composed of all sub-interfaces.
+// Embed the sub-interfaces in your own types when you only need a subset.
+type Runner interface {
+	log.Logger
+	Lifecycle
+	Namer
+	Contexter
+	Signaler
+	ErrorCollector
+
+	Inherit(Runner)
+	Parent() Runner
+	WithLoggerFrom(r Runner, fields ...any)
 }
 
 // Init a runner.
@@ -133,18 +154,21 @@ func run(r Runner) {
 	default:
 	}
 
+	// Bridge context cancellation to Stop so that runners whose Start()
+	// implementation only listens on Stopping() are still unblocked when
+	// the context is cancelled externally.
+	// The inner select guards against a race where run()'s defer has already
+	// called MarkStopping() + Cancel() before this goroutine is scheduled:
+	// both Stopping() and Ctx().Done() would be selectable simultaneously,
+	// so we re-check Stopping() to avoid a spurious stop().
 	go func() {
 		select {
 		case <-r.Stopping():
 			return
 		case <-r.Ctx().Done():
-			// 当r.Run()立即返回的情况下，上方的defer函数里的r.markStopping()和r.Cancel()可能会在此goroutine执行前就全部执行结束
-			// 这种情况下r.Stopping()和r.Ctx().Done()这两个case会同时可进入，会随机进入一个，偶尔就会进入到r.Ctx().Done()这个case里
-			// 所以偶尔就会看到明明没有调r.Cancel()，但是却走到r.Ctx().Done()的case里
-			// 在这个case里再判断一次r.Stopping()
 			select {
 			case <-r.Stopping():
-				return
+				return // already stopping; the race described above
 			default:
 			}
 			r.Info("canceling")
@@ -236,7 +260,7 @@ func newBase(name string) Runner {
 		stopping: make(chan struct{}),
 		stopDone: make(chan struct{}),
 		done:     make(chan struct{}),
-		NoErrKVS: kvs.NewMapKVS(),
+		NoErrKVS: kvs.NewNoErrKVS(kvs.NewMapKVS()),
 	}
 	return br
 }
@@ -259,24 +283,6 @@ func (br *baseRunner) Name() string {
 func (br *baseRunner) Init() error {
 	if !br.markInitialized() {
 		panic("init twice")
-	}
-	if br.Logger == nil {
-		br.Logger = log.NewNopLogger()
-	}
-	if br.started == nil {
-		br.started = make(chan struct{})
-	}
-	if br.stopping == nil {
-		br.stopping = make(chan struct{})
-	}
-	if br.stopDone == nil {
-		br.stopDone = make(chan struct{})
-	}
-	if br.done == nil {
-		br.done = make(chan struct{})
-	}
-	if br.NoErrKVS == nil {
-		br.NoErrKVS = kvs.NewMapKVS()
 	}
 	return nil
 }
@@ -350,9 +356,9 @@ func (br *baseRunner) Done() <-chan struct{} {
 	return br.done
 }
 
-func (br *baseRunner) WithLoggerFrom(r Runner, kvs ...any) {
+func (br *baseRunner) WithLoggerFrom(r Runner, fields ...any) {
 	br.Logger = r.WithLoggerName(br.Name())
-	br.WithLoggerFields(kvs...)
+	br.WithLoggerFields(fields...)
 }
 
 func (br *baseRunner) MarkStarted() bool {
@@ -400,12 +406,16 @@ func (br *baseRunner) AppendError(err ...error) {
 	defer br.errMu.Unlock()
 	var res []error
 	switch et := br.err.(type) {
-	case interface{ UnWrap() []error }:
-		res = make([]error, 0, len(et.UnWrap())+len(err))
-		res = append(res, et.UnWrap()...)
+	case interface{ Unwrap() []error }:
+		res = make([]error, 0, len(et.Unwrap())+len(err))
+		res = append(res, et.Unwrap()...)
 	default:
-		res = make([]error, 0, 1+len(err))
-		res = append(res, br.err)
+		if br.err != nil {
+			res = make([]error, 0, 1+len(err))
+			res = append(res, br.err)
+		} else {
+			res = make([]error, 0, len(err))
+		}
 	}
 	res = append(res, err...)
 	br.err = errors.Join(res...)

@@ -1,7 +1,6 @@
 package httpu
 
 import (
-	"bytes"
 	"encoding/xml"
 	"errors"
 	"io"
@@ -65,23 +64,6 @@ type Decoder interface {
 }
 
 type NewDecoder func(r io.Reader) Decoder
-
-func RespAny(w http.ResponseWriter, statusCode int, a any, headersKV ...string) {
-	if a == nil {
-		RespBytes(w, statusCode, nil, headersKV...)
-		return
-	}
-	s, err := conv.ToString(a)
-	if err != nil {
-		var buf bytes.Buffer
-		buf.Grow(128)
-		buf.WriteString("convert response data to string failed: ")
-		buf.WriteString(err.Error())
-		RespBytes(w, http.StatusInternalServerError, buf.Bytes(), headersKV...)
-		return
-	}
-	RespBytes(w, statusCode, conv.String2Bytes(s), headersKV...)
-}
 
 func RespBytes(w http.ResponseWriter, statusCode int, bs []byte, headersKV ...string) {
 	setHeaders(w, headersKV...)

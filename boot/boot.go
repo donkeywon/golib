@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/signal"
 	"reflect"
@@ -44,9 +45,9 @@ var (
 	_b                 *booter
 )
 
-func Boot(opt ...Option) {
+func Boot(ctx context.Context, opt ...Option) {
 	_b = create(opt...)
-	_b.SetCtx(context.Background())
+	_b.SetCtx(ctx)
 	err := runner.Init(_b)
 	if err != nil {
 		_b.Error("boot init failed", err)
@@ -107,6 +108,7 @@ func Get[D Daemon](typ DaemonType) D {
 type options struct {
 	CfgPath        string `env:"CFG_PATH" description:"config file path"   long:"config"  short:"c"`
 	PrintVersion   bool   `               description:"print version info" long:"version" short:"v"`
+	logHandler     slog.Handler
 	envPrefix      string
 	onConfigLoaded map[DaemonType]OnConfigLoadedFunc
 	onCreated      map[DaemonType]OnCreatedFunc

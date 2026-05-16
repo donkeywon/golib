@@ -1,6 +1,8 @@
 package boot
 
-import "github.com/donkeywon/golib/log"
+import (
+	"log/slog"
+)
 
 type OnConfigLoadedFunc func(any)
 type OnCreatedFunc func()
@@ -20,9 +22,9 @@ func EnvPrefix(envPrefix string) Option {
 	}
 }
 
-func DefaultLogCfg(cfg *log.Cfg) Option {
+func WithLogHandler(h slog.Handler) Option {
 	return func(b *booter) {
-		b.logCfg = cfg
+		b.options.logHandler = h
 	}
 }
 

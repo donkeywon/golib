@@ -52,12 +52,6 @@ func validate[P Plugin, C any](typ any, creator Creator[P], cfgCreator CfgCreato
 	// if exists {
 	// 	panic("duplicate reg")
 	// }
-
-	sample := creator()
-	pRT := reflect.TypeOf(sample)
-	if pRT == nil {
-		panic(fmt.Sprintf("plugin creator returned nil: %s(%v)", reflect.TypeOf(typ).String(), typ))
-	}
 }
 
 // 创建一个注册的Plugin
