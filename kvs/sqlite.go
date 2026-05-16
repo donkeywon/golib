@@ -62,10 +62,19 @@ func NewSQLiteKVSCfg() *SQLiteKVSCfg {
 	}
 }
 
+func (c *SQLiteKVSCfg) setDefaults() {
+	if c.Table == "" {
+		c.Table = defaultTable
+	}
+	if c.PoolSize == 0 {
+		c.PoolSize = defaultPoolSize
+	}
+}
+
 // SQLiteKVS is a KVS backed by a SQLite database.
 // Call Open before use and Close when done.
 type SQLiteKVS struct {
-	*SQLiteKVSCfg
+	cfg *SQLiteKVSCfg
 
 	pool *sqlitex.Pool
 
@@ -79,40 +88,43 @@ type SQLiteKVS struct {
 	sqlCleanOutdated   string
 }
 
-func NewSQLiteKVS() *SQLiteKVS {
-	return &SQLiteKVS{}
+func NewSQLiteKVS(cfg *SQLiteKVSCfg) *SQLiteKVS {
+	cfg.setDefaults()
+	return &SQLiteKVS{
+		cfg: cfg,
+	}
 }
 
 // Open initialises the connection pool and creates the table/index if absent.
-func (s *SQLiteKVS) Open() error {
+func (s *SQLiteKVS) Open(ctx context.Context) error {
 	// Validate table name before any SQL is built — prevents identifier injection.
-	if err := validateTableName(s.Table); err != nil {
+	if err := validateTableName(s.cfg.Table); err != nil {
 		return errs.Wrap(err, "invalid table name")
 	}
 
 	// Pre-format all SQL once so that per-operation paths are allocation-free.
-	s.sqlInsertOrUpdate = fmt.Sprintf(insertOrUpdateSQLTpl, s.Table)
-	s.sqlInsertOrIgnore = fmt.Sprintf(insertOrIgnoreSQLTpl, s.Table)
-	s.sqlDelete = fmt.Sprintf(deleteSQLTpl, s.Table)
-	s.sqlDeleteReturning = fmt.Sprintf(deleteReturningSQLTpl, s.Table)
-	s.sqlQuery = fmt.Sprintf(querySQLTpl, s.Table)
-	s.sqlPageQuery = fmt.Sprintf(pageQuerySQLTpl, s.Table)
-	s.sqlCleanOutdated = fmt.Sprintf(cleanOutdatedSQLTpl, s.Table)
+	s.sqlInsertOrUpdate = fmt.Sprintf(insertOrUpdateSQLTpl, s.cfg.Table)
+	s.sqlInsertOrIgnore = fmt.Sprintf(insertOrIgnoreSQLTpl, s.cfg.Table)
+	s.sqlDelete = fmt.Sprintf(deleteSQLTpl, s.cfg.Table)
+	s.sqlDeleteReturning = fmt.Sprintf(deleteReturningSQLTpl, s.cfg.Table)
+	s.sqlQuery = fmt.Sprintf(querySQLTpl, s.cfg.Table)
+	s.sqlPageQuery = fmt.Sprintf(pageQuerySQLTpl, s.cfg.Table)
+	s.sqlCleanOutdated = fmt.Sprintf(cleanOutdatedSQLTpl, s.cfg.Table)
 
 	var err error
-	s.pool, err = sqlitex.NewPool(s.Path, sqlitex.PoolOptions{PoolSize: s.PoolSize})
+	s.pool, err = sqlitex.NewPool(s.cfg.Path, sqlitex.PoolOptions{PoolSize: s.cfg.PoolSize})
 	if err != nil {
 		return errs.Wrap(err, "open sqlite3 db failed")
 	}
 
-	conn, err := s.getConn(context.Background())
+	conn, err := s.getConn(ctx)
 	if err != nil {
 		return errs.Wrap(err, "get conn failed")
 	}
 	defer s.putConn(conn)
 
 	// Three %s: table name, index name prefix (same), table name in ON clause.
-	ddl := fmt.Sprintf(ddlTpl, s.Table, s.Table, s.Table)
+	ddl := fmt.Sprintf(ddlTpl, s.cfg.Table, s.cfg.Table, s.cfg.Table)
 	if err = sqlitex.ExecuteScript(conn, ddl, &sqlitex.ExecOptions{}); err != nil {
 		return errs.Wrap(err, "exec ddl failed")
 	}
