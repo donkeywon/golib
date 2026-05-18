@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"reflect"
 )
 
 type ctxKeyLogger struct{}
@@ -22,7 +21,7 @@ func FromCtx(ctx context.Context) *slog.Logger {
 	}
 	l, ok := v.(*slog.Logger)
 	if !ok {
-		panic(fmt.Sprintf("unknown logger type from ctx: %+v", reflect.TypeOf(v)))
+		panic(fmt.Sprintf("unknown logger type from ctx: %T", v))
 	}
 	return l
 }

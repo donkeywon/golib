@@ -5,424 +5,294 @@ import (
 	"errors"
 	"fmt"
 	"sync"
-	"sync/atomic"
 
 	"github.com/donkeywon/golib/errs"
-	"github.com/donkeywon/golib/kvs"
-	"github.com/donkeywon/golib/log"
+	"github.com/donkeywon/golib/logs"
 )
 
-var Create = newBase // allow to override
-
-// Lifecycle covers the three-phase run protocol.
 type Lifecycle interface {
-	Init() error
-	Start() error
-	Stop() error
+	Init(context.Context) error
+	Start(context.Context) error
+	Stop(context.Context) error
 }
 
-// Namer carries the identity of a runner.
-type Namer interface {
-	Name() string
-	SetName(string)
-}
-
-// Contexter manages the runner's context and cancellation.
-type Contexter interface {
-	Ctx() context.Context
-	SetCtx(context.Context)
-	Cancel()
-}
-
-// Signaler exposes the four lifecycle signals as channels.
 type Signaler interface {
+	MarkInitialized() bool
 	MarkStarted() bool
 	MarkStopping() bool
 	MarkStopDone() bool
 	MarkDone() bool
+	Initialized() <-chan struct{}
 	Started() <-chan struct{}
 	Stopping() <-chan struct{}
 	StopDone() <-chan struct{}
 	Done() <-chan struct{}
 }
 
-// ErrorCollector accumulates non-fatal errors produced during a run.
-type ErrorCollector interface {
-	AppendError(err ...error)
-	Err() error
-}
-
-// Runner is the full interface composed of all sub-interfaces.
-// Embed the sub-interfaces in your own types when you only need a subset.
 type Runner interface {
-	log.Logger
 	Lifecycle
-	Namer
-	Contexter
 	Signaler
-	ErrorCollector
-
-	Inherit(Runner)
-	Parent() Runner
-	WithLoggerFrom(r Runner, fields ...any)
 }
 
 // Init a runner.
-func Init(r Runner) (err error) {
+func Init(ctx context.Context, r Runner) (err error) {
 	if r == nil {
 		panic("nil runner")
 	}
-	if r.Ctx() == nil {
-		panic("nil runner context")
+	if ctx == nil {
+		panic("nil context")
+	}
+	if !r.MarkInitialized() {
+		panic("init again")
 	}
 
 	defer func() {
 		p := recover()
 		if p != nil {
+			pe := errs.PanicToErrWithMsg(p, fmt.Sprintf("panic on init runner: %T", r))
 			if err == nil {
-				err = errs.PanicToErrWithMsg(p, fmt.Sprintf("panic on %s init", r.Name()))
+				err = pe
 			} else {
-				err = errors.Join(err, errs.PanicToErrWithMsg(p, fmt.Sprintf("panic on %s init", r.Name())))
+				err = errors.Join(err, pe)
 			}
 		}
 	}()
-	r.Info("init")
-	err = r.Init()
+
+	l := logs.FromCtx(ctx)
+	l.Info("init")
+	err = r.Init(ctx)
 	if err != nil {
-		r.Cancel()
 		return
 	}
-	r.Info("init done")
+	l.Info("init done")
 	return
 }
 
 // Run a runner and wait it done.
-func Run(r Runner) error {
+func Run(ctx context.Context, r Runner) (err error) {
 	if r == nil {
 		panic("nil runner")
 	}
-	if r.Ctx() == nil {
-		panic("nil runner context")
+	if ctx == nil {
+		panic("nil context")
 	}
-	run(r)
-	return r.Err()
-}
 
-// Start a runner in the background.
-func Start(r Runner) {
-	if r == nil {
-		panic("nil runner")
+	select {
+	case <-r.Initialized():
+	default:
+		panic("start before initialized")
 	}
-	if r.Ctx() == nil {
-		panic("nil runner context")
-	}
-	go run(r)
-}
 
-func run(r Runner) {
+	select {
+	case <-r.Stopping():
+		panic("start after stopping")
+	default:
+	}
+
 	if !r.MarkStarted() {
-		r.Info("already started")
-		return
+		panic("run again")
 	}
 
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+	}
+
+	l := logs.FromCtx(ctx)
 	defer func() {
-		err := recover()
-		if err != nil {
-			r.AppendError(errs.PanicToErrWithMsg(err, fmt.Sprintf("panic on %s running", r.Name())))
+		p := recover()
+		if p != nil {
+			pe := errs.PanicToErrWithMsg(p, fmt.Sprintf("panic on run runner: %T", r))
+			if err == nil {
+				err = pe
+			} else {
+				err = errors.Join(err, pe)
+			}
 		}
 
 		if r.MarkStopping() {
 			// At this point
-			// 1. stopping or canceled before call runner.Run(r)
+			// 1. stopping before call runner.Run(r)
 			// 2. done before call runner.Stop(r)
 			// both need to markStopDone
 			r.MarkStopDone()
 		}
 		<-r.StopDone()
-		r.Info("done")
+		l.Info("done")
 		r.MarkDone()
-		r.Cancel()
 	}()
 
-	select {
-	case <-r.Stopping():
-		r.Info("already stopping before start")
-		return
-	case <-r.Ctx().Done():
-		r.Info("already canceled before start")
-		return
-	default:
-	}
-
-	// Bridge context cancellation to Stop so that runners whose Start()
-	// implementation only listens on Stopping() are still unblocked when
-	// the context is cancelled externally.
-	// The inner select guards against a race where run()'s defer has already
-	// called MarkStopping() + Cancel() before this goroutine is scheduled:
-	// both Stopping() and Ctx().Done() would be selectable simultaneously,
-	// so we re-check Stopping() to avoid a spurious stop().
 	go func() {
 		select {
 		case <-r.Stopping():
 			return
-		case <-r.Ctx().Done():
+		case <-ctx.Done():
 			select {
 			case <-r.Stopping():
-				return // already stopping; the race described above
+				return
 			default:
 			}
-			r.Info("canceling")
-			stop(r, false)
+			l.Info("canceling")
+			stop(context.Background(), r, false)
 		}
 	}()
 
-	r.Info("starting")
-	r.AppendError(r.Start())
+	l.Info("starting")
+	return r.Start(ctx)
 }
 
-// Stop runner, in most scenario, Stop is notification action to notify the Runner to stop.
-func Stop(r Runner) {
-	stop(r, false)
-}
-
-// StopAndWait notify Runner to stop and wait it done.
-func StopAndWait(r Runner) {
-	stop(r, true)
-}
-
-func stop(r Runner, wait bool) {
-	if !r.MarkStopping() {
-		r.Info("already stopping", "wait", wait)
-		return
-	}
-
-	r.Info("stopping", "wait", wait)
-
-	select {
-	case <-r.Started():
-		safeStop(r)
-		r.Info("stop done")
-		r.MarkStopDone()
-		if wait {
-			<-r.Done()
-		}
-	default:
-		// 这里不直接return的原因是：
-		// 有些struct组合了Runner接口，但是并不需要Start，只是依赖Runner的一些公共方法
-		// 例如Log相关方法、Value相关方法，Ctx和事件通知相关方法
-		// 所以这里支持在Runner没有Start的情况下做Stop操作
-		// 这种情况下必须要调用runner.Init执行初始化，Init、Start、Stop都可以不用实现.
-		r.Info("stopping before started")
-		safeStop(r)
-		r.Info("stop done before started")
-		r.MarkStopDone()
-		r.MarkDone()
-	}
-}
-
-func safeStop(r Runner) {
-	defer func() {
-		err := recover()
-		if err != nil {
-			r.AppendError(errs.PanicToErrWithMsg(err, "panic on stopping"))
-		}
-	}()
-	r.AppendError(r.Stop())
-}
-
-type baseRunner struct {
-	kvs.NoErrKVS
-	log.Logger
-
-	initialized  atomic.Bool
-	ctx          context.Context
-	cancel       context.CancelFunc
-	err          error
-	parent       Runner
-	started      chan struct{}
-	done         chan struct{}
-	stopDone     chan struct{}
-	stopping     chan struct{}
-	name         string
-	startedOnce  sync.Once
-	doneOnce     sync.Once
-	stopDoneOnce sync.Once
-	stoppingOnce sync.Once
-	cancelOnce   sync.Once
-	errMu        sync.Mutex
-}
-
-func newBase(name string) Runner {
-	br := &baseRunner{
-		Logger:   log.NewNopLogger(),
-		name:     name,
-		started:  make(chan struct{}),
-		stopping: make(chan struct{}),
-		stopDone: make(chan struct{}),
-		done:     make(chan struct{}),
-		NoErrKVS: kvs.NewNoErrKVS(kvs.NewMapKVS()),
-	}
-	return br
-}
-
-func (br *baseRunner) markInitialized() bool {
-	return br.initialized.CompareAndSwap(false, true)
-}
-
-func (br *baseRunner) SetName(n string) {
-	if br.initialized.Load() {
-		panic("set name after initialized")
-	}
-	br.name = n
-}
-
-func (br *baseRunner) Name() string {
-	return br.name
-}
-
-func (br *baseRunner) Init() error {
-	if !br.markInitialized() {
-		panic("init twice")
-	}
-	return nil
-}
-
-func (br *baseRunner) Start() error {
-	<-br.Stopping()
-	return nil
-}
-
-func (br *baseRunner) Stop() error {
-	return nil
-}
-
-func (br *baseRunner) Inherit(r Runner) {
-	if br.parent != nil {
-		panic("inherit twice")
-	}
-	if br.initialized.Load() {
-		panic("inherit after initialized")
-	}
-	br.WithLoggerFrom(r)
-	if br.ctx == nil {
-		br.SetCtx(r.Ctx())
-	}
-	br.parent = r
-}
-
-func (br *baseRunner) Parent() Runner {
-	return br.parent
-}
-
-func (br *baseRunner) SetCtx(ctx context.Context) {
-	if br.initialized.Load() {
-		panic("set context after initialized")
+// Start a runner in the background.
+func Start(ctx context.Context, r Runner) {
+	if r == nil {
+		panic("nil runner")
 	}
 	if ctx == nil {
 		panic("nil context")
 	}
-	if br.ctx != nil {
-		panic("context already set")
+	go func() {
+		// TODO
+	}()
+}
+
+// Stop runner, in most scenario, Stop is notification action to notify the Runner to stop.
+func Stop(ctx context.Context, r Runner) error {
+	return stop(ctx, r, false)
+}
+
+// StopAndWait notify Runner to stop and wait it done.
+func StopAndWait(ctx context.Context, r Runner) error {
+	return stop(ctx, r, true)
+}
+
+func stop(ctx context.Context, r Runner, wait bool) (err error) {
+	select {
+	case <-r.Started():
+	default:
+		panic("stop before start")
 	}
-	br.ctx, br.cancel = context.WithCancel(ctx)
-}
 
-func (br *baseRunner) Cancel() {
-	br.cancelOnce.Do(func() {
-		if br.cancel != nil {
-			br.Debug("cancel")
-			br.cancel()
+	l := logs.FromCtx(ctx)
+	if !r.MarkStopping() {
+		l.Info("already stopping", "wait", wait)
+		return waitDone(ctx, r)
+	}
+
+	l.Info("stopping", "wait", wait)
+	err = safeStop(ctx, r)
+	l.Info("stop done")
+	r.MarkStopDone()
+	if wait {
+		waitErr := waitDone(ctx, r)
+		if waitErr != nil {
+			err = errors.Join(err, errs.Wrapf(waitErr, "wait runner done failed"))
 		}
-	})
+	}
+	return
 }
 
-func (br *baseRunner) Ctx() context.Context {
-	return br.ctx
+func safeStop(ctx context.Context, r Runner) (err error) {
+	defer func() {
+		p := recover()
+		if p == nil {
+			return
+		}
+
+		pe := errs.PanicToErrWithMsg(p, fmt.Sprintf("panic on stop runner: %T", r))
+		if err == nil {
+			err = pe
+		} else {
+			err = errors.Join(err, pe)
+		}
+	}()
+	return r.Stop(ctx)
 }
 
-func (br *baseRunner) Started() <-chan struct{} {
+func waitDone(ctx context.Context, r Runner) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-r.Done():
+		return nil
+	}
+}
+
+type Base struct {
+	initialized  chan struct{}
+	started      chan struct{}
+	stopping     chan struct{}
+	done         chan struct{}
+	stopDone     chan struct{}
+	initOnce     sync.Once
+	startedOnce  sync.Once
+	stoppingOnce sync.Once
+	doneOnce     sync.Once
+	stopDoneOnce sync.Once
+}
+
+func (br *Base) Init(_ context.Context) error {
+	br.initialized = make(chan struct{})
+	br.started = make(chan struct{})
+	br.stopping = make(chan struct{})
+	br.done = make(chan struct{})
+	br.stopDone = make(chan struct{})
+	return nil
+}
+
+func (br *Base) Start(_ context.Context) error {
+	<-br.Stopping()
+	return nil
+}
+
+func (br *Base) Stop(_ context.Context) error {
+	return nil
+}
+
+func (br *Base) Initialized() <-chan struct{} {
+	return br.initialized
+}
+
+func (br *Base) Started() <-chan struct{} {
 	return br.started
 }
 
-func (br *baseRunner) Stopping() <-chan struct{} {
+func (br *Base) Stopping() <-chan struct{} {
 	return br.stopping
 }
 
-func (br *baseRunner) StopDone() <-chan struct{} {
+func (br *Base) StopDone() <-chan struct{} {
 	return br.stopDone
 }
 
-func (br *baseRunner) Done() <-chan struct{} {
+func (br *Base) Done() <-chan struct{} {
 	return br.done
 }
 
-func (br *baseRunner) WithLoggerFrom(r Runner, fields ...any) {
-	br.Logger = r.WithLoggerName(br.Name())
-	br.WithLoggerFields(fields...)
+func (br *Base) MarkInitialized() bool {
+	return br.closeCh(&br.initOnce, br.initialized)
 }
 
-func (br *baseRunner) MarkStarted() bool {
+func (br *Base) MarkStarted() bool {
+	return br.closeCh(&br.startedOnce, br.started)
+}
+
+func (br *Base) MarkStopping() bool {
+	return br.closeCh(&br.stoppingOnce, br.stopping)
+}
+
+func (br *Base) MarkStopDone() bool {
+	return br.closeCh(&br.stopDoneOnce, br.stopDone)
+}
+
+func (br *Base) MarkDone() bool {
+	return br.closeCh(&br.doneOnce, br.done)
+}
+
+func (br *Base) closeCh(once *sync.Once, ch chan struct{}) bool {
 	marked := false
-	br.startedOnce.Do(func() {
-		close(br.started)
+	once.Do(func() {
+		close(ch)
 		marked = true
 	})
-	br.Debug("mark started", "marked", marked)
 	return marked
-}
-
-func (br *baseRunner) MarkStopping() bool {
-	marked := false
-	br.stoppingOnce.Do(func() {
-		close(br.stopping)
-		marked = true
-	})
-	br.Debug("mark stopping", "marked", marked)
-	return marked
-}
-
-func (br *baseRunner) MarkStopDone() bool {
-	marked := false
-	br.stopDoneOnce.Do(func() {
-		close(br.stopDone)
-		marked = true
-	})
-	br.Debug("mark stop done", "marked", marked)
-	return marked
-}
-
-func (br *baseRunner) MarkDone() bool {
-	marked := false
-	br.doneOnce.Do(func() {
-		close(br.done)
-		marked = true
-	})
-	br.Debug("mark done", "marked", marked)
-	return marked
-}
-
-func (br *baseRunner) AppendError(err ...error) {
-	br.errMu.Lock()
-	defer br.errMu.Unlock()
-	var res []error
-	switch et := br.err.(type) {
-	case interface{ Unwrap() []error }:
-		res = make([]error, 0, len(et.Unwrap())+len(err))
-		res = append(res, et.Unwrap()...)
-	default:
-		if br.err != nil {
-			res = make([]error, 0, 1+len(err))
-			res = append(res, br.err)
-		} else {
-			res = make([]error, 0, len(err))
-		}
-	}
-	res = append(res, err...)
-	br.err = errors.Join(res...)
-}
-
-func (br *baseRunner) Err() error {
-	br.errMu.Lock()
-	defer br.errMu.Unlock()
-	return br.err
 }
