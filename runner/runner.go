@@ -69,7 +69,7 @@ func Init(ctx context.Context, r Runner) (err error) {
 }
 
 // Run a runner and wait it done.
-func Run(ctx context.Context, r Runner) (err error) {
+func Start(ctx context.Context, r Runner) (err error) {
 	if r == nil {
 		panic("nil runner")
 	}
@@ -111,14 +111,6 @@ func Run(ctx context.Context, r Runner) (err error) {
 			}
 		}
 
-		if r.MarkStopping() {
-			// At this point
-			// 1. stopping before call runner.Run(r)
-			// 2. done before call runner.Stop(r)
-			// both need to markStopDone
-			r.MarkStopDone()
-		}
-		<-r.StopDone()
 		l.Info("done")
 		r.MarkDone()
 	}()
@@ -140,19 +132,6 @@ func Run(ctx context.Context, r Runner) (err error) {
 
 	l.Info("starting")
 	return r.Start(ctx)
-}
-
-// Start a runner in the background.
-func Start(ctx context.Context, r Runner) {
-	if r == nil {
-		panic("nil runner")
-	}
-	if ctx == nil {
-		panic("nil context")
-	}
-	go func() {
-		// TODO
-	}()
 }
 
 // Stop runner, in most scenario, Stop is notification action to notify the Runner to stop.
@@ -218,58 +197,72 @@ func waitDone(ctx context.Context, r Runner) error {
 }
 
 type Base struct {
-	initialized  chan struct{}
-	started      chan struct{}
-	stopping     chan struct{}
-	done         chan struct{}
-	stopDone     chan struct{}
-	initOnce     sync.Once
-	startedOnce  sync.Once
-	stoppingOnce sync.Once
-	doneOnce     sync.Once
-	stopDoneOnce sync.Once
+	initialized     chan struct{}
+	started         chan struct{}
+	stopping        chan struct{}
+	done            chan struct{}
+	stopDone        chan struct{}
+	initializedOnce sync.Once
+	startedOnce     sync.Once
+	stoppingOnce    sync.Once
+	doneOnce        sync.Once
+	stopDoneOnce    sync.Once
+	initOnce        sync.Once
+}
+
+func (br *Base) init() {
+	br.initOnce.Do(func() {
+		br.initialized = make(chan struct{})
+		br.started = make(chan struct{})
+		br.stopping = make(chan struct{})
+		br.done = make(chan struct{})
+		br.stopDone = make(chan struct{})
+	})
 }
 
 func (br *Base) Init(_ context.Context) error {
-	br.initialized = make(chan struct{})
-	br.started = make(chan struct{})
-	br.stopping = make(chan struct{})
-	br.done = make(chan struct{})
-	br.stopDone = make(chan struct{})
+	br.init()
 	return nil
 }
 
 func (br *Base) Start(_ context.Context) error {
+	br.init()
 	<-br.Stopping()
 	return nil
 }
 
 func (br *Base) Stop(_ context.Context) error {
+	br.init()
 	return nil
 }
 
 func (br *Base) Initialized() <-chan struct{} {
+	br.init()
 	return br.initialized
 }
 
 func (br *Base) Started() <-chan struct{} {
+	br.init()
 	return br.started
 }
 
 func (br *Base) Stopping() <-chan struct{} {
+	br.init()
 	return br.stopping
 }
 
 func (br *Base) StopDone() <-chan struct{} {
+	br.init()
 	return br.stopDone
 }
 
 func (br *Base) Done() <-chan struct{} {
+	br.init()
 	return br.done
 }
 
 func (br *Base) MarkInitialized() bool {
-	return br.closeCh(&br.initOnce, br.initialized)
+	return br.closeCh(&br.initializedOnce, br.initialized)
 }
 
 func (br *Base) MarkStarted() bool {
@@ -289,10 +282,11 @@ func (br *Base) MarkDone() bool {
 }
 
 func (br *Base) closeCh(once *sync.Once, ch chan struct{}) bool {
-	marked := false
+	br.init()
+	closed := false
 	once.Do(func() {
 		close(ch)
-		marked = true
+		closed = true
 	})
-	return marked
+	return closed
 }
