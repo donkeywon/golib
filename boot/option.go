@@ -1,8 +1,6 @@
 package boot
 
-import (
-	"log/slog"
-)
+import "github.com/donkeywon/golib/logs"
 
 type OnConfigLoadedFunc func(any)
 type OnCreatedFunc func()
@@ -22,9 +20,16 @@ func EnvPrefix(envPrefix string) Option {
 	}
 }
 
-func WithLogHandler(h slog.Handler) Option {
+func WithLoggerCreator(cfgKey string, c logs.Creator) Option {
+	if cfgKey == "" {
+		panic("empty logger cfg key")
+	}
+	if c == nil {
+		panic("nil logger creator")
+	}
 	return func(b *booter) {
-		b.options.logHandler = h
+		b.options.loggerCfgKey = cfgKey
+		b.options.loggerCreator = c
 	}
 }
 
