@@ -1,7 +1,9 @@
 package profd
 
 import (
+	"context"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/http/pprof"
 	"strconv"
@@ -12,6 +14,7 @@ import (
 	"github.com/donkeywon/golib/boot"
 	"github.com/donkeywon/golib/daemon/httpd"
 	"github.com/donkeywon/golib/errs"
+	"github.com/donkeywon/golib/logs"
 	"github.com/donkeywon/golib/runner"
 	"github.com/donkeywon/golib/util/httpu"
 	"github.com/donkeywon/golib/util/prof"
@@ -30,7 +33,8 @@ type Profd interface {
 }
 
 type profd struct {
-	runner.Runner
+	runner.Base
+	*slog.Logger
 
 	cfg *Cfg
 
@@ -45,12 +49,11 @@ type profd struct {
 }
 
 func New() boot.Daemon {
-	return &profd{
-		Runner: runner.Create(string(DaemonTypeProfd)),
-	}
+	return &profd{}
 }
 
-func (p *profd) Init() error {
+func (p *profd) Init(ctx context.Context) error {
+	p.Logger = logs.FromCtx(ctx)
 	p.httpd = boot.Get[httpd.HTTPd](httpd.DaemonTypeHTTPd)
 
 	var err error
@@ -60,7 +63,7 @@ func (p *profd) Init() error {
 			if !p.cfg.SkipStartupErr {
 				return errs.Wrap(err, "startup profiling failed")
 			}
-			p.Error("startup profiling failed", err,
+			p.Error("startup profiling failed", "err", err,
 				"mode", p.cfg.StartupProfilingMode,
 				"duration", fmt.Sprintf("%ds", p.cfg.StartupProfilingSec),
 				"filepath", filepath)
@@ -89,7 +92,7 @@ func (p *profd) Init() error {
 			if !p.cfg.SkipStartupErr {
 				return errs.Wrap(err, "init statsviz failed")
 			}
-			p.Error("init statsviz failed", err)
+			p.Error("init statsviz failed", "err", err)
 		} else {
 			p.httpd.Handle(p.cfg.Prefix+"/debug/statsviz/", p.midSecure(p.statsvizServer.Index()))
 			p.httpd.Handle(p.cfg.Prefix+"/debug/statsviz/ws", p.midSecure(p.statsvizServer.Ws()))
@@ -127,14 +130,14 @@ func (p *profd) Init() error {
 			if !p.cfg.SkipStartupErr {
 				return errs.Wrap(err, "init gops agent failed")
 			}
-			p.Error("init gops agent failed", err, "addr", p.cfg.GoPsAddr)
+			p.Error("init gops agent failed", "err", err, "addr", p.cfg.GoPsAddr)
 		}
 	}
 
-	return p.Runner.Init()
+	return nil
 }
 
-func (p *profd) Stop() error {
+func (p *profd) Stop(ctx context.Context) error {
 	if p.cfg.EnableStartupProfiling && prof.IsRunning() {
 		err := prof.Stop()
 		if err != nil {

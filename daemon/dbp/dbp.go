@@ -3,11 +3,13 @@ package dbp
 import (
 	"context"
 	"database/sql"
+	"log/slog"
 	"time"
 
 	"github.com/donkeywon/golib/boot"
 	"github.com/donkeywon/golib/daemon/metricsd"
 	"github.com/donkeywon/golib/errs"
+	"github.com/donkeywon/golib/logs"
 	"github.com/donkeywon/golib/runner"
 	"github.com/prometheus/client_golang/prometheus"
 )
@@ -84,21 +86,22 @@ var (
 )
 
 type dbp struct {
-	runner.Runner
+	runner.Base
 
 	cfg      *Cfg
 	dbs      map[string]*sql.DB
 	metricsd metricsd.Metricsd
+	l        *slog.Logger
 }
 
 func New() boot.Daemon {
 	return &dbp{
-		Runner: runner.Create(string(DaemonTypeDBP)),
-		dbs:    make(map[string]*sql.DB),
+		dbs: make(map[string]*sql.DB),
 	}
 }
 
-func (d *dbp) Init() error {
+func (d *dbp) Init(ctx context.Context) error {
+	d.l = logs.FromCtx(ctx)
 	for _, dbCfg := range d.cfg.Pools {
 		db, err := sql.Open(dbCfg.Type, dbCfg.DSN)
 		if err != nil {
@@ -110,7 +113,7 @@ func (d *dbp) Init() error {
 		db.SetConnMaxLifetime(dbCfg.MaxLifeTime)
 		db.SetConnMaxIdleTime(dbCfg.MaxIdleTime)
 
-		err = d.waitDBReady(db, dbCfg.Name, dbCfg.Type, dbCfg.MaxWaitReadyTime, dbCfg.ReadyQuery)
+		err = d.waitDBReady(ctx, db, dbCfg.Name, dbCfg.Type, dbCfg.MaxWaitReadyTime, dbCfg.ReadyQuery)
 		if err != nil {
 			d.closeAll()
 			return errs.Wrapf(err, "wait db ready timed out, name: %s, type: %s", dbCfg.Name, dbCfg.Type)
@@ -122,19 +125,19 @@ func (d *dbp) Init() error {
 		d.metricsd = boot.Get[metricsd.Metricsd](metricsd.DaemonTypeMetricsd)
 		d.metricsd.MustRegister(d)
 	}
-	return d.Runner.Init()
+	return nil
 }
 
 func (d *dbp) SetCfg(cfg any) {
 	d.cfg = cfg.(*Cfg)
 }
 
-func (d *dbp) waitDBReady(db *sql.DB, name string, typ string, maxWait time.Duration, readyQuery string) error {
+func (d *dbp) waitDBReady(ctx context.Context, db *sql.DB, name string, typ string, maxWait time.Duration, readyQuery string) error {
 	if maxWait == 0 {
-		return d.checkDBReady(db, readyQuery)
+		return d.checkDBReady(ctx, db, readyQuery)
 	}
 
-	ctx, cancel := context.WithTimeout(d.Ctx(), maxWait)
+	ctx, cancel := context.WithTimeout(ctx, maxWait)
 	defer cancel()
 
 	var err error
@@ -145,27 +148,27 @@ func (d *dbp) waitDBReady(db *sql.DB, name string, typ string, maxWait time.Dura
 		case <-ctx.Done():
 			return errs.Wrap(err, "check db ready failed")
 		case <-t.C:
-			err = d.checkDBReady(db, readyQuery)
+			err = d.checkDBReady(ctx, db, readyQuery)
 			if err == nil {
 				return nil
 			}
 
 			t.Reset(time.Second)
-			d.Warn("check db ready failed", "err", err, "name", name, "type", typ)
+			d.l.Warn("check db ready failed", "err", err, "name", name, "type", typ)
 		}
 	}
 }
 
-func (d *dbp) checkDBReady(db *sql.DB, query string) error {
+func (d *dbp) checkDBReady(ctx context.Context, db *sql.DB, query string) error {
 	if query == "" {
-		return db.PingContext(d.Ctx())
+		return db.PingContext(ctx)
 	}
 
-	_, err := db.ExecContext(d.Ctx(), query)
+	_, err := db.ExecContext(ctx, query)
 	return err
 }
 
-func (d *dbp) Stop() error {
+func (d *dbp) Stop(ctx context.Context) error {
 	d.closeAll()
 	return nil
 }
@@ -178,7 +181,7 @@ func (d *dbp) closeAll() {
 		}
 		err := db.Close()
 		if err != nil {
-			d.Error("close db failed", err, "name", dbCfg.Name, "type", dbCfg.Type)
+			d.l.Error("close db failed", "err", err, "name", dbCfg.Name, "type", dbCfg.Type)
 		}
 	}
 }

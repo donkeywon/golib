@@ -1,10 +1,13 @@
 package httpd
 
 import (
+	"context"
 	"errors"
+	"log/slog"
 	"net/http"
 
 	"github.com/donkeywon/golib/boot"
+	"github.com/donkeywon/golib/logs"
 	"github.com/donkeywon/golib/runner"
 )
 
@@ -19,6 +22,7 @@ type HTTPd interface {
 	Use(...func(http.Handler) http.Handler)
 	Handle(string, http.Handler)
 	HandleFunc(string, func(http.ResponseWriter, *http.Request))
+	Logger() *slog.Logger
 }
 
 type Router interface {
@@ -28,11 +32,12 @@ type Router interface {
 }
 
 type httpd struct {
-	runner.Runner
+	runner.Base
 
 	cfg *Cfg
 	s   *http.Server
 
+	l           *slog.Logger
 	r           Router
 	patterns    []string
 	handlers    []http.Handler
@@ -40,12 +45,11 @@ type httpd struct {
 }
 
 func New() boot.Daemon {
-	return &httpd{
-		Runner: runner.Create(string(DaemonTypeHTTPd)),
-	}
+	return &httpd{}
 }
 
-func (h *httpd) Init() error {
+func (h *httpd) Init(ctx context.Context) error {
+	h.l = logs.FromCtx(ctx)
 	if h.r == nil {
 		h.r = http.NewServeMux()
 	}
@@ -55,23 +59,19 @@ func (h *httpd) Init() error {
 	}
 
 	h.s.Handler = h.r
-	return h.Runner.Init()
+	return nil
 }
 
-func (h *httpd) Start() error {
-	return h.s.ListenAndServe()
-}
-
-func (h *httpd) Stop() error {
-	return h.s.Close()
-}
-
-func (h *httpd) AppendError(err ...error) {
-	for _, e := range err {
-		if !errors.Is(e, http.ErrServerClosed) {
-			h.Runner.AppendError(e)
-		}
+func (h *httpd) Start(_ context.Context) error {
+	err := h.s.ListenAndServe()
+	if errors.Is(err, http.ErrServerClosed) {
+		return nil
 	}
+	return err
+}
+
+func (h *httpd) Stop(ctx context.Context) error {
+	return h.s.Shutdown(ctx)
 }
 
 func (h *httpd) Use(mf ...func(http.Handler) http.Handler) {
@@ -99,6 +99,10 @@ func (h *httpd) SetRouter(r Router) {
 
 func (h *httpd) Server() *http.Server {
 	return h.s
+}
+
+func (h *httpd) Logger() *slog.Logger {
+	return h.l
 }
 
 func (h *httpd) buildHandlerChain(next http.Handler) http.Handler {

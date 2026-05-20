@@ -1,7 +1,9 @@
 package svcd
 
 import (
+	"context"
 	"fmt"
+	"log/slog"
 	"reflect"
 	"strings"
 
@@ -24,21 +26,20 @@ var (
 	_svcCreatorsMap = make(map[string]Creator, initSize)
 	_svcMap         = make(map[string]Svc, initSize)
 	_svcCfgMap      = make(map[string]any, initSize)
-	_svcd           = &svcd{
-		Runner: runner.Create("svc"),
-	}
+	_svcd           = &svcd{}
 )
 
 type svcd struct {
-	runner.Runner
+	runner.Base
 	*Cfg
+	*slog.Logger
 }
 
 func New() boot.Daemon {
 	return _svcd
 }
 
-func (s *svcd) Init() error {
+func (s *svcd) Init(ctx context.Context) error {
 	for _, fqn := range _svcFQNs {
 		creator := _svcCreatorsMap[fqn]
 		s.Debug("create svc", "fqn", fqn)
@@ -54,7 +55,7 @@ func (s *svcd) Init() error {
 		}
 	}
 
-	return s.Runner.Init()
+	return nil
 }
 
 func buildFQN(ns Namespace, m Module, n Name) string {

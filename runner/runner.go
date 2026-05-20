@@ -210,6 +210,11 @@ func (br *Base) Init(_ context.Context) error {
 	return nil
 }
 
+func (br *Base) Start(_ context.Context) error {
+	<-br.Stopping()
+	return nil
+}
+
 func (br *Base) Stop(_ context.Context) error {
 	return nil
 }

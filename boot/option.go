@@ -1,12 +1,13 @@
 package boot
 
 import (
+	"context"
+
 	"github.com/donkeywon/golib/logs"
 )
 
-type OnConfigLoadedFunc func(any)
-type OnCreatedFunc func()
-type OnInitializedFunc func()
+type OnCreatedFunc func(context.Context)
+type AfterDoneFunc func(context.Context)
 
 type Option func(*booter)
 
@@ -35,20 +36,14 @@ func WithLoggerCreator(cfgKey string, c logs.Creator) Option {
 	}
 }
 
-func OnConfigLoaded(t DaemonType, f OnConfigLoadedFunc) Option {
-	return func(b *booter) {
-		b.options.onConfigLoaded[t] = f
-	}
-}
-
 func OnCreated(t DaemonType, f OnCreatedFunc) Option {
 	return func(b *booter) {
 		b.options.onCreated[t] = f
 	}
 }
 
-func OnInitialized(t DaemonType, f OnInitializedFunc) Option {
+func AfterDone(t DaemonType, f AfterDoneFunc) Option {
 	return func(b *booter) {
-		b.options.onInitialized[t] = f
+		b.options.afterDone[t] = f
 	}
 }

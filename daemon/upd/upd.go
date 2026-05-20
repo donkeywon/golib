@@ -3,6 +3,7 @@ package upd
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"os"
 	"os/exec"
 	"sync/atomic"
@@ -33,30 +34,35 @@ type Upd interface {
 
 // upd must be first daemon if need
 type upd struct {
-	runner.Runner
+	runner.Base
 	*Cfg
+	*slog.Logger
 
 	upgrading          atomic.Bool
 	upgradingBlockChan chan struct{}
 	allDoneExceptMe    chan struct{}
+	cancel             context.CancelFunc
 }
 
 func New() boot.Daemon {
 	return &upd{
-		Runner:             runner.Create(string(DaemonTypeUpd)),
 		upgradingBlockChan: make(chan struct{}),
 		allDoneExceptMe:    make(chan struct{}),
 	}
 }
 
-func (u *upd) Stop() error {
-	u.Cancel()
+func (u *upd) Init(ctx context.Context) error {
+
+}
+
+func (u *upd) Stop(ctx context.Context) error {
+	u.cancel()
 	if u.isUpgrading() {
 		// at this point, all daemon done except upd
 		close(u.allDoneExceptMe)
 		<-u.upgradingBlockChan
 	}
-	return u.Runner.Stop()
+	return nil
 }
 
 func (u *upd) markUpgrading() bool {
@@ -158,7 +164,7 @@ func (u *upd) upgrade(vi *VerInfo) bool {
 	u.Info("start download new package", "ver", vi.Ver)
 	err := u.downloadPackage(vi.DownloadDstPath, vi.StoreCfg)
 	if err != nil {
-		u.Error("download new package failed", err)
+		u.Error("download new package failed", "err", err)
 		return false
 	}
 	u.Info("download new package done, start upgrade", "cur_ver", buildinfo.Version, "new_ver", vi.Ver)

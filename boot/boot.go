@@ -13,7 +13,6 @@ import (
 	"strings"
 
 	"github.com/donkeywon/golib/buildinfo"
-	"github.com/donkeywon/golib/consts"
 	"github.com/donkeywon/golib/errs"
 	"github.com/donkeywon/golib/logs"
 	"github.com/donkeywon/golib/plugin"
@@ -35,7 +34,6 @@ type DaemonType string
 
 type Daemon interface {
 	runner.Runner
-	plugin.Plugin
 }
 
 var (
@@ -95,19 +93,17 @@ type options struct {
 	CfgPath      string `env:"CFG_PATH" description:"config file path"   long:"config"  short:"c"`
 	PrintVersion bool   `               description:"print version info" long:"version" short:"v"`
 
-	loggerCfgKey   string
-	loggerCreator  logs.Creator
-	envPrefix      string
-	onConfigLoaded map[DaemonType]OnConfigLoadedFunc
-	onCreated      map[DaemonType]OnCreatedFunc
-	onInitialized  map[DaemonType]OnInitializedFunc
+	loggerCfgKey  string
+	loggerCreator logs.Creator
+	envPrefix     string
+	onCreated     map[DaemonType]OnCreatedFunc
+	afterDone     map[DaemonType]AfterDoneFunc
 }
 
 func createOptions() *options {
 	return &options{
-		onConfigLoaded: make(map[DaemonType]OnConfigLoadedFunc),
-		onCreated:      make(map[DaemonType]OnCreatedFunc),
-		onInitialized:  make(map[DaemonType]OnInitializedFunc),
+		onCreated: make(map[DaemonType]OnCreatedFunc),
+		afterDone: make(map[DaemonType]AfterDoneFunc),
 	}
 }
 
@@ -176,12 +172,6 @@ func (b *booter) Init(ctx context.Context) error {
 		return errs.Wrap(err, "load cfg failed")
 	}
 
-	for _, daemonType := range _daemonTypes {
-		if f, ok := b.options.onConfigLoaded[daemonType]; ok {
-			f(b.cfgMap[string(daemonType)])
-		}
-	}
-
 	err = b.validateCfg()
 	if err != nil {
 		return errs.Wrap(err, "validate cfg failed")
@@ -198,7 +188,7 @@ func (b *booter) Init(ctx context.Context) error {
 		b.l.Debug("load config", "name", name, "cfg", cfg)
 	}
 
-	b.createDaemons()
+	b.createDaemons(ctx)
 	err = b.initDaemons(logs.CtxWith(ctx, b.l))
 	if err != nil {
 		return errs.Wrap(err, "init daemons failed")
@@ -212,13 +202,13 @@ func (b *booter) Start(ctx context.Context) error {
 	ctx, cancel = context.WithCancelCause(ctx)
 	defer cancel(errCanceled)
 
-	ctx = logs.CtxWith(ctx, b.l)
 	var errg *errgroup.Group
 	errg, ctx = errgroup.WithContext(ctx)
 
 	for _, daemonType := range _daemonTypes {
 		daemon := b.daemonsMap[daemonType]
 		errg.Go(func() error {
+			ctx = logs.CtxWith(ctx, b.l.With("daemon", daemonType))
 			e := runner.Start(ctx, daemon)
 			if errors.Is(e, context.Canceled) && errors.Is(context.Cause(ctx), errCanceled) {
 				return nil
@@ -277,14 +267,14 @@ func (b *booter) Stop(ctx context.Context) error {
 	return errors.Join(allErr...)
 }
 
-func (b *booter) createDaemons() {
+func (b *booter) createDaemons(ctx context.Context) {
 	for _, daemonType := range _daemonTypes {
 		daemon := plugin.CreateWithCfg[Daemon](daemonType, b.cfgMap[string(daemonType)])
 		b.daemonsMap[daemonType] = daemon
 
 		onCreated := b.options.onCreated[daemonType]
 		if onCreated != nil {
-			onCreated()
+			onCreated(ctx)
 		}
 	}
 }
@@ -296,11 +286,6 @@ func (b *booter) initDaemons(ctx context.Context) error {
 		err = runner.Init(ctx, daemon)
 		if err != nil {
 			return errs.Wrapf(err, "init daemon failed: %s", daemonType)
-		}
-
-		onInitialized := b.options.onInitialized[daemonType]
-		if onInitialized != nil {
-			onInitialized()
 		}
 	}
 	return nil
@@ -314,11 +299,10 @@ func (b *booter) loadCfgFromFlags() error {
 func (b *booter) loadCfgFromFile() error {
 	cfgPath := b.options.CfgPath
 	if cfgPath == "" {
-		cfgPath = consts.CfgPath
-		if !paths.FileExist(cfgPath) {
-			return nil
-		}
-	} else if !paths.FileExist(cfgPath) {
+		return nil
+	}
+
+	if !paths.FileExist(cfgPath) {
 		return errs.Errorf("cfg file not exists: %s", cfgPath)
 	}
 

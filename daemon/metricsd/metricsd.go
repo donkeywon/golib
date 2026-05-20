@@ -1,11 +1,14 @@
 package metricsd
 
 import (
+	"context"
+	"log/slog"
 	"reflect"
 	"sync"
 
 	"github.com/donkeywon/golib/boot"
 	"github.com/donkeywon/golib/daemon/httpd"
+	"github.com/donkeywon/golib/logs"
 	"github.com/donkeywon/golib/runner"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/collectors"
@@ -31,24 +34,25 @@ type Metricsd interface {
 }
 
 type metricsd struct {
-	runner.Runner
+	runner.Base
 
 	cfg   *Cfg
 	mu    sync.RWMutex
 	m     map[string]prometheus.Metric
 	reg   *prometheus.Registry
 	httpd httpd.HTTPd
+	l     *slog.Logger
 }
 
 func New() boot.Daemon {
 	return &metricsd{
-		Runner: runner.Create(string(DaemonTypeMetricsd)),
-		reg:    prometheus.NewRegistry(),
-		m:      make(map[string]prometheus.Metric),
+		reg: prometheus.NewRegistry(),
+		m:   make(map[string]prometheus.Metric),
 	}
 }
 
-func (p *metricsd) Init() error {
+func (p *metricsd) Init(ctx context.Context) error {
+	p.l = logs.FromCtx(ctx)
 	if !p.cfg.DisableGoCollector {
 		p.reg.MustRegister(collectors.NewGoCollector())
 	}
@@ -59,7 +63,7 @@ func (p *metricsd) Init() error {
 	p.httpd = boot.Get[httpd.HTTPd](httpd.DaemonTypeHTTPd)
 	p.httpd.Handle(p.cfg.HTTPEndpointPath, promhttp.HandlerFor(p.reg, promhttp.HandlerOpts{Registry: p.reg}))
 
-	return p.Runner.Init()
+	return nil
 }
 
 func (p *metricsd) SetCfg(cfg any) {
@@ -114,7 +118,7 @@ func (p *metricsd) loadOrStore(name string, creator func() prometheus.Metric) pr
 	m = creator()
 	err := p.reg.Register(m.(prometheus.Collector))
 	if err != nil {
-		p.Error("register metrics failed", err, "name", name)
+		p.l.Error("register metrics failed", err, "name", name)
 		return m
 	}
 
@@ -129,7 +133,7 @@ func (p *metricsd) opGauge(name string, op func(g prometheus.Gauge)) {
 		op(gg)
 		return
 	}
-	p.Warn("metrics type not match", "name", name, "wanted", "Gauge", "actual", reflect.TypeOf(g))
+	p.l.Warn("metrics type not match", "name", name, "wanted", "Gauge", "actual", reflect.TypeOf(g))
 }
 
 func (p *metricsd) opCounter(name string, op func(c prometheus.Counter)) {
@@ -139,7 +143,7 @@ func (p *metricsd) opCounter(name string, op func(c prometheus.Counter)) {
 		op(cc)
 		return
 	}
-	p.Warn("metrics type not match", "name", name, "wanted", "Counter", "actual", reflect.TypeOf(c))
+	p.l.Warn("metrics type not match", "name", name, "wanted", "Counter", "actual", reflect.TypeOf(c))
 }
 
 func (p *metricsd) Register(c prometheus.Collector) error {
