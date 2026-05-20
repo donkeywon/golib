@@ -119,7 +119,6 @@ type booter struct {
 	flagParser *flags.Parser
 
 	daemonsMap map[DaemonType]Daemon
-	errg       *errgroup.Group
 	l          *slog.Logger
 }
 
@@ -138,6 +137,13 @@ func create(opt ...Option) *booter {
 
 func (b *booter) Init(ctx context.Context) error {
 	var err error
+
+	if b.options.loggerCfgKey == "" {
+		return errs.New("empty logger cfg key")
+	}
+	if b.options.loggerCreator == nil {
+		return errs.New("nil logger creator")
+	}
 
 	var cfgKeys []string
 	b.cfgMap, cfgKeys = b.buildCfgMap()
@@ -170,8 +176,10 @@ func (b *booter) Init(ctx context.Context) error {
 		return errs.Wrap(err, "load cfg failed")
 	}
 
-	for t, f := range b.options.onConfigLoaded {
-		f(b.cfgMap[string(t)])
+	for _, daemonType := range _daemonTypes {
+		if f, ok := b.options.onConfigLoaded[daemonType]; ok {
+			f(b.cfgMap[string(daemonType)])
+		}
 	}
 
 	err = b.validateCfg()
@@ -191,7 +199,7 @@ func (b *booter) Init(ctx context.Context) error {
 	}
 
 	b.createDaemons()
-	err = b.initDaemons(ctx)
+	err = b.initDaemons(logs.CtxWith(ctx, b.l))
 	if err != nil {
 		return errs.Wrap(err, "init daemons failed")
 	}
@@ -212,24 +220,32 @@ func (b *booter) Start(ctx context.Context) error {
 		daemon := b.daemonsMap[daemonType]
 		errg.Go(func() error {
 			e := runner.Start(ctx, daemon)
-			if errors.Is(e, errCanceled) {
+			if errors.Is(e, context.Canceled) && errors.Is(context.Cause(ctx), errCanceled) {
 				return nil
 			}
 			if e != nil {
 				b.l.Error("daemon failed", "err", e, "daemon", daemonType)
-			} else {
-				b.l.Error("daemon done, should not happen", "daemon", daemonType)
-				e = errs.Errorf("daemon done, should not happen: %s", daemonType)
+				return e
 			}
+
+			select {
+			case <-b.Stopping():
+				return nil
+			default:
+			}
+			b.l.Error("daemon done, should not happen", "daemon", daemonType)
+			e = errs.Errorf("daemon done, should not happen: %s", daemonType)
 			return e
 		})
 	}
 
 	termSigCh := make(chan os.Signal, 1)
 	signal.Notify(termSigCh, signals.TermSignals...)
+	defer signal.Stop(termSigCh)
 
 	intSigCh := make(chan os.Signal, 1)
 	signal.Notify(intSigCh, signals.IntSignals...)
+	defer signal.Stop(intSigCh)
 
 	select {
 	case sig := <-termSigCh:
@@ -242,20 +258,23 @@ func (b *booter) Start(ctx context.Context) error {
 		b.l.Info("exit due to stopping")
 	}
 
-	daemonErr := b.errg.Wait()
-	if errors.Is(daemonErr, errCanceled) {
-		b.l.Info("all daemon done")
-		return nil
-	}
-
-	return daemonErr
+	return errg.Wait()
 }
 
 func (b *booter) Stop(ctx context.Context) error {
+	allErr := make([]error, 0, len(_daemonTypes))
 	for i := len(_daemonTypes) - 1; i >= 0; i-- {
-		runner.Stop(ctx, b.daemonsMap[_daemonTypes[i]])
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+			err := runner.StopAndWait(ctx, b.daemonsMap[_daemonTypes[i]])
+			if err != nil {
+				allErr = append(allErr, errs.Wrapf(err, "stop daemon failed: %s", _daemonTypes[i]))
+			}
+		}
 	}
-	return nil
+	return errors.Join(allErr...)
 }
 
 func (b *booter) createDaemons() {

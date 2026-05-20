@@ -1,6 +1,8 @@
 package boot
 
-import "github.com/donkeywon/golib/logs"
+import (
+	"github.com/donkeywon/golib/logs"
+)
 
 type OnConfigLoadedFunc func(any)
 type OnCreatedFunc func()
