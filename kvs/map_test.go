@@ -191,9 +191,8 @@ func TestMapKVS_Range_EarlyStop(t *testing.T) {
 func TestMapKVS_Concurrent(t *testing.T) {
 	m := NewMapKVS[int, int]()
 	var wg sync.WaitGroup
-	const N = 200
 
-	for i := 0; i < N; i++ {
+	for i := range 200 {
 		wg.Add(3)
 		go func(i int) {
 			defer wg.Done()

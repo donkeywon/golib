@@ -23,20 +23,16 @@ type CfgSetter[C any] interface {
 type Plugin any
 
 var (
-	_pluginCreators    = make(map[any]any)
-	_pluginCfgCreators = make(map[any]any)
+	_pluginCreators    = make(map[any]func() any)
+	_pluginCfgCreators = make(map[any]func() any)
 )
 
-// 推荐自定义plugin的类型，不要直接使用基础类型，例如
-// type DaemonType string
-// const DaemonTypeHttpd DaemonType = "httpd"
-// Reg(DaemonTypeHttpd, func() Daemon { return NewHttpd() }, func() any { return NewHttpdCfg() }).
 func Reg[P Plugin, C any](typ any, creator Creator[P], cfgCreator CfgCreator[C]) {
 	validate(typ, creator, cfgCreator)
 
-	_pluginCreators[typ] = creator
+	_pluginCreators[typ] = func() any { return creator() }
 	if cfgCreator != nil {
-		_pluginCfgCreators[typ] = cfgCreator
+		_pluginCfgCreators[typ] = func() any { return cfgCreator() }
 	}
 }
 
@@ -67,40 +63,33 @@ func CreateWithCfg[P Plugin, C any](typ any, cfg C) P {
 		panic(fmt.Sprintf("plugin not exists: %+v", typ))
 	}
 
-	// 这里为什么不做cfg的validate校验？
-	// 校验逻辑应该放到Create之后的Init阶段，例如runner.Init
-	// 即使plugin不是Runner类型，也应该有一个统一的类似Init的阶段用来做一些初始化工作
-
-	var p P
-	if ff, ok := f.(Creator[P]); ok {
-		p = ff()
-	} else if ff, ok := f.(Creator[any]); ok {
-		p = ff().(P)
-	} else {
-		panic(fmt.Sprintf("plugin creator type mismatch: %s(%v)", reflect.TypeOf(typ).String(), typ))
+	p := f()
+	pp, ok := p.(P)
+	if !ok {
+		panic(fmt.Sprintf("plugin type mismatch: want %v, got %v (type: %+v)", reflect.TypeFor[P](), reflect.TypeOf(p), typ))
 	}
 
-	SetCfg(p, cfg)
+	SetCfg(pp, cfg)
 
-	return p
+	return pp
 }
 
 func CreateCfg[C any](typ any) C {
-	var emptyC C
+	var zero C
 	f, exists := _pluginCfgCreators[typ]
 	if !exists {
-		return emptyC
+		return zero
 	}
 
-	if ff, ok := f.(CfgCreator[C]); ok {
-		return ff()
+	c := f()
+	switch cc := c.(type) {
+	case C:
+		return cc
+	case *C:
+		return *cc
+	default:
+		panic(fmt.Sprintf("plugin cfg type mismatch: want %v, got %v (type: %+v)", reflect.TypeFor[C](), reflect.TypeOf(c), typ))
 	}
-
-	if ff, ok := f.(CfgCreator[*C]); ok {
-		return *ff()
-	}
-
-	return f.(CfgCreator[any])().(C)
 }
 
 func Create[P Plugin, C any](typ any) P {
@@ -134,8 +123,7 @@ func SetCfg[C any](p any, cfg C) {
 		return
 	}
 
-	for i := range pValue.Elem().NumField() {
-		field := pValue.Elem().Field(i)
+	for _, field := range pValue.Elem().Fields() {
 		if field.CanSet() && field.Type() == cfgRV.Type() {
 			field.Set(cfgRV)
 			return

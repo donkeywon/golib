@@ -212,6 +212,9 @@ func (b *booter) Start(ctx context.Context) error {
 		daemon := b.daemonsMap[daemonType]
 		errg.Go(func() error {
 			e := runner.Start(ctx, daemon)
+			if errors.Is(e, errCanceled) {
+				return nil
+			}
 			if e != nil {
 				b.l.Error("daemon failed", "err", e, "daemon", daemonType)
 			} else {
