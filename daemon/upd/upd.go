@@ -12,6 +12,7 @@ import (
 	"github.com/donkeywon/golib/boot"
 	"github.com/donkeywon/golib/buildinfo"
 	"github.com/donkeywon/golib/errs"
+	"github.com/donkeywon/golib/logs"
 	"github.com/donkeywon/golib/pipeline"
 	"github.com/donkeywon/golib/runner"
 	"github.com/donkeywon/golib/util/cmd"
@@ -41,6 +42,7 @@ type upd struct {
 	upgrading          atomic.Bool
 	upgradingBlockChan chan struct{}
 	allDoneExceptMe    chan struct{}
+	ctx                context.Context
 	cancel             context.CancelFunc
 }
 
@@ -52,7 +54,9 @@ func New() boot.Daemon {
 }
 
 func (u *upd) Init(ctx context.Context) error {
-
+	u.ctx, u.cancel = context.WithCancel(ctx)
+	u.Logger = logs.FromCtx(ctx)
+	return nil
 }
 
 func (u *upd) Stop(ctx context.Context) error {
@@ -172,7 +176,7 @@ func (u *upd) upgrade(vi *VerInfo) bool {
 	// 没有退路可言，no going back
 	go func() {
 		u.Info("stopping all")
-		runner.StopAndWait(u.Parent())
+		boot.Stop(context.Background())
 	}()
 
 	select {
@@ -227,5 +231,5 @@ func (u *upd) downloadPackage(downloadDstPath string, storeCfg *pipeline.ReaderC
 		return errs.Wrap(err, "init download pipeline failed")
 	}
 
-	return runner.Run(p)
+	return runner.Start(u.ctx, p)
 }

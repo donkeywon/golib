@@ -57,6 +57,10 @@ func Boot(ctx context.Context, opt ...Option) {
 	}
 }
 
+func Stop(ctx context.Context) error {
+	return runner.Stop(ctx, _b)
+}
+
 // Reg register a Daemon creator and its config creator.
 func Reg(typ DaemonType, creator plugin.Creator[Daemon], cfgCreator plugin.CfgCreator[any]) {
 	if !slices.Contains(_daemonTypes, typ) {
@@ -239,13 +243,18 @@ func (b *booter) Start(ctx context.Context) error {
 
 	select {
 	case sig := <-termSigCh:
-		b.l.Info("received signal, exit", "signal", sig.String())
-		go runner.Stop(ctx, b)
+		b.l.Info("received signal", "signal", sig.String())
+		go func() {
+			e := runner.Stop(ctx, b)
+			if e != nil {
+				b.l.Error("stop booter failed", "err", e)
+			}
+		}()
 	case sig := <-intSigCh:
-		b.l.Info("received signal, exit", "signal", sig.String())
+		b.l.Info("received signal", "signal", sig.String())
 		cancel(errCanceled)
 	case <-b.Stopping():
-		b.l.Info("exit due to stopping")
+		b.l.Info("stopping")
 	}
 
 	return errg.Wait()
