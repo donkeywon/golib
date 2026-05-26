@@ -98,7 +98,7 @@ func Start(ctx context.Context, r Runner) (err error) {
 		case <-r.Stopping():
 			stopErr := <-stopErrCh
 			if stopErr != nil {
-				allErr = append(allErr, errs.Wrap(err, "stop runner failed"))
+				allErr = append(allErr, errs.Wrap(stopErr, "stop runner failed"))
 			}
 		default:
 		}
