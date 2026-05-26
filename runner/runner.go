@@ -86,25 +86,24 @@ func Start(ctx context.Context, r Runner) (err error) {
 	stopErrCh := make(chan error, 1)
 	defer func() {
 		allErr := make([]error, 0, 3)
-		if err != nil {
-			allErr = append(allErr, err)
-		}
 		p := recover()
 		if p != nil {
 			allErr = append(allErr, errs.PanicToErrWithMsg(p, fmt.Sprintf("panic on start runner: %T", r)))
 		}
+		if err != nil {
+			allErr = append(allErr, err)
+		}
 
 		select {
 		case <-r.Stopping():
-			<-r.StopDone()
+			stopErr := <-stopErrCh
+			if stopErr != nil {
+				allErr = append(allErr, errs.Wrap(err, "stop runner failed"))
+			}
 		default:
 		}
-		stopErr := <-stopErrCh
-		if stopErr != nil {
-			allErr = append(allErr, errs.Wrap(err, "stop runner failed"))
-		}
-		err = errors.Join(allErr...)
 
+		err = errors.Join(allErr...)
 		r.markDone()
 	}()
 
