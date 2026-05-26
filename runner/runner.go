@@ -83,35 +83,51 @@ func Start(ctx context.Context, r Runner) (err error) {
 		panic("start again")
 	}
 
+	stopErrCh := make(chan error, 1)
 	defer func() {
+		allErr := make([]error, 0, 3)
+		if err != nil {
+			allErr = append(allErr, err)
+		}
 		p := recover()
 		if p != nil {
-			pe := errs.PanicToErrWithMsg(p, fmt.Sprintf("panic on start runner: %T", r))
-			if err == nil {
-				err = pe
-			} else {
-				err = errors.Join(err, pe)
-			}
+			allErr = append(allErr, errs.PanicToErrWithMsg(p, fmt.Sprintf("panic on start runner: %T", r)))
 		}
+
+		select {
+		case <-r.Stopping():
+			<-r.StopDone()
+		default:
+		}
+		stopErr := <-stopErrCh
+		if stopErr != nil {
+			allErr = append(allErr, errs.Wrap(err, "stop runner failed"))
+		}
+		err = errors.Join(allErr...)
 
 		r.markDone()
 	}()
 
 	go func() {
+		defer close(stopErrCh)
+
 		select {
-		case <-r.Stopping():
+		case <-r.Stopping(): // Stop called
 			return
-		case <-r.Done():
+		case <-r.Done(): // Start returned
 			return
 		case <-ctx.Done():
 			select {
-			case <-r.Stopping():
+			case <-r.Stopping(): // Stop called immediately after ctx done
 				return
-			case <-r.Done():
+			case <-r.Done(): // Start returned immediately after ctx done
 				return
 			default:
 			}
-			stop(context.WithoutCancel(ctx), r, false)
+			stopErr := stop(context.WithoutCancel(ctx), r, false)
+			if stopErr != nil {
+				stopErrCh <- stopErr
+			}
 		}
 	}()
 
