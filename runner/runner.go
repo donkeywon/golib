@@ -85,6 +85,8 @@ func Start(ctx context.Context, r Runner) (err error) {
 
 	stopErrCh := make(chan error, 1)
 	defer func() {
+		r.markDone()
+
 		allErr := make([]error, 0, 3)
 		p := recover()
 		if p != nil {
@@ -94,17 +96,11 @@ func Start(ctx context.Context, r Runner) (err error) {
 			allErr = append(allErr, err)
 		}
 
-		select {
-		case <-r.Stopping():
-			stopErr := <-stopErrCh
-			if stopErr != nil {
-				allErr = append(allErr, errs.Wrap(stopErr, "stop runner failed"))
-			}
-		default:
+		stopErr := <-stopErrCh
+		if stopErr != nil {
+			allErr = append(allErr, errs.Wrap(stopErr, "stop runner failed"))
 		}
-
 		err = errors.Join(allErr...)
-		r.markDone()
 	}()
 
 	go func() {
