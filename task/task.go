@@ -1,11 +1,13 @@
 package task
 
 import (
+	"context"
 	"fmt"
 	"time"
 
 	"github.com/donkeywon/golib/consts"
 	"github.com/donkeywon/golib/errs"
+	"github.com/donkeywon/golib/kvs"
 	"github.com/donkeywon/golib/plugin"
 	"github.com/donkeywon/golib/runner"
 	"github.com/donkeywon/golib/task/step"
@@ -32,14 +34,11 @@ type HookExtraData struct {
 }
 
 type Cfg struct {
-	ID              string         `json:"id"              validate:"required" yaml:"id"`
-	Type            Type           `json:"type"            validate:"required" yaml:"type"`
-	Steps           []*step.Cfg    `json:"steps"           validate:"required" yaml:"steps"`
-	DeferSteps      []*step.Cfg    `json:"deferSteps"      yaml:"deferSteps"`
-	CurStepIdx      int            `json:"curStepIdx"      yaml:"curStepIdx"`
-	CurDeferStepIdx int            `json:"curDeferStepIdx" yaml:"curDeferStepIdx"`
-	Pool            string         `json:"pool"            yaml:"pool"`
-	Values          map[string]any `json:"values"          yaml:"values"`
+	ID         string      `json:"id"          validate:"required" yaml:"id"`
+	Steps      []*step.Cfg `json:"steps"       validate:"required" yaml:"steps"`
+	DeferSteps []*step.Cfg `json:"defer_steps"                     yaml:"deferSteps"`
+	Skip       int         `json:"skip"        validate:"min=0"    yaml:"skip"`
+	DeferSkip  int         `json:"defer_skip"  validate:"min=0"    yaml:"deferSkip"`
 }
 
 func NewCfg() *Cfg {
@@ -48,11 +47,6 @@ func NewCfg() *Cfg {
 
 func (c *Cfg) SetID(id string) *Cfg {
 	c.ID = id
-	return c
-}
-
-func (c *Cfg) SetType(t Type) *Cfg {
-	c.Type = t
 	return c
 }
 
@@ -67,63 +61,70 @@ func (c *Cfg) Defer(typ step.Type, cfg any) *Cfg {
 }
 
 type Result struct {
-	Data           map[string]any   `json:"data"           yaml:"data"`
-	StepsData      []map[string]any `json:"stepsData"      yaml:"stepsData"`
-	DeferStepsData []map[string]any `json:"deferStepsData" yaml:"deferStepsData"`
+	Data           map[string]any   `json:"data"             yaml:"data"`
+	StepsData      []map[string]any `json:"steps_data"       yaml:"stepsData"`
+	DeferStepsData []map[string]any `json:"defer_steps_data" yaml:"deferStepsData"`
 }
 
 type Task struct {
-	runner.Runner
-	*Cfg
+	kvs.Map[string, any]
+	runner.Base
+
+	cfg *Cfg
 
 	stepDoneHooks      []StepHook
 	deferStepDoneHooks []StepHook
 
 	steps      []step.Step
 	deferSteps []step.Step
+
+	cancel context.CancelFunc
 }
 
 func New() *Task {
-	return &Task{
-		Runner: runner.Create("task"),
-		Cfg:    NewCfg(),
-	}
+	return &Task{}
 }
 
-func (t *Task) Init() error {
+func (t *Task) SetCfg(cfg any) {
+	t.cfg = cfg.(*Cfg)
+}
+
+func (t *Task) Init(ctx context.Context) error {
 	err := v.Struct(t)
 	if err != nil {
 		return err
 	}
 
-	for i, cfg := range t.Cfg.Steps {
-		step := t.createStep(i, cfg, false)
+	for _, cfg := range t.cfg.Steps {
+		step := plugin.CreateWithCfg[step.Step](cfg.Type, cfg.Cfg)
 		t.steps = append(t.steps, step)
 	}
 
-	for i, cfg := range t.Cfg.DeferSteps {
-		step := t.createStep(i, cfg, true)
+	for _, cfg := range t.cfg.DeferSteps {
+		step := plugin.CreateWithCfg[step.Step](cfg.Type, cfg.Cfg)
 		t.deferSteps = append(t.deferSteps, step)
 	}
 
-	for i := t.Cfg.CurStepIdx; i < len(t.steps); i++ {
-		err = runner.Init(t.steps[i])
+	for i := t.cfg.Skip; i < len(t.steps); i++ {
+		err = runner.Init(ctx, t.steps[i])
 		if err != nil {
-			return errs.Wrapf(err, "init step(%d) %s failed", i, t.steps[i].Name())
+			return errs.Wrapf(err, "init step failed: %s(%d)", t.cfg.Steps[i].Type, i)
 		}
 	}
 
-	for i := len(t.Cfg.DeferSteps) - 1 - t.Cfg.CurDeferStepIdx; i >= 0; i-- {
-		err = runner.Init(t.deferSteps[i])
+	for i := len(t.cfg.DeferSteps) - 1 - t.cfg.DeferSkip; i >= 0; i-- {
+		err = runner.Init(ctx, t.deferSteps[i])
 		if err != nil {
-			return errs.Wrapf(err, "init defer step(%d) %s failed", i, t.deferSteps[i].Name())
+			return errs.Wrapf(err, "init defer step failed: %s(%d)", t.cfg.DeferSteps[i].Type, i)
 		}
 	}
 
-	return t.Runner.Init()
+	return nil
 }
 
-func (t *Task) Start() error {
+func (t *Task) Start(ctx context.Context) error {
+	ctx, t.cancel = context.WithCancel(ctx)
+
 	defer t.final()
 	defer t.runDeferSteps()
 	defer t.recoverStepPanic()
@@ -134,8 +135,8 @@ func (t *Task) Start() error {
 	return nil
 }
 
-func (t *Task) Stop() error {
-	t.Cancel()
+func (t *Task) Stop(ctx context.Context) error {
+	t.cancel()
 	return nil
 }
 
@@ -169,27 +170,11 @@ func (t *Task) DeferSteps() []step.Step {
 }
 
 func (t *Task) CurDeferStep() step.Step {
-	return t.DeferSteps()[t.CurDeferStepIdx]
+	return t.DeferSteps()[t.cfg.CurDeferStepIdx]
 }
 
 func (t *Task) Store(k string, v any) {
 	t.Runner.StoreAsString(k, v)
-}
-
-func (t *Task) createStep(idx int, stepCfg *step.Cfg, isDefer bool) step.Step {
-	var (
-		stepOrDefer string
-	)
-	if isDefer {
-		stepOrDefer = "defer_step"
-	} else {
-		stepOrDefer = "step"
-	}
-
-	s := plugin.CreateWithCfg[step.Step](stepCfg.Type, stepCfg.Cfg)
-	s.Inherit(t)
-	s.WithLoggerFields(stepOrDefer, idx, stepOrDefer+"_type", s.Name())
-	return s
 }
 
 func (t *Task) recoverStepPanic() {

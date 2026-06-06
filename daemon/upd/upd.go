@@ -54,7 +54,7 @@ func New() boot.Daemon {
 }
 
 func (u *upd) Init(ctx context.Context) error {
-	u.ctx, u.cancel = context.WithCancel(ctx)
+	u.ctx, u.cancel = context.WithCancel(ctx) // TODO 不能用Init的ctx
 	u.Logger = logs.FromCtx(ctx)
 	return nil
 }

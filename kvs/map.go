@@ -4,32 +4,38 @@ import (
 	"sync"
 )
 
-type MapKVS[K comparable, V any] struct {
+type Map[K comparable, V any] struct {
 	m    map[K]V
 	mu   sync.RWMutex
 	once sync.Once
 }
 
-func NewMapKVS[K comparable, V any]() *MapKVS[K, V] {
-	return &MapKVS[K, V]{
-		m: make(map[K]V),
-	}
+func (m *Map[K, V]) init() {
+	m.once.Do(func() {
+		m.m = make(map[K]V)
+	})
 }
 
-func (m *MapKVS[K, V]) Store(k K, v V) {
+func (m *Map[K, V]) Store(k K, v V) {
+	m.init()
+
 	m.mu.Lock()
 	m.m[k] = v
 	m.mu.Unlock()
 }
 
-func (m *MapKVS[K, V]) Load(k K) (V, bool) {
+func (m *Map[K, V]) Load(k K) (V, bool) {
+	m.init()
+
 	m.mu.RLock()
 	v, exists := m.m[k]
 	m.mu.RUnlock()
 	return v, exists
 }
 
-func (m *MapKVS[K, V]) LoadOrStore(k K, v V) (V, bool) {
+func (m *Map[K, V]) LoadOrStore(k K, v V) (V, bool) {
+	m.init()
+
 	m.mu.RLock()
 	vv, exists := m.m[k]
 	m.mu.RUnlock()
@@ -49,7 +55,9 @@ func (m *MapKVS[K, V]) LoadOrStore(k K, v V) (V, bool) {
 	return v, false
 }
 
-func (m *MapKVS[K, V]) LoadAndDelete(k K) (V, bool) {
+func (m *Map[K, V]) LoadAndDelete(k K) (V, bool) {
+	m.init()
+
 	m.mu.Lock()
 	v, exists := m.m[k]
 	if !exists {
@@ -63,13 +71,17 @@ func (m *MapKVS[K, V]) LoadAndDelete(k K) (V, bool) {
 	return v, true
 }
 
-func (m *MapKVS[K, V]) Delete(k K) {
+func (m *Map[K, V]) Delete(k K) {
+	m.init()
+
 	m.mu.Lock()
 	delete(m.m, k)
 	m.mu.Unlock()
 }
 
-func (m *MapKVS[K, V]) Range(f func(k K, v V) bool) {
+func (m *Map[K, V]) Range(f func(k K, v V) bool) {
+	m.init()
+
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	for k, v := range m.m {
