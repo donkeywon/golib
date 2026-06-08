@@ -18,7 +18,7 @@ func GetNicSpeed(nic string) (int, error) {
 	if result.Err() != nil {
 		return 0, errs.Wrap(result.Err(), "exec Get-NetAdapter failed")
 	}
-	for _, line := range result.Stdout {
+	for _, line := range result.StdoutLines() {
 		if !strings.HasPrefix(line, nic) {
 			continue
 		}

@@ -1,10 +1,12 @@
 package step
 
 import (
+	"context"
 	"os/exec"
 
 	"github.com/donkeywon/golib/consts"
 	"github.com/donkeywon/golib/errs"
+	"github.com/donkeywon/golib/logs"
 	"github.com/donkeywon/golib/plugin"
 	"github.com/donkeywon/golib/util/cmd"
 	"github.com/donkeywon/golib/util/v"
@@ -21,37 +23,34 @@ func NewCmdStepCfg() *cmd.Cfg {
 }
 
 type CmdStep struct {
-	Step
-	*cmd.Cfg
+	Base
 
+	cfg         *cmd.Cfg
+	cancel      context.CancelFunc
 	beforeStart []func(cmd *exec.Cmd)
 }
 
 func NewCmdStep() *CmdStep {
-	return &CmdStep{
-		Step: CreateBase(string(TypeCmd)),
-		Cfg:  NewCmdStepCfg(),
-	}
+	return &CmdStep{}
 }
 
-func (c *CmdStep) Init() error {
-	err := v.Struct(c.Cfg)
-	if err != nil {
-		return err
-	}
-	c.WithLoggerFields("cmd", c.Command[0])
-
-	return c.Step.Init()
+func (c *CmdStep) Init(ctx context.Context) error {
+	return v.StructCtx(ctx, c.cfg)
 }
 
-func (c *CmdStep) Start() error {
+func (c *CmdStep) Start(ctx context.Context) error {
+	l := logs.FromCtx(ctx)
+
+	ctx, c.cancel = context.WithCancel(ctx)
+	defer c.cancel()
+
 	var err error
 
-	c.Cfg.SetPgid = true
+	c.cfg.SetPgid = true
 
-	result := cmd.Run(c.Ctx(), c.Cfg, c.beforeStart...)
+	result := cmd.Run(ctx, c.cfg, c.beforeStart...)
 	err = result.Err()
-	c.Info("cmd exit", "result", result.String())
+	l.Info("cmd exit", "result", result.String())
 
 	if result != nil {
 		c.Store(consts.FieldCmdStdout, result.Stdout)
@@ -65,7 +64,7 @@ func (c *CmdStep) Start() error {
 	if result != nil && result.Signaled {
 		select {
 		case <-c.Stopping():
-			c.Info("cmd exit signaled", "err", err)
+			l.Info("cmd exit signaled", "err", err)
 			err = nil
 		default:
 		}
@@ -78,13 +77,13 @@ func (c *CmdStep) Start() error {
 	return nil
 }
 
-func (c *CmdStep) Stop() error {
-	c.Cancel()
+func (c *CmdStep) Stop(ctx context.Context) error {
+	c.cancel()
 	return nil
 }
 
 func (c *CmdStep) SetCfg(cfg any) {
-	c.Cfg = cfg.(*cmd.Cfg)
+	c.cfg = cfg.(*cmd.Cfg)
 }
 
 func (c *CmdStep) BeforeStart(f ...func(cmd *exec.Cmd)) {

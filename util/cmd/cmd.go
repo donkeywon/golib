@@ -1,47 +1,49 @@
 package cmd
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"errors"
+	"io"
 	"os/exec"
 	"strconv"
 	"syscall"
 	"time"
 
-	"github.com/donkeywon/golib/errs"
-	"github.com/donkeywon/golib/util/bufferpool"
-	"github.com/donkeywon/golib/util/jsons"
 	"github.com/donkeywon/golib/util/proc"
 )
 
-const defaultWaitSecBetweenKillSignals = 5
+const (
+	defaultWaitInterval = time.Second
+	defaultWaitCount    = 5
+)
 
 type Cfg struct {
-	Command                   []string          `json:"command"                   yaml:"command"  validate:"required"`
-	Env                       map[string]string `json:"env"                       yaml:"env"`
-	RunAsUser                 string            `json:"runAsUser"                 yaml:"runAsUser"`
-	WorkingDir                string            `json:"workingDir"                yaml:"workingDir"`
-	SetPgid                   bool              `json:"setPgid"                   yaml:"setPgid"`
-	WaitSecBetweenKillSignals int               `json:"waitSecBetweenKillSignals" yaml:"waitSecBetweenKillSignals"`
-}
-
-func NewCfg() *Cfg {
-	return &Cfg{}
+	Command      []string          `json:"command"       yaml:"command"  validate:"required"`
+	Env          map[string]string `json:"env"           yaml:"env"`
+	RunAsUser    string            `json:"run_as_user"   yaml:"runAsUser"`
+	WorkingDir   string            `json:"working_dir"   yaml:"workingDir"`
+	SetPgid      bool              `json:"set_pgid"      yaml:"setPgid"`
+	Signals      []int             `json:"signals"       yaml:"signals"`
+	WaitInterval time.Duration     `json:"wait_interval" yaml:"waitInterval"`
+	WaitCount    int               `json:"wait_count"    yaml:"waitCount"`
 }
 
 type Result struct {
-	cmd           *exec.Cmd
-	err           error
-	stdoutBuf     *bufferpool.Buffer
-	stderrBuf     *bufferpool.Buffer
-	done          chan struct{}
-	Stdout        []string `json:"stdout"`
-	Stderr        []string `json:"stderr"`
-	ExitCode      int      `json:"exitCode"`
-	Pid           int      `json:"pid"`
-	StartTimeNano int64    `json:"startTimeNano"`
-	StopTimeNano  int64    `json:"stopTimeNano"`
-	Signaled      bool     `json:"signaled"`
+	cmd       *exec.Cmd
+	stdoutBuf *bytes.Buffer
+	stderrBuf *bytes.Buffer
+	err       error
+	done      chan struct{}
+
+	Stdout        string `json:"stdout"`
+	Stderr        string `json:"stderr"`
+	ExitCode      int    `json:"exit_code"`
+	Pid           int    `json:"pid"`
+	StartTimeNano int64  `json:"start_time_nano"`
+	StopTimeNano  int64  `json:"stop_time_nano"`
+	Signaled      bool   `json:"signaled"`
 }
 
 func (r *Result) markDone() {
@@ -60,45 +62,62 @@ func (r *Result) Cmd() *exec.Cmd {
 	return r.cmd
 }
 
-func (r *Result) String() string {
-	buf := bufferpool.Get()
-	defer buf.Free()
+func (r *Result) StdoutLines() []string {
+	if r.stdoutBuf == nil {
+		return nil
+	}
+	return scanLines(r.stdoutBuf)
+}
 
-	buf.WriteString(`{"stdout":[`)
-	for i := range r.Stdout {
-		buf.WriteString(strconv.Quote(r.Stdout[i]))
-		if i < len(r.Stdout)-1 {
-			buf.WriteByte(',')
-		}
+func (r *Result) StderrLines() []string {
+	if r.stderrBuf == nil {
+		return nil
 	}
-	buf.WriteString(`],"stderr":[`)
-	for i := range r.Stderr {
-		buf.WriteString(strconv.Quote(r.Stderr[i]))
-		if i < len(r.Stderr)-1 {
-			buf.WriteByte(',')
-		}
+	return scanLines(r.stderrBuf)
+}
+
+func scanLines(r io.Reader) []string {
+	lines := make([]string, 0, 32)
+	s := bufio.NewScanner(r)
+	for s.Scan() {
+		lines = append(lines, s.Text())
 	}
-	buf.WriteString(`],"exitCode":`)
-	buf.WriteString(strconv.Itoa(r.ExitCode))
-	buf.WriteString(`,"pid":`)
-	buf.WriteString(strconv.Itoa(r.Pid))
-	buf.WriteString(`,"startTimeNano":`)
-	buf.WriteString(strconv.FormatInt(r.StartTimeNano, 10))
-	buf.WriteString(`,"stopTimeNano":`)
-	buf.WriteString(strconv.FormatInt(r.StopTimeNano, 10))
-	buf.WriteString(`,"signaled":`)
-	buf.WriteString(strconv.FormatBool(r.Signaled))
-	buf.WriteByte('}')
-	return buf.String()
+	return lines
+}
+
+func (r *Result) String() string {
+	buf := make([]byte, 0, 150+(len(r.Stdout)+len(r.Stderr))*5/4)
+
+	buf = append(buf, `{"stdout":`...)
+	buf = strconv.AppendQuote(buf, r.Stdout)
+
+	buf = append(buf, `,"stderr":`...)
+	buf = strconv.AppendQuote(buf, r.Stderr)
+
+	buf = append(buf, `,"exit_code":`...)
+	buf = strconv.AppendInt(buf, int64(r.ExitCode), 10)
+
+	buf = append(buf, `,"pid":`...)
+	buf = strconv.AppendInt(buf, int64(r.Pid), 10)
+
+	buf = append(buf, `,"start_time_nano":`...)
+	buf = strconv.AppendInt(buf, r.StartTimeNano, 10)
+
+	buf = append(buf, `,"stop_time_nano":`...)
+	buf = strconv.AppendInt(buf, r.StopTimeNano, 10)
+
+	buf = append(buf, `,"signaled":`...)
+	buf = strconv.AppendBool(buf, r.Signaled)
+	buf = append(buf, '}')
+
+	return string(buf)
 }
 
 func Exec(ctx context.Context, command ...string) *Result {
 	if len(command) == 0 {
 		panic("empty command")
 	}
-	cfg := NewCfg()
-	cfg.Command = command
-	return Run(ctx, cfg)
+	return Run(ctx, &Cfg{Command: command})
 }
 
 func Run(ctx context.Context, cfg *Cfg, beforeStart ...func(cmd *exec.Cmd)) *Result {
@@ -139,11 +158,11 @@ func Start(ctx context.Context, cfg *Cfg, beforeStart ...func(cmd *exec.Cmd)) *R
 	}
 
 	if r.cmd.Stdout == nil {
-		r.stdoutBuf = bufferpool.Get()
+		r.stdoutBuf = bytes.NewBuffer(nil)
 		r.cmd.Stdout = r.stdoutBuf
 	}
 	if r.cmd.Stderr == nil {
-		r.stderrBuf = bufferpool.Get()
+		r.stderrBuf = bytes.NewBuffer(nil)
 		r.cmd.Stderr = r.stderrBuf
 	}
 	r.StartTimeNano = time.Now().UnixNano()
@@ -161,62 +180,48 @@ func Start(ctx context.Context, cfg *Cfg, beforeStart ...func(cmd *exec.Cmd)) *R
 	return r
 }
 
-func wait(ctx context.Context, cmd *exec.Cmd, cfg *Cfg, startResult *Result) error {
-	if startResult.stdoutBuf != nil {
-		defer func() {
-			startResult.stdoutBuf.Free()
-			startResult.stdoutBuf = nil
-		}()
-	}
-	if startResult.stderrBuf != nil {
-		defer func() {
-			startResult.stderrBuf.Free()
-			startResult.stderrBuf = nil
-		}()
-	}
-
+func wait(ctx context.Context, cmd *exec.Cmd, cfg *Cfg, r *Result) error {
 	var waitErr error
-	if startResult.err == nil {
+	if r.err == nil {
 		cmdDone := make(chan struct{})
 		go func() {
-			waitSecBetweenKillSignals := cfg.WaitSecBetweenKillSignals
-			if waitSecBetweenKillSignals <= 0 {
-				waitSecBetweenKillSignals = defaultWaitSecBetweenKillSignals
+			waitInterval := cfg.WaitInterval
+			if waitInterval <= 0 {
+				waitInterval = defaultWaitInterval
+			}
+			waitCount := cfg.WaitCount
+			if waitCount <= 0 {
+				waitCount = defaultWaitCount
 			}
 			select {
 			case <-ctx.Done():
 				if cfg.SetPgid {
-					_ = MustStopGroup(context.Background(), cmd, waitSecBetweenKillSignals, proc.MustKillSignals...)
+					_ = MustStopGroup(context.Background(), cmd, waitInterval, waitCount, proc.MustKillSignals...)
 				} else {
-					_ = MustStop(context.Background(), cmd, waitSecBetweenKillSignals, proc.MustKillSignals...)
+					_ = MustStop(context.Background(), cmd, waitInterval, waitCount, proc.MustKillSignals...)
 				}
 			case <-cmdDone:
 				return
 			}
 		}()
 		waitErr = cmd.Wait()
-		startResult.StopTimeNano = time.Now().UnixNano()
+		r.StopTimeNano = time.Now().UnixNano()
 		close(cmdDone)
 	} else {
-		waitErr = startResult.err
+		waitErr = r.err
 	}
 
-	startResult.Signaled = IsSignaled(waitErr)
+	r.Signaled = IsSignaled(waitErr)
 	if cmd.ProcessState != nil {
-		startResult.Pid = cmd.ProcessState.Pid()
-		startResult.ExitCode = cmd.ProcessState.ExitCode()
+		r.Pid = cmd.ProcessState.Pid()
+		r.ExitCode = cmd.ProcessState.ExitCode()
 	}
 
-	if startResult.stdoutBuf != nil {
-		startResult.Stdout = startResult.stdoutBuf.Lines()
+	if r.stdoutBuf != nil {
+		r.Stdout = r.stdoutBuf.String()
 	}
-	if startResult.stderrBuf != nil {
-		startResult.Stderr = startResult.stderrBuf.Lines()
-	}
-	if waitErr != nil {
-		if len(startResult.Stdout) > 0 || len(startResult.Stderr) > 0 {
-			waitErr = errs.Wrapf(waitErr, "stdout: %s, stderr: %s", jsons.MustMarshalString(startResult.Stdout), jsons.MustMarshalString(startResult.Stderr))
-		}
+	if r.stderrBuf != nil {
+		r.Stderr = r.stderrBuf.String()
 	}
 	return waitErr
 }
@@ -259,7 +264,7 @@ func StopGroup(cmd *exec.Cmd) error {
 	return proc.KillGroup(cmd.Process.Pid, syscall.SIGTERM)
 }
 
-func MustStop(ctx context.Context, cmd *exec.Cmd, singleSigWaitExitSec int, sig ...syscall.Signal) error {
+func MustStop(ctx context.Context, cmd *exec.Cmd, interval time.Duration, count int, sig ...syscall.Signal) error {
 	if cmd == nil {
 		return nil
 	}
@@ -267,17 +272,17 @@ func MustStop(ctx context.Context, cmd *exec.Cmd, singleSigWaitExitSec int, sig 
 		return nil
 	}
 
-	return proc.MustKill(ctx, cmd.Process.Pid, singleSigWaitExitSec, sig...)
+	return proc.MustKill(ctx, cmd.Process.Pid, interval, count, sig...)
 }
 
-func MustStopGroup(ctx context.Context, cmd *exec.Cmd, singleSigWaitExitSec int, sig ...syscall.Signal) error {
+func MustStopGroup(ctx context.Context, cmd *exec.Cmd, interval time.Duration, count int, sig ...syscall.Signal) error {
 	if cmd == nil {
 		return nil
 	}
 	if cmd.Process == nil {
 		return nil
 	}
-	return proc.MustKillGroup(ctx, cmd.Process.Pid, singleSigWaitExitSec, sig...)
+	return proc.MustKillGroup(ctx, cmd.Process.Pid, interval, count, sig...)
 }
 
 func KillGroup(cmd *exec.Cmd) error {

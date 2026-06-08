@@ -22,7 +22,7 @@ func KillGroup(pid int, sig syscall.Signal) error {
 	return Kill(pid, sig)
 }
 
-func MustKill(ctx context.Context, pid int, singleSigWaitExitSec int, sig ...syscall.Signal) error {
+func MustKill(ctx context.Context, pid int, interval time.Duration, count int, sig ...syscall.Signal) error {
 	if !Exists(pid) {
 		return nil
 	}
@@ -33,7 +33,7 @@ func MustKill(ctx context.Context, pid int, singleSigWaitExitSec int, sig ...sys
 			return err
 		}
 
-		if WaitProcExit(ctx, pid, time.Second, singleSigWaitExitSec) {
+		if WaitProcExit(ctx, pid, interval, count) {
 			return nil
 		}
 	}
@@ -41,7 +41,7 @@ func MustKill(ctx context.Context, pid int, singleSigWaitExitSec int, sig ...sys
 	return nil
 }
 
-func MustKillGroup(ctx context.Context, pid int, singleSigWaitExitSec int, sig ...syscall.Signal) error {
+func MustKillGroup(ctx context.Context, pid int, interval time.Duration, count int, sig ...syscall.Signal) error {
 	if !Exists(pid) {
 		return nil
 	}
@@ -52,7 +52,7 @@ func MustKillGroup(ctx context.Context, pid int, singleSigWaitExitSec int, sig .
 			return err
 		}
 
-		if WaitProcExit(ctx, pid, time.Second, singleSigWaitExitSec) {
+		if WaitProcExit(ctx, pid, interval, count) {
 			return nil
 		}
 	}
