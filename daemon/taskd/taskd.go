@@ -28,6 +28,12 @@ var (
 	ErrPoolNotExists       = errors.New("pool not exists")
 )
 
+type Hook func(*task.Task, error, *HookExtraData)
+
+type HookExtraData struct {
+	Wait bool
+}
+
 var _ Taskd = (*taskd)(nil)
 
 type Taskd interface {
