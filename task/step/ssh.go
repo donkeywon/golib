@@ -1,13 +1,14 @@
 package step
 
 import (
+	"context"
 	"errors"
 	"io"
-	"strings"
 	"time"
 
 	"github.com/donkeywon/golib/consts"
 	"github.com/donkeywon/golib/errs"
+	"github.com/donkeywon/golib/logs"
 	"github.com/donkeywon/golib/plugin"
 	"github.com/donkeywon/golib/util/bufferpool"
 	"github.com/donkeywon/golib/util/sshs"
@@ -22,46 +23,49 @@ func init() {
 const TypeSSH Type = "ssh"
 
 type SSHStepCfg struct {
-	Addr       string `json:"addr"       yaml:"addr" validate:"required"`
-	User       string `json:"user"       yaml:"user" validate:"required"`
-	Pwd        string `json:"pwd"        yaml:"pwd"  validate:"required"`
-	PrivateKey string `json:"privateKey" yaml:"privateKey"`
-	Timeout    int    `json:"timeout"    yaml:"timeout"`
+	Addr       string        `json:"addr"       yaml:"addr" validate:"required"`
+	User       string        `json:"user"       yaml:"user" validate:"required"`
+	Pwd        string        `json:"pwd"        yaml:"pwd"  validate:"required"`
+	PrivateKey string        `json:"privateKey" yaml:"privateKey"`
+	Timeout    time.Duration `json:"timeout"    yaml:"timeout"`
 
-	Cmd []string `json:"cmd"  yaml:"cmd" validate:"required"`
+	Cmd string `json:"cmd"  yaml:"cmd" validate:"required"`
 }
 
-func NewSSHStepCfg() *SSHStepCfg {
-	return &SSHStepCfg{}
+func NewSSHStepCfg() SSHStepCfg {
+	return SSHStepCfg{}
 }
 
 type SSHStep struct {
-	Step
-	*SSHStepCfg
+	Base
 
+	cfg  SSHStepCfg
 	cli  *ssh.Client
 	sess *ssh.Session
 }
 
 func NewSSHStep() *SSHStep {
-	return &SSHStep{
-		Step: CreateBase(string(TypeSSH)),
-	}
+	return &SSHStep{}
 }
 
-func (s *SSHStep) Init() error {
-	err := v.Struct(s.SSHStepCfg)
+func (s *SSHStep) SetCfg(cfg any) {
+	s.cfg = cfg.(SSHStepCfg)
+}
+
+func (s *SSHStep) Init(ctx context.Context) error {
+	err := v.Struct(s.cfg)
 	if err != nil {
 		return err
 	}
 
-	s.WithLoggerFields("addr", s.SSHStepCfg.Addr, "user", s.SSHStepCfg.User, "cmd", s.SSHStepCfg.User)
-	return s.Step.Init()
+	return nil
 }
 
-func (s *SSHStep) Start() error {
+func (s *SSHStep) Start(ctx context.Context) error {
+	l := logs.FromCtx(ctx).With("addr", s.cfg.Addr, "user", s.cfg.User, "cmd", s.cfg.Cmd)
+
 	var err error
-	s.cli, s.sess, err = sshs.NewClient(s.SSHStepCfg.Addr, s.SSHStepCfg.User, s.SSHStepCfg.Pwd, []byte(s.SSHStepCfg.PrivateKey), time.Second*time.Duration(s.SSHStepCfg.Timeout))
+	s.cli, s.sess, err = sshs.NewClient(s.cfg.Addr, s.cfg.User, s.cfg.Pwd, []byte(s.cfg.PrivateKey), s.cfg.Timeout)
 	if err != nil {
 		return errs.Wrap(err, "create ssh client failed")
 	}
@@ -69,7 +73,7 @@ func (s *SSHStep) Start() error {
 	defer func() {
 		err = sshs.Close(s.cli, s.sess)
 		if err != nil {
-			s.Error("close ssh client failed", err)
+			l.Error("close ssh client failed", "err", err)
 		}
 	}()
 
@@ -78,24 +82,28 @@ func (s *SSHStep) Start() error {
 	stderrBuf := bufferpool.Get()
 	defer stderrBuf.Free()
 
-	cmd := strings.Join(s.SSHStepCfg.Cmd, " ")
-
 	startNano := time.Now().UnixNano()
-	err = s.sess.Run(cmd)
+	err = s.sess.Run(s.cfg.Cmd)
 	stopNano := time.Now().UnixNano()
 	s.Store(consts.FieldStartTimeNano, startNano)
 	s.Store(consts.FieldStopTimeNano, stopNano)
-	s.Info("ssh cmd done", "stdout", stdoutBuf.String(), "stderr", stderrBuf.String(), "cost_nano", stopNano-startNano, "err", err)
+
 	if err != nil {
+		l.Error("ssh cmd failed", "stdout", stdoutBuf.String(), "stderr", stderrBuf.String(), "cost_nano", stopNano-startNano, "err", err)
 		return errs.Wrap(err, "ssh cmd failed")
+	} else {
+		l.Info("ssh cmd done", "stdout", stdoutBuf.String(), "stderr", stderrBuf.String(), "cost_nano", stopNano-startNano)
 	}
 	return nil
 }
 
-func (s *SSHStep) Stop() error {
+func (s *SSHStep) Stop(ctx context.Context) error {
+	if s.sess == nil {
+		return nil
+	}
 	err := s.sess.Signal(ssh.SIGKILL)
 	if errors.Is(err, io.EOF) {
 		return nil
 	}
-	return nil
+	return err
 }

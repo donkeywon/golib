@@ -31,12 +31,12 @@ func (pc PoolCfg) MarshalFlag() (string, error) {
 }
 
 type Cfg struct {
-	Pools               []*PoolCfg `env:"POOLS" env-delim:";"   yaml:"pools"               long:"pools"                 description:"database connection pools"                                 validate:"required"`
-	EnableExportMetrics bool       `env:"ENABLE_EXPORT_METRICS" yaml:"enableExportMetrics" long:"enable-export-metrics" description:"export database conn pool metrics with prometheus protocol"`
+	Pools               []PoolCfg `env:"POOLS" env-delim:";"   yaml:"pools"               long:"pools"                 description:"database connection pools"                                 validate:"required"`
+	EnableExportMetrics bool      `env:"ENABLE_EXPORT_METRICS" yaml:"enableExportMetrics" long:"enable-export-metrics" description:"export database conn pool metrics with prometheus protocol"`
 }
 
-func NewCfg() *Cfg {
-	return &Cfg{
+func NewCfg() Cfg {
+	return Cfg{
 		EnableExportMetrics: DefaultEnableExportMetrics,
 	}
 }

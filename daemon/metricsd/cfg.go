@@ -12,8 +12,8 @@ type Cfg struct {
 	HTTPEndpointPath    string `env:"HTTP_ENDPOINT_PATH"    yaml:"httpEndpointPath"    long:"http-endpoint-path"    description:"metrics http endpoint path"`
 }
 
-func NewCfg() *Cfg {
-	return &Cfg{
+func NewCfg() Cfg {
+	return Cfg{
 		EnableProcCollector: DefaultEnableProcCollector,
 		EnableFDCollector:   DefaultEnableFDCollector,
 		HTTPEndpointPath:    DefaultHTTPEndpointPath,

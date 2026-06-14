@@ -36,7 +36,7 @@ type profd struct {
 	runner.Base
 	*slog.Logger
 
-	cfg *Cfg
+	cfg Cfg
 
 	allowedIPsGetter func() map[string]struct{}
 
@@ -148,11 +148,11 @@ func (p *profd) Stop(ctx context.Context) error {
 }
 
 func (p *profd) SetCfg(cfg any) {
-	p.cfg = cfg.(*Cfg)
+	p.cfg = cfg.(Cfg)
 }
 
 func (p *profd) Cfg() Cfg {
-	return *p.cfg
+	return p.cfg
 }
 
 func (p *profd) SetAllowedIPsGetter(allowedIPsGetter func() map[string]struct{}) {

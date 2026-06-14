@@ -34,7 +34,7 @@ type Router interface {
 type httpd struct {
 	runner.Base
 
-	cfg *Cfg
+	cfg Cfg
 	s   *http.Server
 
 	l           *slog.Logger
@@ -89,7 +89,7 @@ func (h *httpd) HandleFunc(pattern string, handler func(http.ResponseWriter, *ht
 }
 
 func (h *httpd) SetCfg(cfg any) {
-	h.cfg = cfg.(*Cfg)
+	h.cfg = cfg.(Cfg)
 	h.s = h.cfg.buildHTTPServer()
 }
 

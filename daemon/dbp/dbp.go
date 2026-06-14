@@ -28,7 +28,7 @@ type DBP interface {
 type dbp struct {
 	runner.Base
 
-	cfg      *Cfg
+	cfg      Cfg
 	dbs      map[string]*sql.DB
 	metricsd metricsd.Metricsd
 	l        *slog.Logger
@@ -69,7 +69,7 @@ func (d *dbp) Init(ctx context.Context) error {
 }
 
 func (d *dbp) SetCfg(cfg any) {
-	d.cfg = cfg.(*Cfg)
+	d.cfg = cfg.(Cfg)
 }
 
 func (d *dbp) waitDBReady(ctx context.Context, db *sql.DB, name string, typ string, maxWait time.Duration, readyQuery string) error {
@@ -131,8 +131,9 @@ func (d *dbp) Get(name string) *sql.DB {
 }
 
 func (d *dbp) writeMetrics(w io.Writer) {
-	buf := bytes.NewBuffer(nil)
-	for _, poolCfg := range d.cfg.Pools {
+	buf := bytes.NewBuffer(make([]byte, 0, 128))
+	for i := range d.cfg.Pools {
+		poolCfg := &d.cfg.Pools[i]
 		db := d.dbs[poolCfg.Name]
 		stats := db.Stats()
 
@@ -151,8 +152,9 @@ func (d *dbp) writeMetrics(w io.Writer) {
 
 func writeMetric(w io.Writer, buf *bytes.Buffer, metricsName string, poolCfg *PoolCfg, v int64) {
 	buf.Reset()
+	buf.WriteString(metricsName)
 	writeLabels(buf, poolCfg)
-	strconv.AppendInt(buf.AvailableBuffer(), v, 10)
+	buf.Write(strconv.AppendInt(buf.AvailableBuffer(), v, 10))
 	buf.WriteByte('\n')
 	w.Write(buf.Bytes())
 }

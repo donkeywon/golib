@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/donkeywon/golib/util/httpc"
-	"github.com/donkeywon/golib/util/httpio"
+	"github.com/donkeywon/golib/httpio"
 	"github.com/donkeywon/golib/util/oss"
 )
 

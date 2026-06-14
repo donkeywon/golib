@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/donkeywon/golib/errs"
-	"github.com/donkeywon/golib/util/cmd"
+	"github.com/donkeywon/golib/cmd"
 )
 
 // GetNicSpeed

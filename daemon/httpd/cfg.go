@@ -20,8 +20,8 @@ type Cfg struct {
 	IdleTimeout       time.Duration `env:"IDLE_TIMEOUT"        long:"idle-timeout"        yaml:"idleTimeout"                           description:"maximum amount of time to wait for the next request when keep-alives are enabled"`
 }
 
-func NewCfg() *Cfg {
-	return &Cfg{
+func NewCfg() Cfg {
+	return Cfg{
 		WriteTimeout:      DefaultWriteTimeout,
 		ReadTimeout:       DefaultReadTimeout,
 		ReadHeaderTimeout: DefaultReadHeaderTimeout,
@@ -29,7 +29,7 @@ func NewCfg() *Cfg {
 	}
 }
 
-func (cfg *Cfg) buildHTTPServer() *http.Server {
+func (cfg Cfg) buildHTTPServer() *http.Server {
 	return &http.Server{
 		Addr:              cfg.Addr,
 		ReadTimeout:       cfg.ReadTimeout,

@@ -11,6 +11,7 @@ import (
 	"runtime"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/donkeywon/golib/buildinfo"
 	"github.com/donkeywon/golib/errs"
@@ -76,6 +77,9 @@ func RegCfg(name string, cfg any) {
 	}
 	if slices.Contains(_daemonTypes, DaemonType(name)) {
 		panic("duplicate register cfg: " + name)
+	}
+	if !reflects.IsPointer(cfg) {
+		panic(fmt.Sprintf("cfg type must be pointer: %s/%T", name, cfg))
 	}
 	_additionalCfgKeys = append(_additionalCfgKeys, name)
 	_additionalCfgMap[name] = cfg
@@ -164,7 +168,7 @@ func (b *booter) Init(ctx context.Context) error {
 		fmt.Fprint(os.Stdout,
 			"Version:"+buildinfo.Version+"\n"+
 				"BuildTime:"+buildinfo.BuildTime+"\n"+
-				"CommitTime:"+buildinfo.CommitTime+"\n"+
+				"CommitTime:"+buildinfo.CommitTime.Local().Format(time.DateTime)+"\n"+
 				"Revision:"+buildinfo.Revision+"\n"+
 				"GoVersion:"+runtime.Version()+"\n"+
 				"Arch:"+runtime.GOARCH+"\n")
@@ -278,7 +282,8 @@ func (b *booter) Stop(ctx context.Context) error {
 
 func (b *booter) createDaemons(ctx context.Context) {
 	for _, daemonType := range _daemonTypes {
-		daemon := plugin.CreateWithCfg[Daemon](daemonType, b.cfgMap[string(daemonType)])
+		cfg := b.cfgMap[string(daemonType)]
+		daemon := plugin.CreateWithCfg[Daemon](daemonType, reflect.ValueOf(cfg).Elem().Interface())
 		b.daemonsMap[daemonType] = daemon
 
 		onCreated := b.options.onCreated[daemonType]
@@ -372,7 +377,11 @@ func (b *booter) buildCfgMap() (map[string]any, []string) {
 	cfgMap := make(map[string]any)
 	for _, daemonType := range _daemonTypes {
 		cfg := plugin.CreateCfg[any](daemonType)
-		cfgMap[string(daemonType)] = cfg
+		if !reflects.IsPointer(cfg) {
+			cfgMap[string(daemonType)] = &cfg
+		} else {
+			cfgMap[string(daemonType)] = cfg
+		}
 		cfgKeys = append(cfgKeys, string(daemonType))
 	}
 	for name, cfg := range _additionalCfgMap {

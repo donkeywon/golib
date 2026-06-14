@@ -4,11 +4,11 @@ import (
 	"context"
 	"os/exec"
 
+	"github.com/donkeywon/golib/cmd"
 	"github.com/donkeywon/golib/consts"
 	"github.com/donkeywon/golib/errs"
 	"github.com/donkeywon/golib/logs"
 	"github.com/donkeywon/golib/plugin"
-	"github.com/donkeywon/golib/util/cmd"
 	"github.com/donkeywon/golib/util/v"
 )
 
@@ -25,7 +25,7 @@ func NewCmdStepCfg() *cmd.Cfg {
 type CmdStep struct {
 	Base
 
-	cfg         *cmd.Cfg
+	cfg         cmd.Cfg
 	cancel      context.CancelFunc
 	beforeStart []func(cmd *exec.Cmd)
 }
@@ -50,7 +50,11 @@ func (c *CmdStep) Start(ctx context.Context) error {
 
 	result := cmd.Run(ctx, c.cfg, c.beforeStart...)
 	err = result.Err()
-	l.Info("cmd exit", "result", result.String())
+	if err == nil {
+		l.Info("cmd done", "result", result)
+	} else {
+		l.Error("cmd failed", "result", result)
+	}
 
 	c.Store(consts.FieldCmdStdout, result.Stdout)
 	c.Store(consts.FieldCmdStderr, result.Stderr)
@@ -81,7 +85,7 @@ func (c *CmdStep) Stop(ctx context.Context) error {
 }
 
 func (c *CmdStep) SetCfg(cfg any) {
-	c.cfg = cfg.(*cmd.Cfg)
+	c.cfg = cfg.(cmd.Cfg)
 }
 
 func (c *CmdStep) BeforeStart(f ...func(cmd *exec.Cmd)) {

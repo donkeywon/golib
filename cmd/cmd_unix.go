@@ -12,10 +12,7 @@ import (
 	"github.com/donkeywon/golib/util/paths"
 )
 
-func beforeStartFromCfg(cfg *Cfg) ([]func(cmd *exec.Cmd), error) {
-	if cfg == nil {
-		return nil, nil
-	}
+func beforeStartFromCfg(cfg Cfg) ([]func(cmd *exec.Cmd), error) {
 	var beforeRun []func(cmd *exec.Cmd)
 	if len(cfg.Env) > 0 {
 		beforeRun = append(beforeRun, func(cmd *exec.Cmd) {

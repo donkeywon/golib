@@ -11,11 +11,11 @@ import (
 
 	"github.com/donkeywon/golib/boot"
 	"github.com/donkeywon/golib/buildinfo"
+	"github.com/donkeywon/golib/cmd"
 	"github.com/donkeywon/golib/errs"
 	"github.com/donkeywon/golib/logs"
 	"github.com/donkeywon/golib/pipeline"
 	"github.com/donkeywon/golib/runner"
-	"github.com/donkeywon/golib/util/cmd"
 	"github.com/donkeywon/golib/util/paths"
 	"github.com/donkeywon/golib/util/v"
 )
@@ -30,18 +30,19 @@ var _ Upd = (*upd)(nil)
 
 type Upd interface {
 	boot.Daemon
-	Upgrade(vi *VerInfo) error
+	Upgrade(context.Context, *VerInfo) error
 }
 
 // upd must be first daemon if need
 type upd struct {
 	runner.Base
-	*Cfg
 	*slog.Logger
 
+	cfg                Cfg
 	upgrading          atomic.Bool
 	upgradingBlockChan chan struct{}
 	allDoneExceptMe    chan struct{}
+	l                  *slog.Logger
 	ctx                context.Context
 	cancel             context.CancelFunc
 }
@@ -53,9 +54,10 @@ func New() boot.Daemon {
 	}
 }
 
-func (u *upd) Init(ctx context.Context) error {
-	u.ctx, u.cancel = context.WithCancel(ctx) // TODO 不能用Init的ctx
+func (u *upd) Start(ctx context.Context) error {
 	u.Logger = logs.FromCtx(ctx)
+	u.ctx, u.cancel = context.WithCancel(ctx)
+	<-u.Stopping()
 	return nil
 }
 
@@ -81,10 +83,12 @@ func (u *upd) isUpgrading() bool {
 	return u.upgrading.Load()
 }
 
-func (u *upd) Upgrade(vi *VerInfo) error {
+func (u *upd) Upgrade(ctx context.Context, vi *VerInfo) error {
 	if !u.markUpgrading() {
 		return ErrAlreadyUpgrading
 	}
+
+	l := logs.FromCtx(ctx)
 
 	err := u.prepareUpgrade(vi)
 	if err != nil {
@@ -98,7 +102,7 @@ func (u *upd) Upgrade(vi *VerInfo) error {
 
 			err := recover()
 			if err != nil {
-				u.Error("panic on upgrade", errs.PanicToErr(err))
+				l.Error("panic on upgrade", errs.PanicToErr(err))
 			}
 		}()
 
@@ -127,7 +131,7 @@ func (u *upd) prepareUpgrade(vi *VerInfo) error {
 
 	upgradeCmd := vi.UpgradeCmd
 	if len(upgradeCmd) == 0 {
-		upgradeCmd = u.Cfg.UpgradeCmd
+		upgradeCmd = u.cfg.UpgradeCmd
 	}
 	if len(upgradeCmd) == 0 {
 		return errs.New("upgrade cmd is empty")
@@ -135,7 +139,7 @@ func (u *upd) prepareUpgrade(vi *VerInfo) error {
 
 	upgradeOutputPath := vi.UpgradeOutputPath
 	if upgradeOutputPath == "" {
-		upgradeOutputPath = u.Cfg.UpgradeOutputPath
+		upgradeOutputPath = u.cfg.UpgradeOutputPath
 	}
 	if upgradeOutputPath == "" {
 		return errs.New("upgrade output path is empty")
@@ -154,7 +158,6 @@ func (u *upd) prepareUpgrade(vi *VerInfo) error {
 	}
 
 	if paths.FileExist(vi.DownloadDstPath) {
-		u.Info("download dst path exists, remove it", "path", vi.DownloadDstPath)
 		err = os.Remove(vi.DownloadDstPath)
 		if err != nil {
 			return errs.Wrapf(err, "remove exists download dst path failed")
@@ -181,18 +184,18 @@ func (u *upd) upgrade(vi *VerInfo) bool {
 
 	select {
 	case <-time.After(time.Minute):
-		u.Error("stop all daemon timeout", u.Parent().Err())
+		u.Error("stop all daemon timeout")
 	case <-u.allDoneExceptMe:
 		u.Info("all daemon stopped except me")
 	}
 
 	upgradeCmd := vi.UpgradeCmd
 	if len(upgradeCmd) == 0 {
-		upgradeCmd = u.Cfg.UpgradeCmd
+		upgradeCmd = u.cfg.UpgradeCmd
 	}
 	upgradeOutputPath := vi.UpgradeOutputPath
 	if upgradeOutputPath == "" {
-		upgradeOutputPath = u.Cfg.UpgradeOutputPath
+		upgradeOutputPath = u.cfg.UpgradeOutputPath
 	}
 	upgradeOutputFile, err := os.OpenFile(upgradeOutputPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
 	if err != nil {
@@ -200,9 +203,10 @@ func (u *upd) upgrade(vi *VerInfo) bool {
 	}
 
 	u.Info("start exec upgrade cmd")
-	cmdCfg := cmd.NewCfg()
-	cmdCfg.Command = upgradeCmd
-	cmdCfg.SetPgid = true
+	cmdCfg := cmd.Cfg{
+		Command: upgradeCmd,
+		SetPgid: true,
+	}
 	cmdResult := cmd.Start(context.Background(), cmdCfg, func(cmd *exec.Cmd) {
 		cmd.Stdout = upgradeOutputFile
 		cmd.Stderr = upgradeOutputFile

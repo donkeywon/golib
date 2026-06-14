@@ -13,12 +13,12 @@ type PoolCfg struct {
 }
 
 type Cfg struct {
-	Pools []*PoolCfg `json:"pools" yaml:"pools" env:"POOLS"`
+	Pools []PoolCfg `json:"pools" yaml:"pools" env:"POOLS"`
 }
 
-func NewCfg() *Cfg {
-	return &Cfg{
-		Pools: []*PoolCfg{
+func NewCfg() Cfg {
+	return Cfg{
+		Pools: []PoolCfg{
 			{
 				Name:      DefaultPool,
 				Size:      DefaultPoolSize,

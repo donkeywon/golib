@@ -31,7 +31,7 @@ var (
 
 type svcd struct {
 	runner.Base
-	*Cfg
+	Cfg
 	*slog.Logger
 }
 

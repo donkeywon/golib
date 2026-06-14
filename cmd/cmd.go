@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"log/slog"
 	"os/exec"
 	"strconv"
 	"syscall"
@@ -113,14 +114,18 @@ func (r *Result) String() string {
 	return string(buf)
 }
 
+func (r *Result) LogValue() slog.Value {
+	return slog.StringValue(r.String())
+}
+
 func Exec(ctx context.Context, command ...string) *Result {
 	if len(command) == 0 {
 		panic("empty command")
 	}
-	return Run(ctx, &Cfg{Command: command})
+	return Run(ctx, Cfg{Command: command})
 }
 
-func Run(ctx context.Context, cfg *Cfg, beforeStart ...func(cmd *exec.Cmd)) *Result {
+func Run(ctx context.Context, cfg Cfg, beforeStart ...func(cmd *exec.Cmd)) *Result {
 	if len(cfg.Command) == 0 {
 		panic("empty command")
 	}
@@ -131,7 +136,7 @@ func Run(ctx context.Context, cfg *Cfg, beforeStart ...func(cmd *exec.Cmd)) *Res
 
 // Start command
 // you can get pid from Result.Pid before <-Result.Done(), 0 means start fail.
-func Start(ctx context.Context, cfg *Cfg, beforeStart ...func(cmd *exec.Cmd)) *Result {
+func Start(ctx context.Context, cfg Cfg, beforeStart ...func(cmd *exec.Cmd)) *Result {
 	if ctx == nil {
 		panic("nil context")
 	}
@@ -180,7 +185,7 @@ func Start(ctx context.Context, cfg *Cfg, beforeStart ...func(cmd *exec.Cmd)) *R
 	return r
 }
 
-func wait(ctx context.Context, cmd *exec.Cmd, cfg *Cfg, r *Result) error {
+func wait(ctx context.Context, cmd *exec.Cmd, cfg Cfg, r *Result) error {
 	var waitErr error
 	if r.err == nil {
 		cmdDone := make(chan struct{})

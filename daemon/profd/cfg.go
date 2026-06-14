@@ -36,8 +36,8 @@ type Cfg struct {
 	SkipStartupErr bool   `yaml:"skipStartupErr" env:"SKIP_STARTUP_ERR" long:"skip-startup-err" description:"skip startup err, boot will failed if false"`
 }
 
-func NewCfg() *Cfg {
-	return &Cfg{
+func NewCfg() Cfg {
+	return Cfg{
 		EnableStartupProfiling: DefaultEnableStartupProfiling,
 		StartupProfilingSec:    DefaultStartupProfilingSec,
 		StartupProfilingMode:   DefaultStartupProfilingMode,

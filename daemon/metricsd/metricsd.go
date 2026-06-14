@@ -30,7 +30,7 @@ type Metricsd interface {
 type metricsd struct {
 	runner.Base
 
-	cfg *Cfg
+	cfg Cfg
 
 	httpd httpd.HTTPd
 	l     *slog.Logger
@@ -50,7 +50,7 @@ func (p *metricsd) Init(ctx context.Context) error {
 }
 
 func (p *metricsd) SetCfg(cfg any) {
-	p.cfg = cfg.(*Cfg)
+	p.cfg = cfg.(Cfg)
 }
 
 func (p *metricsd) SetGauge(name string, v float64) {

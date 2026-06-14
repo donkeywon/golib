@@ -14,8 +14,8 @@ type Cfg struct {
 	UpgradeOutputPath string   `env:"UPGRADE_OUTPUT_PATH" long:"upgrade-output-path" yaml:"upgradeOutputPath" description:"upgrade cmd output path"`
 }
 
-func NewCfg() *Cfg {
-	return &Cfg{
+func NewCfg() Cfg {
+	return Cfg{
 		UpgradeOutputPath: DefaultUpgradeOutputPath,
 	}
 }

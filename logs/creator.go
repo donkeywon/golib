@@ -17,9 +17,11 @@ type Creator interface {
 	Create() (*slog.Logger, error)
 }
 
-type NopLoggerCreator struct{}
+var NopLoggerCreator Creator = nop{}
 
-func (n *NopLoggerCreator) Create() (*slog.Logger, error) {
+type nop struct{}
+
+func (n nop) Create() (*slog.Logger, error) {
 	return slog.New(slog.DiscardHandler), nil
 }
 

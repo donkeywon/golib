@@ -31,13 +31,13 @@ type Type string
 type StepHook func(context.Context, *Task, int, step.Step, error) error
 
 type Cfg struct {
-	ID         string      `json:"id"          validate:"required" yaml:"id"`
-	Steps      []*step.Cfg `json:"steps"       validate:"required" yaml:"steps"`
-	DeferSteps []*step.Cfg `json:"defer_steps"                     yaml:"deferSteps"`
+	ID         string     `json:"id"          validate:"required" yaml:"id"`
+	Steps      []step.Cfg `json:"steps"       validate:"required" yaml:"steps"`
+	DeferSteps []step.Cfg `json:"defer_steps"                     yaml:"deferSteps"`
 }
 
-func NewCfg() *Cfg {
-	return &Cfg{}
+func NewCfg() Cfg {
+	return Cfg{}
 }
 
 func (c *Cfg) SetID(id string) *Cfg {
@@ -46,12 +46,12 @@ func (c *Cfg) SetID(id string) *Cfg {
 }
 
 func (c *Cfg) Add(typ step.Type, cfg any) *Cfg {
-	c.Steps = append(c.Steps, &step.Cfg{Type: typ, Cfg: cfg})
+	c.Steps = append(c.Steps, step.Cfg{Type: typ, Cfg: cfg})
 	return c
 }
 
 func (c *Cfg) Defer(typ step.Type, cfg any) *Cfg {
-	c.DeferSteps = append(c.DeferSteps, &step.Cfg{Type: typ, Cfg: cfg})
+	c.DeferSteps = append(c.DeferSteps, step.Cfg{Type: typ, Cfg: cfg})
 	return c
 }
 
@@ -59,7 +59,7 @@ type Task struct {
 	kvs.Map[string, any]
 	runner.Base
 
-	cfg *Cfg
+	cfg Cfg
 
 	beforeStepRunHooks      []StepHook
 	afterStepDoneHooks      []StepHook
@@ -78,7 +78,11 @@ func New() *Task {
 }
 
 func (t *Task) SetCfg(cfg any) {
-	t.cfg = cfg.(*Cfg)
+	t.cfg = cfg.(Cfg)
+}
+
+func (t *Task) Cfg() Cfg {
+	return t.cfg
 }
 
 func (t *Task) Init(ctx context.Context) error {
