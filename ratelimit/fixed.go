@@ -6,7 +6,6 @@ import (
 
 	"github.com/donkeywon/golib/errs"
 	"github.com/donkeywon/golib/plugin"
-	"github.com/donkeywon/golib/runner"
 	"golang.org/x/time/rate"
 )
 
@@ -26,29 +25,29 @@ func NewFixedRateLimiterCfg() *FixedRateLimiterCfg {
 }
 
 type FixedRateLimiter struct {
-	runner.Runner
-	*FixedRateLimiterCfg
+	cfg  *FixedRateLimiterCfg
 	txRl *rate.Limiter
 	rxRl *rate.Limiter
 }
 
 func NewFixedRateLimiter() *FixedRateLimiter {
-	return &FixedRateLimiter{
-		Runner:              runner.Create("fixedRateLimiter"),
-		FixedRateLimiterCfg: NewFixedRateLimiterCfg(),
-	}
+	return &FixedRateLimiter{}
 }
 
-func (frl *FixedRateLimiter) Init() error {
-	if frl.N < 0 {
-		return errs.Errorf("fixed rate limiter N must ge 0: %d", frl.N)
+func (frl *FixedRateLimiter) SetCfg(cfg any) {
+	frl.cfg = cfg.(*FixedRateLimiterCfg)
+}
+
+func (frl *FixedRateLimiter) Init(ctx context.Context) error {
+	if frl.cfg.N < 0 {
+		return errs.Errorf("fixed rate limiter N must ge 0: %d", frl.cfg.N)
 	}
-	if frl.Burst <= 0 {
-		return errs.Errorf("fixed rate limiter Burst must gt 0: %d", frl.Burst)
+	if frl.cfg.Burst <= 0 {
+		return errs.Errorf("fixed rate limiter Burst must gt 0: %d", frl.cfg.Burst)
 	}
-	frl.rxRl = rate.NewLimiter(rate.Limit(frl.N), frl.Burst)
-	frl.txRl = rate.NewLimiter(rate.Limit(frl.N), frl.Burst)
-	return frl.Runner.Init()
+	frl.rxRl = rate.NewLimiter(rate.Limit(frl.cfg.N), frl.cfg.Burst)
+	frl.txRl = rate.NewLimiter(rate.Limit(frl.cfg.N), frl.cfg.Burst)
+	return nil
 }
 
 func (frl *FixedRateLimiter) waitN(ctx context.Context, n int, timeout time.Duration, rl *rate.Limiter) error {

@@ -6,7 +6,6 @@ import (
 
 	"github.com/donkeywon/golib/errs"
 	"github.com/donkeywon/golib/plugin"
-	"github.com/donkeywon/golib/runner"
 )
 
 func init() {
@@ -16,7 +15,7 @@ func init() {
 const TypeSleep Type = "sleep"
 
 type SleepRateLimiterCfg struct {
-	Microsecond int
+	Duration time.Duration `json:"duration" yaml:"duration" validate:"required"`
 }
 
 func NewSleepRateLimiterCfg() *SleepRateLimiterCfg {
@@ -24,22 +23,18 @@ func NewSleepRateLimiterCfg() *SleepRateLimiterCfg {
 }
 
 type SleepRateLimiter struct {
-	runner.Runner
-	*SleepRateLimiterCfg
+	cfg *SleepRateLimiterCfg
 }
 
 func NewSleepRateLimiter() *SleepRateLimiter {
-	return &SleepRateLimiter{
-		Runner:              runner.Create("sleepRateLimiter"),
-		SleepRateLimiterCfg: NewSleepRateLimiterCfg(),
-	}
+	return &SleepRateLimiter{}
 }
 
-func (srl *SleepRateLimiter) Init() error {
-	if srl.SleepRateLimiterCfg.Microsecond <= 0 {
-		return errs.Errorf("sleep rate limiter Microsecond must gt 0: %d", srl.SleepRateLimiterCfg.Microsecond)
+func (srl *SleepRateLimiter) Init(ctx context.Context) error {
+	if srl.cfg.Duration <= 0 {
+		return errs.Errorf("sleep rate limiter duration must gt 0: %d", srl.cfg.Duration)
 	}
-	return srl.Runner.Init()
+	return nil
 }
 
 func (srl *SleepRateLimiter) waitN(ctx context.Context, n int, timeout time.Duration) error {
@@ -47,14 +42,16 @@ func (srl *SleepRateLimiter) waitN(ctx context.Context, n int, timeout time.Dura
 		return nil
 	}
 
-	sn := time.Duration(srl.Microsecond) * time.Microsecond
-	if timeout > 0 && timeout < sn {
-		sn = timeout
+	d := srl.cfg.Duration
+	if timeout > 0 && timeout < d {
+		d = timeout
 	}
-	var cancel context.CancelFunc
-	ctx, cancel = context.WithTimeout(ctx, sn)
-	defer cancel()
-	<-ctx.Done()
+
+	select {
+	case <-ctx.Done():
+	case <-time.After(d):
+	}
+
 	return nil
 }
 

@@ -8,7 +8,6 @@ import (
 
 	"github.com/donkeywon/golib/errs"
 	"github.com/donkeywon/golib/util/cmd"
-	"github.com/shirou/gopsutil/v4/net"
 )
 
 // GetNicSpeed
@@ -53,32 +52,4 @@ func GetNicSpeed(nic string) (int, error) {
 	}
 
 	return 0, errs.Errorf("nic speed not found in Get-NetAdapter output: %s", result.String())
-}
-
-// GetNetDevStats
-// get statistics about nic.
-func GetNetDevStats() (map[string]*NetDevStats, error) {
-	counters, err := net.IOCounters(true)
-	if err != nil {
-		return nil, errs.Wrap(err, "get nic counters failed")
-	}
-
-	stats := make(map[string]*NetDevStats, len(counters))
-	for _, c := range counters {
-		stats[c.Name] = &NetDevStats{
-			Name:      c.Name,
-			RxBytes:   c.BytesRecv,
-			RxPackets: c.PacketsRecv,
-			RxErrors:  c.Errin,
-			RxDropped: c.Dropin,
-			RxFIFO:    c.Fifoin,
-			TxBytes:   c.BytesSent,
-			TxPackets: c.PacketsSent,
-			TxErrors:  c.Errout,
-			TxDropped: c.Dropin,
-			TxFIFO:    c.Fifoin,
-		}
-	}
-
-	return stats, nil
 }
