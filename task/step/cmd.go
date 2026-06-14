@@ -52,14 +52,12 @@ func (c *CmdStep) Start(ctx context.Context) error {
 	err = result.Err()
 	l.Info("cmd exit", "result", result.String())
 
-	if result != nil {
-		c.Store(consts.FieldCmdStdout, result.Stdout)
-		c.Store(consts.FieldCmdStderr, result.Stderr)
-		c.Store(consts.FieldCmdExitCode, result.ExitCode)
-		c.Store(consts.FieldStartTimeNano, result.StartTimeNano)
-		c.Store(consts.FieldStopTimeNano, result.StopTimeNano)
-		c.Store(consts.FieldCmdSignaled, result.Signaled)
-	}
+	c.Store(consts.FieldCmdStdout, result.Stdout)
+	c.Store(consts.FieldCmdStderr, result.Stderr)
+	c.Store(consts.FieldCmdExitCode, result.ExitCode)
+	c.Store(consts.FieldStartTimeNano, result.StartTimeNano)
+	c.Store(consts.FieldStopTimeNano, result.StopTimeNano)
+	c.Store(consts.FieldCmdSignaled, result.Signaled)
 
 	if result != nil && result.Signaled {
 		select {

@@ -12,8 +12,6 @@ import (
 	"github.com/donkeywon/golib/util/conv"
 	"github.com/donkeywon/golib/util/jsons"
 	"github.com/donkeywon/golib/util/yamls"
-	"github.com/pelletier/go-toml/v2"
-	"google.golang.org/protobuf/proto"
 )
 
 const (
@@ -136,24 +134,6 @@ func ReqToYAML(r *http.Request, obj any) error {
 	return yamls.NewDecoder(r.Body).Decode(obj)
 }
 
-func ReqToTOML(r *http.Request, obj any) error {
-	return toml.NewDecoder(r.Body).Decode(obj)
-}
-
-func ReqToPB(r *http.Request, obj any) error {
-	msg, ok := obj.(proto.Message)
-	if !ok {
-		return errors.New("obj is not proto.Message")
-	}
-
-	buf, err := io.ReadAll(r.Body)
-	if err != nil {
-		return err
-	}
-
-	return proto.Unmarshal(buf, msg)
-}
-
 func ReqTo(r *http.Request, obj any) error {
 	var err error
 	contentType := r.Header.Get(HeaderContentType)
@@ -164,10 +144,6 @@ func ReqTo(r *http.Request, obj any) error {
 		err = ReqToXML(r, obj)
 	case MIMEYAML, MIMEYAML2:
 		err = ReqToYAML(r, obj)
-	case MIMETOML:
-		err = ReqToTOML(r, obj)
-	case MIMEPROTOBUF:
-		err = ReqToPB(r, obj)
 	default:
 		err = ReqToJSON(r, obj)
 	}

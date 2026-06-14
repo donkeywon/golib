@@ -1,21 +1,21 @@
 package metricsd
 
 const (
-	DefaultDisableGoCollector   = false
-	DefaultDisableProcCollector = false
-	DefaultHTTPEndpointPath     = "/metrics"
+	DefaultEnableProcCollector = false
+	DefaultEnableFDCollector   = false
+	DefaultHTTPEndpointPath    = "/metrics"
 )
 
 type Cfg struct {
-	DisableGoCollector   bool   `env:"DISABLE_GO_COLLECTOR"   yaml:"disableGoCollector"   long:"disable-go-collector"   description:"disable collect current go process runtime metrics"`
-	DisableProcCollector bool   `env:"DISABLE_PROC_COLLECTOR" yaml:"disableProcCollector" long:"disable-proc-collector" description:"disable collect current state of process metrics including CPU, memory and file descriptor usage as well as the process start time"`
-	HTTPEndpointPath     string `env:"HTTP_ENDPOINT_PATH"     yaml:"httpEndpointPath"     long:"http-endpoint-path"     description:"metrics http endpoint path"`
+	EnableProcCollector bool   `env:"ENABLE_PROC_COLLECTOR" yaml:"enableProcCollector" long:"enable-proc-collector" description:"enable collect current state of process metrics including go runtime metrics, CPU, memory and file descriptor usage as well as the process start time"`
+	EnableFDCollector   bool   `env:"ENABLE_FD_COLLECTOR"   yaml:"enableFDCollector"   long:"enable-fd-collector"   description:"enable file descriptor counter metrics(may affect performance)"`
+	HTTPEndpointPath    string `env:"HTTP_ENDPOINT_PATH"    yaml:"httpEndpointPath"    long:"http-endpoint-path"    description:"metrics http endpoint path"`
 }
 
 func NewCfg() *Cfg {
 	return &Cfg{
-		DisableGoCollector:   DefaultDisableGoCollector,
-		DisableProcCollector: DefaultDisableProcCollector,
-		HTTPEndpointPath:     DefaultHTTPEndpointPath,
+		EnableProcCollector: DefaultEnableProcCollector,
+		EnableFDCollector:   DefaultEnableFDCollector,
+		HTTPEndpointPath:    DefaultHTTPEndpointPath,
 	}
 }

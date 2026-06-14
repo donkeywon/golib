@@ -1,24 +1,35 @@
 package buildinfo
 
 import (
-	"github.com/earthboundkid/versioninfo/v2"
+	"runtime/debug"
+	"time"
 )
 
 func init() {
-	if Version == "" {
-		Version = versioninfo.Version
+	info, ok := debug.ReadBuildInfo()
+	if !ok {
+		return
 	}
-	if Revision == "" {
-		Revision = versioninfo.Revision
-	}
-	if CommitTime == "" {
-		CommitTime = versioninfo.LastCommit.Local().Format("2006-01-02 15:04:05")
+	Version = info.Main.Version
+	for _, kv := range info.Settings {
+		if kv.Value == "" {
+			continue
+		}
+		switch kv.Key {
+		case "vcs.revision":
+			Revision = kv.Value
+		case "vcs.time":
+			CommitTime, _ = time.Parse(time.RFC3339, kv.Value)
+		case "vcs.modified":
+			DirtyBuild = kv.Value == "true"
+		}
 	}
 }
 
 var (
-	Version    = ""
-	BuildTime  = ""
-	CommitTime = ""
-	Revision   = ""
+	DirtyBuild bool
+	CommitTime time.Time
+	Version    string
+	BuildTime  string
+	Revision   string
 )
