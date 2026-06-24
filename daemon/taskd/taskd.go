@@ -3,11 +3,14 @@ package taskd
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"sync"
+	"sync/atomic"
 
 	"github.com/alitto/pond/v2"
 	"github.com/donkeywon/golib/boot"
 	"github.com/donkeywon/golib/errs"
+	"github.com/donkeywon/golib/logs"
 	"github.com/donkeywon/golib/plugin"
 	"github.com/donkeywon/golib/runner"
 	"github.com/donkeywon/golib/task"
@@ -28,32 +31,44 @@ var (
 	ErrPoolNotExists       = errors.New("pool not exists")
 )
 
+type TaskState uint32
+
+const (
+	TaskStatePending TaskState = 0
+	TaskStateRunning TaskState = 1
+	TaskStateDone    TaskState = 2
+	TaskStatePausing TaskState = 3
+	TaskStatePaused  TaskState = 4
+)
+
 type Hook func(*task.Task, error, *HookExtraData)
 
 type HookExtraData struct {
 	Wait bool
 }
 
-var _ Taskd = (*taskd)(nil)
+type taskInfo struct {
+	task  *task.Task
+	state atomic.Uint32
+	pool  string
+}
 
 type Taskd interface {
 	boot.Daemon
-	SubmitTask(taskCfg *task.Cfg) (*task.Task, error)
-	SubmitTaskAndWait(context.Context, *task.Cfg) (*task.Task, error)
-	StopTask(taskID string) error
-	PauseTask(taskID string) error
-	ResumeTask(taskID string) (*task.Task, error)
+	SubmitTask(ctx context.Context, pool string, taskCfg task.Cfg) (*task.Task, error)
+	SubmitTaskAndWait(ctx context.Context, pool string, taskCfg task.Cfg) (*task.Task, error)
+	StopTask(ctx context.Context, taskID string) error
+	PauseTask(ctx context.Context, taskID string) error
+	ResumeTask(ctx context.Context, taskID string) (*task.Task, error)
 	IsTaskExists(taskID string) bool
-	IsTaskPending(taskID string) bool
-	IsTaskRunning(taskID string) bool
-	IsTaskPaused(taskID string) bool
 	ListTasks() []*task.Task
-	ListTasksCfg() []*task.Cfg
+	ListTasksCfg() []task.Cfg
 	ListTaskIDs() []string
 	ListPendingTaskIDs() []string
 	ListRunningTaskIDs() []string
 	ListPausingTaskIDs() []string
 	ListPausedTaskIDs() []string
+	GetTaskState(taskID string) (TaskState, error)
 	GetTaskCfg(taskID string) (task.Cfg, error)
 	OnTaskCreate(hooks ...Hook)
 	OnTaskInit(hooks ...Hook)
@@ -62,45 +77,36 @@ type Taskd interface {
 	OnTaskPausing(hooks ...Hook)
 	OnTaskPaused(hooks ...Hook)
 	OnTaskDone(hooks ...Hook)
-	OnTaskStepDone(hooks ...task.StepHook)
-	OnTaskDeferStepDone(hooks ...task.StepHook)
 }
+
+var _ Taskd = (*taskd)(nil)
 
 type taskd struct {
 	runner.Base
 
-	cfg *Cfg
-
+	cfg    *Cfg
+	l      *slog.Logger
+	ctx    context.Context
 	cancel context.CancelFunc
 
 	pools map[string]pond.Pool
 
-	mu               sync.RWMutex
-	taskIDMap        map[string]struct{}   // task id map include pending, except paused
-	taskMap          map[string]*task.Task // task map include pending, except paused
-	taskIDRunningMap map[string]struct{}   // running task id map
-	taskIDPausingMap map[string]struct{}
-	taskPausedMap    map[string]*task.Task // paused task map
+	mu          sync.RWMutex
+	taskInfoMap map[string]*taskInfo
 
-	createHooks        []Hook
-	initHooks          []Hook
-	submitHooks        []Hook
-	startHooks         []Hook
-	pausingHooks       []Hook
-	pausedHooks        []Hook
-	doneHooks          []Hook
-	stepDoneHooks      []task.StepHook
-	deferStepDoneHooks []task.StepHook
+	createHooks  []Hook
+	initHooks    []Hook
+	submitHooks  []Hook
+	startHooks   []Hook
+	pausingHooks []Hook
+	pausedHooks  []Hook
+	doneHooks    []Hook
 }
 
 func New() boot.Daemon {
 	return &taskd{
-		taskMap:          make(map[string]*task.Task),
-		taskIDMap:        make(map[string]struct{}),
-		taskIDRunningMap: make(map[string]struct{}),
-		taskIDPausingMap: make(map[string]struct{}),
-		taskPausedMap:    make(map[string]*task.Task),
-		pools:            make(map[string]pond.Pool),
+		taskInfoMap: make(map[string]*taskInfo),
+		pools:       make(map[string]pond.Pool),
 	}
 }
 
@@ -115,6 +121,9 @@ func (td *taskd) Init(ctx context.Context) error {
 }
 
 func (td *taskd) Start(ctx context.Context) error {
+	td.l = logs.FromCtx(ctx)
+	td.ctx, td.cancel = context.WithCancel(ctx)
+
 	<-td.Stopping()
 	td.waitAllTaskDone()
 	for _, pool := range td.pools {
@@ -124,36 +133,32 @@ func (td *taskd) Start(ctx context.Context) error {
 }
 
 func (td *taskd) Stop(ctx context.Context) error {
-	td.cancel()
+	if td.cancel != nil {
+		td.cancel()
+	}
 	return nil
-}
-
-func (td *taskd) getPool(taskCfg *task.Cfg) pond.Pool {
-	return td.pools[taskCfg.Pool]
 }
 
 func (td *taskd) SetCfg(cfg any) {
 	td.cfg = cfg.(*Cfg)
 }
 
-func (td *taskd) SubmitTask(taskCfg *task.Cfg) (*task.Task, error) {
-	return td.createInitSubmit(td.Ctx(), taskCfg, false)
+func (td *taskd) SubmitTask(ctx context.Context, pool string, taskCfg task.Cfg) (*task.Task, error) {
+	return td.createInitSubmit(ctx, pool, taskCfg, false)
 }
 
-func (td *taskd) SubmitTaskAndWait(ctx context.Context, taskCfg *task.Cfg) (*task.Task, error) {
-	return td.createInitSubmit(ctx, taskCfg, true)
+func (td *taskd) SubmitTaskAndWait(ctx context.Context, pool string, taskCfg task.Cfg) (*task.Task, error) {
+	return td.createInitSubmit(ctx, pool, taskCfg, true)
 }
 
-func (td *taskd) StopTask(taskID string) error {
+func (td *taskd) StopTask(ctx context.Context, taskID string) error {
 	select {
 	case <-td.Stopping():
 		return ErrStopping
 	default:
 	}
 
-	isPaused, _ := td.unmarkTaskIfPaused(taskID)
-	if isPaused {
-		// task is paused, just unmark it
+	if t, _ := td.removeTaskIfPaused(taskID); t != nil {
 		return nil
 	}
 
@@ -168,11 +173,10 @@ func (td *taskd) StopTask(taskID string) error {
 	default:
 	}
 
-	runner.Stop(t)
-	return nil
+	return runner.Stop(ctx, t)
 }
 
-func (td *taskd) PauseTask(taskID string) error {
+func (td *taskd) PauseTask(ctx context.Context, taskID string) error {
 	select {
 	case <-td.Stopping():
 		return ErrStopping
@@ -196,53 +200,168 @@ func (td *taskd) PauseTask(taskID string) error {
 	default:
 	}
 
-	if !td.markTaskPausing(taskID) {
+	if !td.changeTaskState(taskID, TaskStateRunning, TaskStatePausing) {
 		return ErrTaskAlreadyPausing
 	}
 
 	td.hookTask(t, nil, td.pausingHooks, "pausing", nil)
-	runner.Stop(t)
-	return nil
+	return runner.Stop(ctx, t)
 }
 
-func (td *taskd) ResumeTask(taskID string) (*task.Task, error) {
+func (td *taskd) ResumeTask(ctx context.Context, taskID string) (*task.Task, error) {
 	select {
 	case <-td.Stopping():
 		return nil, ErrStopping
 	default:
 	}
 
-	isPaused, t := td.unmarkTaskIfPaused(taskID)
-	if !isPaused {
+	t, pool := td.removeTaskIfPaused(taskID)
+	if t == nil {
 		return nil, ErrTaskNotPaused
 	}
 
-	newT, err := td.createInitSubmit(td.Ctx(), t.Cfg, false, func(newT *task.Task, err error, hed *task.HookExtraData) {
-		data := t.LoadAll()
-		for k, v := range data {
-			newT.Store(k, v)
+	oldCfg := t.Cfg()
+	newT, err := td.createInitSubmit(ctx, pool, oldCfg, false, func(newT *task.Task, _ error, _ *HookExtraData) {
+		t.Range(func(k string, val any) bool {
+			newT.Store(k, val)
+			return true
+		})
+
+		oldSteps := t.Steps()
+		for i, newStep := range newT.Steps() {
+			oldSteps[i].Range(func(k string, val any) bool {
+				newStep.Store(k, val)
+				return true
+			})
 		}
 
-		for i, newStep := range newT.Steps() {
-			data = t.Steps()[i].LoadAll()
-			for k, v := range data {
-				newStep.Store(k, v)
-			}
-		}
+		oldDeferSteps := t.DeferSteps()
 		for i, newStep := range newT.DeferSteps() {
-			data = t.DeferSteps()[i].LoadAll()
-			for k, v := range data {
-				newStep.Store(k, v)
-			}
+			oldDeferSteps[i].Range(func(k string, val any) bool {
+				newStep.Store(k, val)
+				return true
+			})
 		}
 	})
-
 	if err != nil {
-		td.markTaskPaused(t)
+		td.restorePaused(t, pool)
 		return newT, err
 	}
 
 	return newT, nil
+}
+
+func (td *taskd) IsTaskExists(taskID string) bool {
+	td.mu.RLock()
+	defer td.mu.RUnlock()
+	_, exists := td.taskInfoMap[taskID]
+	return exists
+}
+
+func (td *taskd) isTaskPausing(taskID string) bool {
+	td.mu.RLock()
+	defer td.mu.RUnlock()
+	e, exists := td.taskInfoMap[taskID]
+	return exists && TaskState(e.state.Load()) == TaskStatePausing
+}
+
+func (td *taskd) GetTaskState(taskID string) (TaskState, error) {
+	td.mu.RLock()
+	defer td.mu.RUnlock()
+	e, exists := td.taskInfoMap[taskID]
+	if !exists {
+		return TaskStatePending, ErrTaskNotExists
+	}
+	return TaskState(e.state.Load()), nil
+}
+
+func (td *taskd) GetTaskCfg(taskID string) (task.Cfg, error) {
+	td.mu.RLock()
+	defer td.mu.RUnlock()
+	e, exists := td.taskInfoMap[taskID]
+	if !exists {
+		return task.Cfg{}, ErrTaskNotExists
+	}
+	return e.task.Cfg(), nil
+}
+
+func (td *taskd) ListTasks() []*task.Task {
+	td.mu.RLock()
+	defer td.mu.RUnlock()
+
+	tasks := make([]*task.Task, 0, len(td.taskInfoMap))
+	for _, e := range td.taskInfoMap {
+		if TaskState(e.state.Load()) != TaskStatePaused {
+			tasks = append(tasks, e.task)
+		}
+	}
+	return tasks
+}
+
+func (td *taskd) ListTasksCfg() []task.Cfg {
+	td.mu.RLock()
+	defer td.mu.RUnlock()
+
+	cfgs := make([]task.Cfg, 0, len(td.taskInfoMap))
+	for _, e := range td.taskInfoMap {
+		cfgs = append(cfgs, e.task.Cfg())
+	}
+	return cfgs
+}
+
+func (td *taskd) ListTaskIDs() []string {
+	td.mu.RLock()
+	defer td.mu.RUnlock()
+
+	ids := make([]string, 0, len(td.taskInfoMap))
+	for id := range td.taskInfoMap {
+		ids = append(ids, id)
+	}
+	return ids
+}
+
+func (td *taskd) ListPendingTaskIDs() []string {
+	return td.listIDsByState(TaskStatePending)
+}
+
+func (td *taskd) ListRunningTaskIDs() []string {
+	return td.listIDsByState(TaskStateRunning)
+}
+
+func (td *taskd) ListPausingTaskIDs() []string {
+	return td.listIDsByState(TaskStatePausing)
+}
+
+func (td *taskd) ListPausedTaskIDs() []string {
+	return td.listIDsByState(TaskStatePaused)
+}
+
+func (td *taskd) OnTaskCreate(hooks ...Hook) {
+	td.createHooks = append(td.createHooks, hooks...)
+}
+
+func (td *taskd) OnTaskInit(hooks ...Hook) {
+	td.initHooks = append(td.initHooks, hooks...)
+}
+
+func (td *taskd) OnTaskSubmit(hooks ...Hook) {
+	td.submitHooks = append(td.submitHooks, hooks...)
+}
+
+func (td *taskd) OnTaskStart(hooks ...Hook) {
+	td.startHooks = append(td.startHooks, hooks...)
+}
+
+func (td *taskd) OnTaskPausing(hooks ...Hook) {
+	td.pausingHooks = append(td.pausingHooks, hooks...)
+}
+
+func (td *taskd) OnTaskPaused(hooks ...Hook) {
+	td.pausedHooks = append(td.pausedHooks, hooks...)
+}
+
+func (td *taskd) OnTaskDone(hooks ...Hook) {
+	td.doneHooks = append(td.doneHooks, hooks...)
 }
 
 func (td *taskd) waitAllTaskDone() {
@@ -251,35 +370,24 @@ func (td *taskd) waitAllTaskDone() {
 	}
 }
 
-func (td *taskd) createInit(ctx context.Context, taskCfg *task.Cfg, extra *task.HookExtraData, beforeInit ...task.Hook) (*task.Task, error) {
-	err := v.Struct(taskCfg)
-	if err != nil {
+func (td *taskd) createInit(ctx context.Context, taskCfg task.Cfg, extra *HookExtraData, beforeInit ...Hook) (*task.Task, error) {
+	if err := v.Struct(taskCfg); err != nil {
 		return nil, errs.Wrap(err, "invalid task cfg")
 	}
 
 	t, err := td.createTask(taskCfg)
-	if err == nil {
-		for k, value := range taskCfg.Values {
-			t.Store(k, value)
-		}
-
-		t.SetCtx(ctx)
-		t.Inherit(td)
-		t.WithLoggerFields("task_id", t.Cfg.ID, "task_type", t.Cfg.Type)
-	}
-	td.hookTask(t, err, td.createHooks, "create", extra)
 	if err != nil {
-		return t, errs.Wrap(err, "create task failed")
+		td.hookTask(t, err, td.createHooks, "create", extra)
+		return t, errs.Wrapf(err, "create task failed")
 	}
 
-	t.HookStepDone(td.stepDoneHooks...)
-	t.HookDeferStepDone(td.deferStepDoneHooks...)
+	td.hookTask(t, nil, td.createHooks, "create", extra)
 
 	for _, h := range beforeInit {
 		h(t, nil, extra)
 	}
 
-	err = td.initTask(t)
+	err = td.initTask(ctx, t)
 	td.hookTask(t, err, td.initHooks, "init", extra)
 	if err != nil {
 		return t, errs.Wrap(err, "init task failed")
@@ -288,394 +396,191 @@ func (td *taskd) createInit(ctx context.Context, taskCfg *task.Cfg, extra *task.
 	return t, nil
 }
 
-func (td *taskd) submit(t *task.Task, wait bool) {
-	extra := &task.HookExtraData{Wait: wait}
+func (td *taskd) submit(t *task.Task, pool string, wait bool) {
+	taskID := t.Cfg().ID
 
 	f := func() {
-		td.markTaskRunning(t.Cfg.ID)
+		td.changeTaskState(taskID, TaskStatePending, TaskStateRunning)
 
-		td.hookTask(t, nil, td.startHooks, "start", extra)
-		err := runner.Run(t)
+		td.hookTask(t, nil, td.startHooks, "start", &HookExtraData{Wait: wait})
+		err := runner.Start(td.ctx, t)
 
-		if td.IsTaskPausing(t.Cfg.ID) {
-			td.markTaskPaused(t)
+		// TODO 通过err判断是否pausing
+		if td.isTaskPausing(taskID) {
+			td.changeTaskState(taskID, TaskStatePausing, TaskStatePaused)
 			td.hookTask(t, nil, td.pausedHooks, "paused", nil)
 		} else {
-			td.unmarkTaskAndTaskID(t.Cfg.ID)
+			td.removeTaskInfo(taskID)
 		}
 
-		td.hookTask(t, err, td.doneHooks, "done", extra)
+		td.hookTask(t, err, td.doneHooks, "done", &HookExtraData{Wait: wait})
 	}
 
-	td.markTask(t)
-
-	pt := td.getPool(t.Cfg).Submit(f)
+	pt := td.pools[pool].Submit(f)
 	if wait {
 		pt.Wait()
 	}
 
-	td.hookTask(t, nil, td.submitHooks, "submit", extra)
+	td.hookTask(t, nil, td.submitHooks, "submit", &HookExtraData{Wait: wait})
 }
 
-func (td *taskd) createInitSubmit(ctx context.Context, taskCfg *task.Cfg, wait bool, beforeInit ...task.Hook) (*task.Task, error) {
+func (td *taskd) createInitSubmit(ctx context.Context, pool string, taskCfg task.Cfg, wait bool, beforeInit ...Hook) (*task.Task, error) {
 	select {
 	case <-td.Stopping():
 		return nil, ErrStopping
 	default:
 	}
 
-	if taskCfg.Pool == "" || td.getPool(taskCfg) == nil {
+	if pool == "" || td.pools[pool] == nil {
 		return nil, ErrPoolNotExists
 	}
+	hookExtra := &HookExtraData{Wait: wait}
 
-	hookExtra := &task.HookExtraData{Wait: wait}
-
-	marked := td.markTaskID(taskCfg.ID)
-	if !marked {
+	if !td.addTaskInfo(taskCfg.ID, pool) {
 		return nil, ErrTaskAlreadyExists
 	}
 
 	t, err := td.createInit(ctx, taskCfg, hookExtra, beforeInit...)
 	if err != nil {
-		td.unmarkTaskID(taskCfg.ID)
+		td.removeTaskInfo(taskCfg.ID)
 		return nil, errs.Wrap(err, "create init task failed")
 	}
 
 	select {
 	case <-td.Stopping():
+		td.removeTaskInfo(taskCfg.ID)
 		return nil, ErrStopping
 	default:
 	}
 
-	td.submit(t, wait)
+	td.setTaskToTaskInfo(t)
+	td.submit(t, pool, wait)
 	return t, nil
 }
 
-func (td *taskd) createTask(cfg *task.Cfg) (t *task.Task, err error) {
+func (td *taskd) createTask(cfg task.Cfg) (t *task.Task, err error) {
 	defer func() {
-		e := recover()
-		if e != nil {
-			err = errs.PanicToErrWithMsg(e, "panic on create task")
+		if p := recover(); p != nil {
+			err = errs.PanicToErrWithMsg(p, "panic on create task")
 		}
 	}()
-	return plugin.CreateWithCfg[*task.Task](task.PluginTypeTask, cfg), nil
+	return plugin.CreateWithCfg[*task.Task](task.PluginTypeTask, &cfg), nil
 }
 
-func (td *taskd) initTask(t *task.Task) (err error) {
+func (td *taskd) initTask(ctx context.Context, t *task.Task) (err error) {
 	defer func() {
-		e := recover()
-		if e != nil {
-			err = errs.PanicToErrWithMsg(e, "panic on init task")
+		if p := recover(); p != nil {
+			err = errs.PanicToErrWithMsg(p, "panic on init task")
 		}
 	}()
-
-	return runner.Init(t)
+	return runner.Init(ctx, t)
 }
 
-func (td *taskd) markTaskID(taskID string) bool {
+func (td *taskd) addTaskInfo(taskID, pool string) bool {
 	td.mu.Lock()
 	defer td.mu.Unlock()
-	_, exists := td.taskIDMap[taskID]
-	if exists {
-		return false
-	}
-	_, exists = td.taskPausedMap[taskID]
-	if exists {
-		return false
-	}
 
-	td.taskIDMap[taskID] = struct{}{}
+	if _, exists := td.taskInfoMap[taskID]; exists {
+		return false
+	}
+	td.taskInfoMap[taskID] = &taskInfo{pool: pool}
 	return true
 }
 
-func (td *taskd) unmarkTaskID(taskID string) bool {
+func (td *taskd) setTaskToTaskInfo(t *task.Task) {
+	td.mu.RLock()
+	defer td.mu.RUnlock()
+
+	if e, exists := td.taskInfoMap[t.Cfg().ID]; exists {
+		e.task = t
+	}
+}
+
+func (td *taskd) removeTaskInfo(taskID string) {
 	td.mu.Lock()
 	defer td.mu.Unlock()
-	_, exists := td.taskIDMap[taskID]
+
+	delete(td.taskInfoMap, taskID)
+}
+
+func (td *taskd) changeTaskState(taskID string, from, to TaskState) bool {
+	td.mu.RLock()
+	defer td.mu.RUnlock()
+
+	e, exists := td.taskInfoMap[taskID]
 	if !exists {
 		return false
 	}
-	delete(td.taskIDMap, taskID)
-	return true
+	return e.state.CompareAndSwap(uint32(from), uint32(to))
 }
 
-func (td *taskd) unmarkTaskAndTaskID(taskID string) {
+func (td *taskd) removeTaskIfPaused(taskID string) (*task.Task, string) {
 	td.mu.Lock()
 	defer td.mu.Unlock()
-	delete(td.taskIDRunningMap, taskID)
-	delete(td.taskIDMap, taskID)
-	delete(td.taskMap, taskID)
+
+	e, exists := td.taskInfoMap[taskID]
+	if !exists || e.state != TaskStatePaused {
+		return nil, ""
+	}
+	t := e.task
+	pool := e.pool
+	delete(td.taskInfoMap, taskID)
+	return t, pool
 }
 
-func (td *taskd) markTask(t *task.Task) {
+func (td *taskd) restorePaused(t *task.Task, pool string) {
 	td.mu.Lock()
 	defer td.mu.Unlock()
-	td.taskMap[t.Cfg.ID] = t
-}
 
-func (td *taskd) markTaskRunning(taskID string) bool {
-	td.mu.Lock()
-	defer td.mu.Unlock()
-	_, exists := td.taskIDRunningMap[taskID]
-	if exists {
-		return false
-	}
-	td.taskIDRunningMap[taskID] = struct{}{}
-	return true
-}
-
-func (td *taskd) markTaskPausing(taskID string) bool {
-	td.mu.Lock()
-	defer td.mu.Unlock()
-	_, exists := td.taskIDPausingMap[taskID]
-	if exists {
-		return false
-	}
-	td.taskIDPausingMap[taskID] = struct{}{}
-	return true
-}
-
-func (td *taskd) markTaskPaused(t *task.Task) {
-	td.mu.Lock()
-	defer td.mu.Unlock()
-	delete(td.taskIDPausingMap, t.Cfg.ID)
-	delete(td.taskIDRunningMap, t.Cfg.ID)
-	delete(td.taskIDMap, t.Cfg.ID)
-	delete(td.taskMap, t.Cfg.ID)
-	td.taskPausedMap[t.Cfg.ID] = t
-}
-
-func (td *taskd) unmarkTaskIfPaused(taskID string) (bool, *task.Task) {
-	td.mu.Lock()
-	defer td.mu.Unlock()
-	t, exists := td.taskPausedMap[taskID]
-	if !exists {
-		return false, t
-	}
-	delete(td.taskPausedMap, taskID)
-	return true, t
-}
-
-func (td *taskd) ListTasksCfg() []*task.Cfg {
-	td.mu.RLock()
-	defer td.mu.RUnlock()
-	tasks := make([]*task.Task, len(td.taskMap)+len(td.taskPausedMap))
-	i := 0
-	for _, t := range td.taskMap {
-		tasks[i] = t
-		i++
-	}
-	for _, t := range td.taskPausedMap {
-		tasks[i] = t
-		i++
-	}
-	cfgs := make([]*task.Cfg, len(tasks))
-	for i = range tasks {
-		cfgs[i] = tasks[i].Cfg
-	}
-	return cfgs
-}
-
-func (td *taskd) ListTasks() []*task.Task {
-	td.mu.RLock()
-	defer td.mu.RUnlock()
-	tasks := make([]*task.Task, len(td.taskMap))
-	i := 0
-	for _, t := range td.taskMap {
-		tasks[i] = t
-		i++
-	}
-	return tasks
-}
-
-func (td *taskd) hookTask(t *task.Task, err error, hooks []task.Hook, hookType string, extra *task.HookExtraData) {
-	for i, h := range hooks {
-		func(idx int, h task.Hook) {
-			defer func() {
-				err := recover()
-				if err != nil {
-					if t == nil {
-						td.Error("panic on hook task", errs.PanicToErr(err), "idx", idx, "hook", reflects.GetFuncName(h), "hook_type", hookType)
-					} else {
-						td.Error("panic on hook task", errs.PanicToErr(err), "idx", idx, "hook", reflects.GetFuncName(h), "hook_type", hookType, "task_id", t.Cfg.ID, "task_type", t.Cfg.Type)
-					}
-				}
-			}()
-			h(t, err, extra)
-		}(i, h)
+	td.taskInfoMap[t.Cfg().ID] = &taskInfo{
+		task:  t,
+		state: TaskStatePaused,
+		pool:  pool,
 	}
 }
 
 func (td *taskd) getTask(taskID string) *task.Task {
 	td.mu.RLock()
 	defer td.mu.RUnlock()
-	return td.taskMap[taskID]
-}
 
-func (td *taskd) IsTaskExists(taskID string) bool {
-	td.mu.RLock()
-	defer td.mu.RUnlock()
-	_, exists := td.taskIDMap[taskID]
-	if exists {
-		return true
-	}
-	_, exists = td.taskPausedMap[taskID]
-	return exists
-}
-
-func (td *taskd) IsTaskPending(taskID string) bool {
-	td.mu.RLock()
-	defer td.mu.RUnlock()
-	_, exists := td.taskIDMap[taskID]
+	e, exists := td.taskInfoMap[taskID]
 	if !exists {
-		return false
+		return nil
 	}
-	_, isRunning := td.taskIDRunningMap[taskID]
-	_, isPaused := td.taskPausedMap[taskID]
-	return !isRunning && !isPaused
+	return e.task
 }
 
-func (td *taskd) IsTaskRunning(taskID string) bool {
+func (td *taskd) listIDsByState(state TaskState) []string {
 	td.mu.RLock()
-	_, exists := td.taskIDRunningMap[taskID]
-	td.mu.RUnlock()
-	return exists
-}
+	defer td.mu.RUnlock()
 
-func (td *taskd) IsTaskPausing(taskID string) bool {
-	td.mu.RLock()
-	_, exists := td.taskIDPausingMap[taskID]
-	td.mu.RUnlock()
-	return exists
-}
-
-func (td *taskd) IsTaskPaused(taskID string) bool {
-	td.mu.RLock()
-	_, exists := td.taskPausedMap[taskID]
-	td.mu.RUnlock()
-	return exists
-}
-
-func (td *taskd) ListTaskIDs() []string {
-	td.mu.RLock()
-
-	ids := make([]string, len(td.taskIDMap)+len(td.taskPausedMap))
-	i := 0
-	for id := range td.taskIDMap {
-		ids[i] = id
-		i++
-	}
-	for id := range td.taskPausedMap {
-		ids[i] = id
-		i++
-	}
-
-	td.mu.RUnlock()
-	return ids
-}
-
-func (td *taskd) ListPendingTaskIDs() []string {
-	td.mu.RLock()
-
-	ids := make([]string, len(td.taskIDMap)-len(td.taskIDRunningMap))
-	i := 0
-	for id := range td.taskIDMap {
-		if _, isRunning := td.taskIDRunningMap[id]; isRunning {
-			continue
+	ids := make([]string, 0, len(td.taskInfoMap))
+	for id, e := range td.taskInfoMap {
+		if TaskState(e.state.Load()) == state {
+			ids = append(ids, id)
 		}
-
-		ids[i] = id
-		i++
 	}
-
-	td.mu.RUnlock()
 	return ids
 }
 
-func (td *taskd) ListRunningTaskIDs() []string {
-	td.mu.RLock()
-
-	ids := make([]string, len(td.taskIDRunningMap))
-	i := 0
-	for id := range td.taskIDRunningMap {
-		ids[i] = id
-		i++
+func (td *taskd) hookTask(t *task.Task, err error, hooks []Hook, hookType string, extra *HookExtraData) {
+	for i, h := range hooks {
+		func(idx int, fn Hook) {
+			defer func() {
+				if p := recover(); p != nil {
+					attrs := []any{
+						"err", errs.PanicToErr(p),
+						"idx", idx,
+						"hook", reflects.GetFuncName(fn),
+						"hook_type", hookType,
+					}
+					if t != nil {
+						attrs = append(attrs, "task_id", t.Cfg().ID)
+					}
+					td.l.Error("panic on hook task", attrs...)
+				}
+			}()
+			fn(t, err, extra)
+		}(i, h)
 	}
-
-	td.mu.RUnlock()
-	return ids
-}
-
-func (td *taskd) ListPausingTaskIDs() []string {
-	td.mu.RLock()
-
-	ids := make([]string, len(td.taskIDPausingMap))
-	i := 0
-	for id := range td.taskIDPausingMap {
-		ids[i] = id
-		i++
-	}
-
-	td.mu.RUnlock()
-	return ids
-}
-
-func (td *taskd) ListPausedTaskIDs() []string {
-	td.mu.RLock()
-
-	ids := make([]string, len(td.taskPausedMap))
-	i := 0
-	for id := range td.taskPausedMap {
-		ids[i] = id
-		i++
-	}
-
-	td.mu.RUnlock()
-	return ids
-}
-
-func (td *taskd) GetTaskCfg(taskID string) (task.Cfg, error) {
-	td.mu.RLock()
-	t, exists := td.taskMap[taskID]
-	td.mu.RUnlock()
-	if !exists {
-		return task.Cfg{}, ErrTaskNotExists
-	}
-	return t.Cfg(), nil
-}
-
-func (td *taskd) OnTaskCreate(hooks ...task.Hook) {
-	td.createHooks = append(td.createHooks, hooks...)
-}
-
-func (td *taskd) OnTaskInit(hooks ...task.Hook) {
-	td.initHooks = append(td.initHooks, hooks...)
-}
-
-func (td *taskd) OnTaskSubmit(hooks ...task.Hook) {
-	td.submitHooks = append(td.submitHooks, hooks...)
-}
-
-func (td *taskd) OnTaskStart(hooks ...task.Hook) {
-	td.startHooks = append(td.startHooks, hooks...)
-}
-
-func (td *taskd) OnTaskDone(hooks ...task.Hook) {
-	td.doneHooks = append(td.doneHooks, hooks...)
-}
-
-func (td *taskd) OnTaskPaused(hooks ...task.Hook) {
-	td.pausedHooks = append(td.pausedHooks, hooks...)
-}
-
-func (td *taskd) OnTaskPausing(hooks ...task.Hook) {
-	td.pausingHooks = append(td.pausingHooks, hooks...)
-}
-
-func (td *taskd) OnTaskStepDone(hooks ...task.StepHook) {
-	td.stepDoneHooks = append(td.stepDoneHooks, hooks...)
-}
-
-func (td *taskd) OnTaskDeferStepDone(hooks ...task.StepHook) {
-	td.deferStepDoneHooks = append(td.deferStepDoneHooks, hooks...)
 }

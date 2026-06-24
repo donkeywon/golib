@@ -9,10 +9,12 @@ const (
 	FieldStartTimeSec = "startTimeSec"
 	FieldStopTimeSec  = "stopTimeSec"
 
-	FieldCmdStdout   = "stdout"
-	FieldCmdStderr   = "stderr"
-	FieldCmdExitCode = "exit"
-	FieldCmdSignaled = "signaled"
+	FieldCmdStdout     = "stdout"
+	FieldCmdStderr     = "stderr"
+	FieldCmdExitCode   = "exitCode"
+	FieldCmdIsSignaled = "isSignaled"
+	FieldCmdSignal     = "signal"
+	FieldCmdIsCoredump = "isCoredump"
 
 	FieldResult = "result"
 

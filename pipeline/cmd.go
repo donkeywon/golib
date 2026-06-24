@@ -63,7 +63,7 @@ func (c *Cmd) Start() error {
 		c.Store(consts.FieldCmdExitCode, result.ExitCode)
 		c.Store(consts.FieldStartTimeNano, result.StartTimeNano)
 		c.Store(consts.FieldStopTimeNano, result.StopTimeNano)
-		c.Store(consts.FieldCmdSignaled, result.Signaled)
+		c.Store(consts.FieldCmdIsSignaled, result.Signaled)
 	}
 
 	if result != nil && result.Signaled {
