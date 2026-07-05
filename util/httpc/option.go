@@ -2,6 +2,7 @@ package httpc
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
@@ -17,14 +18,8 @@ import (
 	"github.com/donkeywon/golib/util/jsons"
 )
 
-// Option must implement reqOption or respOption.
-type Option any
-
-type reqOption interface {
+type Option interface {
 	HandleReq(*http.Request) error
-}
-
-type respOption interface {
 	HandleResp(*http.Response) error
 }
 
@@ -34,7 +29,15 @@ func (f ReqOptionFunc) HandleReq(r *http.Request) error {
 	return f(r)
 }
 
-type RespOptionFunc func(r *http.Response) error
+func (f ReqOptionFunc) HandleResp(_ *http.Response) error {
+	return nil
+}
+
+type RespOptionFunc func(resp *http.Response) error
+
+func (f RespOptionFunc) HandleReq(_ *http.Request) error {
+	return nil
+}
 
 func (f RespOptionFunc) HandleResp(r *http.Response) error {
 	return f(r)
@@ -51,7 +54,11 @@ func WithHeaders(headerKvs ...string) Option {
 
 func WithHeader(h http.Header) Option {
 	return ReqOptionFunc(func(r *http.Request) error {
-		r.Header = h
+		for k, vs := range h {
+			for _, v := range vs {
+				r.Header.Add(k, v)
+			}
+		}
 		return nil
 	})
 }
@@ -164,24 +171,69 @@ func WithBodyForm(form url.Values) Option {
 	})
 }
 
-func CheckStatusCode(statusCode ...int) Option {
+func CheckStatusCode(checkFailedBodyWriter io.Writer, statusCode *int, expectedStatusCodes ...int) Option {
 	return RespOptionFunc(func(resp *http.Response) error {
-		if len(statusCode) == 0 {
+		if statusCode != nil {
+			*statusCode = resp.StatusCode
+		}
+		if len(expectedStatusCodes) == 0 {
 			return nil
 		}
-		if !slices.Contains(statusCode, resp.StatusCode) {
-			return errs.Errorf("unexpected response status code: %s", resp.Status)
+		if slices.Contains(expectedStatusCodes, resp.StatusCode) {
+			return nil
 		}
-		return nil
+
+		err := errs.Errorf("unexpected response status code: %d", resp.StatusCode)
+		if checkFailedBodyWriter != nil {
+			_, e := io.Copy(checkFailedBodyWriter, resp.Body)
+			if e == io.EOF {
+				e = nil
+			}
+			if e != nil {
+				err = errors.Join(err, errs.Wrap(e, "read response body failed"))
+			}
+		}
+
+		return err
 	})
 }
 
-func CheckStatusCodeRange(min, max int) Option {
+func CheckStatusCodeRange(checkFailedBodyWriter io.Writer, statusCode *int, min, max int) Option {
 	return RespOptionFunc(func(resp *http.Response) error {
+		if statusCode != nil {
+			*statusCode = resp.StatusCode
+		}
 		if resp.StatusCode >= min && resp.StatusCode <= max {
 			return nil
 		}
-		return errs.Errorf("unexpected response status code: %s", resp.Status)
+
+		err := errs.Errorf("unexpected response status code: %d", resp.StatusCode)
+		if checkFailedBodyWriter != nil {
+			_, e := io.Copy(checkFailedBodyWriter, resp.Body)
+			if e == io.EOF {
+				e = nil
+			}
+			if e != nil {
+				err = errors.Join(err, errs.Wrap(e, "read response body failed"))
+			}
+		}
+
+		return err
+	})
+}
+
+func ToString(s *string) Option {
+	return RespOptionFunc(func(resp *http.Response) error {
+		var sb strings.Builder
+		_, err := io.Copy(&sb, resp.Body)
+		if err == io.EOF {
+			err = nil
+		}
+		if err != nil {
+			return errs.Wrap(err, "read response body failed")
+		}
+		*s = sb.String()
+		return nil
 	})
 }
 
@@ -193,28 +245,21 @@ func ToBytes(n *int, b []byte) Option {
 		} else {
 			*n, err = iou.ReadFill(b, r.Body)
 		}
-		if err != nil && !errors.Is(err, io.EOF) {
+		if err == io.EOF {
+			err = nil
+		}
+		if err != nil {
 			return errs.Wrap(err, "read response body failed")
 		}
 		return nil
 	})
 }
 
-func ToBytesBuffer(buf *bytes.Buffer) Option {
-	return RespOptionFunc(func(resp *http.Response) error {
-		_, err := io.Copy(buf, resp.Body)
-		if err != nil {
-			return errs.Wrap(err, "read response body failed")
-		}
-		return err
-	})
-}
-
 func ToJSON(v any) Option {
-	return ToAnyDecode(v, func(r io.Reader) httpu.Decoder { return jsons.NewDecoder(r) })
+	return ToAnyDecode(v, func(r io.Reader) httpu.Decoder { return json.NewDecoder(r) })
 }
 
-func ToAnyDecode(v any, newDecoder httpu.NewDecoder) Option {
+func ToAnyDecode(v any, newDecoder httpu.DecoderCreator) Option {
 	return RespOptionFunc(func(r *http.Response) error {
 		err := newDecoder(r.Body).Decode(v)
 		if err != nil && !errors.Is(err, io.EOF) {
@@ -232,13 +277,13 @@ func ToAnyUnmarshal(v any, unmarshaler func(bs []byte, v any) error) Option {
 		}
 		err = unmarshaler(bs, v)
 		if err != nil {
-			return errs.Wrapf(err, "decode response body failed: %s", conv.Bytes2String(bs))
+			return errs.Wrapf(err, "unmarshal response body failed: %s", conv.Bytes2String(bs))
 		}
 		return nil
 	})
 }
 
-func ToWriter(n *int64, w io.Writer) Option {
+func ToWriter(w io.Writer, n *int64) Option {
 	return RespOptionFunc(func(resp *http.Response) error {
 		var err error
 		if n == nil {
@@ -249,20 +294,6 @@ func ToWriter(n *int64, w io.Writer) Option {
 		if err != nil {
 			return errs.Wrap(err, "read response body to writer failed")
 		}
-		return nil
-	})
-}
-
-func ToStatus(status *string) Option {
-	return RespOptionFunc(func(resp *http.Response) error {
-		*status = resp.Status
-		return nil
-	})
-}
-
-func ToStatusCode(statusCode *int) Option {
-	return RespOptionFunc(func(resp *http.Response) error {
-		*statusCode = resp.StatusCode
 		return nil
 	})
 }

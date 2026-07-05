@@ -16,35 +16,37 @@ import (
 
 var commonTimeout = 10 * time.Second
 
-var NeedContentLength = func(url string) bool {
-	switch Which(url) {
-	case TypeOBS, TypeAliyunOSS:
-		return false
-	case TypeBlob, TypeAmazonS3, TypeMinIO, TypeUnknown:
-		return true
-	default:
-		return true
+var (
+	NeedContentLength = func(ctx context.Context, url string) bool {
+		switch Which(ctx, url) {
+		case TypeOBS, TypeAliyunOSS:
+			return false
+		case TypeBlob, TypeAmazonS3, TypeMinIO, TypeUnknown:
+			return true
+		default:
+			return true
+		}
 	}
-}
 
-func Which(url string) Type {
-	if IsAzblob(url) {
-		return TypeBlob
+	Which = func(ctx context.Context, url string) Type {
+		if IsAzblob(url) {
+			return TypeBlob
+		}
+		if IsObs(url) {
+			return TypeOBS
+		}
+		if IsAmzS3(url) {
+			return TypeAmazonS3
+		}
+		if IsAliOSS(url) {
+			return TypeAliyunOSS
+		}
+		return whichByHead(ctx, url)
 	}
-	if IsObs(url) {
-		return TypeOBS
-	}
-	if IsAmzS3(url) {
-		return TypeAmazonS3
-	}
-	if IsAliOSS(url) {
-		return TypeAliyunOSS
-	}
-	return whichByHead(url)
-}
+)
 
-func whichByHead(url string) Type {
-	resp, err := httpc.Head(context.Background(), time.Second*5, url)
+func whichByHead(ctx context.Context, url string) Type {
+	resp, err := httpc.HeadTimeout(ctx, time.Second*5, url)
 	if err != nil {
 		return TypeUnknown
 	}
@@ -69,8 +71,8 @@ func whichByHead(url string) Type {
 	}
 }
 
-func IsSupportAppend(url string) bool {
-	switch Which(url) {
+func IsSupportAppend(ctx context.Context, url string) bool {
+	switch Which(ctx, url) {
 	case TypeBlob, TypeOBS, TypeAliyunOSS:
 		return true
 	case TypeAmazonS3, TypeMinIO, TypeUnknown:
@@ -120,9 +122,9 @@ func Sign(req *http.Request, ak string, sk string, region string) error {
 
 func Delete(ctx context.Context, timeout time.Duration, url string, ak string, sk string, region string) error {
 	var (
-		checkStatus []int
-		respStatus  string
-		respBody    = bytes.NewBuffer(nil)
+		checkStatus    []int
+		respStatusCode int
+		respBody       = bytes.NewBuffer(nil)
 	)
 	if IsAzblob(url) {
 		checkStatus = []int{http.StatusAccepted, http.StatusNotFound}
@@ -130,17 +132,16 @@ func Delete(ctx context.Context, timeout time.Duration, url string, ak string, s
 		checkStatus = []int{http.StatusNoContent}
 	}
 
-	_, err := httpc.Delete(ctx, timeout, url,
+	_, err := httpc.DeleteTimeout(ctx, timeout, url,
 		httpc.ReqOptionFunc(func(req *http.Request) error {
 			return Sign(req, ak, sk, region)
 		}),
-		httpc.ToStatus(&respStatus),
-		httpc.ToBytesBuffer(respBody),
-		httpc.CheckStatusCode(checkStatus...),
+		httpc.CheckStatusCode(respBody, &respStatusCode, checkStatus...),
+		httpc.ToWriter(respBody, nil),
 	)
 
 	if err != nil {
-		return errs.Wrapf(err, "http delete failed, respStatus: %s, respBody: %s", respStatus, respBody.String())
+		return errs.Wrapf(err, "http delete failed, resp status code: %d, resp body: %s", respStatusCode, respBody.String())
 	}
 
 	return nil
@@ -148,21 +149,20 @@ func Delete(ctx context.Context, timeout time.Duration, url string, ak string, s
 
 func Head(ctx context.Context, timeout time.Duration, url string, ak string, sk string, region string) (*http.Response, error) {
 	var (
-		respStatus string
-		respBody   = bytes.NewBuffer(nil)
+		respStatusCode int
+		respBody       = bytes.NewBuffer(nil)
 	)
 
-	resp, err := httpc.Head(ctx, timeout, url,
+	resp, err := httpc.HeadTimeout(ctx, timeout, url,
 		httpc.ReqOptionFunc(func(req *http.Request) error {
 			return Sign(req, ak, sk, region)
 		}),
-		httpc.CheckStatusCode(http.StatusOK),
-		httpc.ToStatus(&respStatus),
-		httpc.ToBytesBuffer(respBody),
+		httpc.CheckStatusCode(respBody, &respStatusCode, http.StatusOK),
+		httpc.ToWriter(respBody, nil),
 	)
 
 	if err != nil {
-		return nil, errs.Wrapf(err, "http head failed, respStatus: %s, respBody: %s", respStatus, respBody.String())
+		return nil, errs.Wrapf(err, "http head failed, resp status code: %d, respBody: %s", respStatusCode, respBody.String())
 	}
 
 	return resp, nil
@@ -204,38 +204,36 @@ type blobProperties struct {
 
 func List(ctx context.Context, timeout time.Duration, url string, ak string, sk string, region string) (ListBucketResult, error) {
 	var (
-		respStatus string
-		respBody   = bytes.NewBuffer(nil)
-		result     ListBucketResult
-		azResult   listBlobResult
+		respStatusCode int
+		respBody       = bytes.NewBuffer(nil)
+		result         ListBucketResult
+		azResult       listBlobResult
 	)
 
-	_, err := httpc.Get(ctx, timeout, url,
+	_, err := httpc.GetTimeout(ctx, timeout, url,
 		httpc.ReqOptionFunc(func(r *http.Request) error {
 			return Sign(r, ak, sk, region)
 		}),
-		httpc.CheckStatusCode(http.StatusOK),
-		httpc.ToStatus(&respStatus),
-		httpc.ToBytesBuffer(respBody),
+		httpc.CheckStatusCode(respBody, &respStatusCode, http.StatusOK),
+		httpc.ToWriter(respBody, nil),
 	)
 
 	if err != nil {
-		return result, errs.Wrapf(err, "http get failed, respStatus: %s, respBody: %s", respStatus, respBody.String())
+		return result, errs.Wrapf(err, "http get failed, resp status code: %d, resp body: %s", respStatusCode, respBody.String())
 	}
 
 	if !IsAzblob(url) {
 		err = xml.Unmarshal(respBody.Bytes(), &result)
 		if err != nil {
-			return result, errs.Wrapf(err, "parse resp to result failed, respStatus: %s, respBody: %s", respStatus, respBody.String())
+			return result, errs.Wrapf(err, "parse resp to result failed, resp body: %s", respBody.String())
 		}
 
 		return result, nil
-
 	}
 
 	err = xml.Unmarshal(respBody.Bytes(), &azResult)
 	if err != nil {
-		return result, errs.Wrapf(err, "parse resp to result failed, respStatus: %s, respBody: %s", respStatus, respBody.String())
+		return result, errs.Wrapf(err, "parse resp to result failed, resp body: %s", respBody.String())
 	}
 	result.Name = azResult.ContainerName
 	result.Prefix = azResult.Prefix

@@ -9,7 +9,7 @@ import (
 )
 
 func TestReader(t *testing.T) {
-	r := NewReader(nil, testCfg())
+	r := NewReader(t.Context(), testCfg())
 
 	fp := "/tmp/test.file1"
 	os.Remove(fp)

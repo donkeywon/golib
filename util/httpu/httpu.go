@@ -55,13 +55,13 @@ type Encoder interface {
 	Encode(v any) error
 }
 
-type NewEncoder func(w io.Writer) Encoder
+type EncoderCreator func(w io.Writer) Encoder
 
 type Decoder interface {
 	Decode(v any) error
 }
 
-type NewDecoder func(r io.Reader) Decoder
+type DecoderCreator func(r io.Reader) Decoder
 
 func RespBytes(w http.ResponseWriter, statusCode int, bs []byte, headersKV ...string) {
 	setHeaders(w, headersKV...)
@@ -93,7 +93,7 @@ func RespYAML(w http.ResponseWriter, statusCode int, data any, headersKV ...stri
 	RespEncoder(w, statusCode, data, MIMEYAML, func(w io.Writer) Encoder { return yamls.NewEncoder(w) }, headersKV...)
 }
 
-func RespEncoder(w http.ResponseWriter, statusCode int, data any, mime string, newEncoder NewEncoder, headersKV ...string) {
+func RespEncoder(w http.ResponseWriter, statusCode int, data any, mime string, newEncoder EncoderCreator, headersKV ...string) {
 	setContentTypeHeader(w, mime)
 	if data == nil {
 		RespBytes(w, statusCode, nil, headersKV...)

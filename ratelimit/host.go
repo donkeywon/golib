@@ -10,7 +10,6 @@ import (
 	"github.com/donkeywon/golib/errs"
 	"github.com/donkeywon/golib/logs"
 	"github.com/donkeywon/golib/plugin"
-	"github.com/donkeywon/golib/util/cloud"
 	"github.com/donkeywon/golib/util/eth"
 	"github.com/donkeywon/golib/util/v"
 	"github.com/shirou/gopsutil/v4/net"
@@ -44,8 +43,8 @@ type HostRateLimiter struct {
 	rxRL *rate.Limiter
 	txRL *rate.Limiter
 
-	selfRxPass      uint64
-	selfTxPass      uint64
+	selfRxPass      atomic.Uint64
+	selfTxPass      atomic.Uint64
 	selfLastRxPass  uint64
 	selfLastTxPass  uint64
 	selfRxSpeedMBps float64
@@ -77,21 +76,9 @@ func (h *HostRateLimiter) Init(ctx context.Context) error {
 	h.l = logs.FromCtx(ctx)
 
 	h.l.Info("use nic", "nic", h.cfg.Nic)
-	nicSpeedMbps, err := eth.GetNicSpeed(h.cfg.Nic)
+	nicSpeedMbps, err := eth.GetNicSpeed(ctx, h.cfg.Nic)
 	if err != nil {
-		h.l.Error("get nic speed failed", "err", err)
-		h.l.Info("try get nic speed on cloud")
-
-		cloudType := cloud.Which()
-		if cloudType == cloud.TypeUnknown {
-			return errs.Errorf("unknown cloud type")
-		}
-
-		h.l.Info("host on cloud", "type", cloudType)
-		nicSpeedMbps, err = cloud.GetNicSpeed()
-		if err != nil {
-			return errs.Wrapf(err, "get cloud(%s) network nic speed failed", cloudType)
-		}
+		return errs.Wrapf(err, "get nic speed failed: %s", h.cfg.Nic)
 	}
 
 	if nicSpeedMbps <= 0 {
@@ -135,7 +122,7 @@ func (h *HostRateLimiter) RxWaitN(ctx context.Context, n int, timeout time.Durat
 	}
 	err := h.rxRL.WaitN(ctx, n)
 	if err == nil {
-		atomic.AddUint64(&h.selfRxPass, uint64(n))
+		h.selfRxPass.Add(uint64(n))
 	}
 	return err
 }
@@ -151,7 +138,7 @@ func (h *HostRateLimiter) TxWaitN(ctx context.Context, n int, timeout time.Durat
 	}
 	err := h.txRL.WaitN(ctx, n)
 	if err == nil {
-		atomic.AddUint64(&h.selfTxPass, uint64(n))
+		h.selfTxPass.Add(uint64(n))
 	}
 	return err
 }
@@ -193,8 +180,8 @@ func (h *HostRateLimiter) monitor() {
 }
 
 func (h *HostRateLimiter) monitorSelfSpeed() {
-	rxPass := atomic.LoadUint64(&h.selfRxPass)
-	txPass := atomic.LoadUint64(&h.selfTxPass)
+	rxPass := h.selfRxPass.Load()
+	txPass := h.selfTxPass.Load()
 	h.selfRxSpeedMBps = float64(rxPass-h.selfLastRxPass) / 1048576 / float64(h.cfg.MonitorInterval)
 	h.selfTxSpeedMBps = float64(txPass-h.selfLastTxPass) / 1048576 / float64(h.cfg.MonitorInterval)
 	h.selfLastRxPass = rxPass

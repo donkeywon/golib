@@ -16,11 +16,11 @@ import (
 func TestGet(t *testing.T) {
 	respBody := bytes.NewBuffer(nil)
 	reqBody := []byte("abc")
-	_, err := Get(context.Background(), time.Second, "http://127.0.0.1:8085/get",
+	_, err := GetTimeout(context.Background(), time.Second, "http://127.0.0.1:8085/get",
 		WithHeaders("test-header", "test-value"),
 		WithBody(reqBody),
-		CheckStatusCode(http.StatusOK),
-		ToBytesBuffer(respBody),
+		CheckStatusCode(respBody, nil, http.StatusOK),
+		ToWriter(respBody, nil),
 	)
 
 	require.NoError(t, err)
@@ -38,11 +38,11 @@ func TestPostJSON(t *testing.T) {
 		FieldA: "abc",
 		FieldB: 123,
 	}
-	_, err := Post(context.Background(), time.Second, "http://127.0.0.1:8085/post",
+	_, err := PostTimeout(context.Background(), time.Second, "http://127.0.0.1:8085/post",
 		WithHeaders("test-header", "test-value"),
 		WithBodyJSON(reqBody),
-		CheckStatusCode(http.StatusOK),
-		ToBytesBuffer(respBody),
+		CheckStatusCode(respBody, nil, http.StatusOK),
+		ToWriter(respBody, nil),
 	)
 
 	require.NoError(t, err)
@@ -66,7 +66,7 @@ func BenchmarkHttpc(b *testing.B) {
 	buf := bytes.NewBuffer(make([]byte, 64))
 	for range b.N {
 		buf.Reset()
-		Post(context.Background(), time.Second, s.URL, WithBody(body), WithHeaders("test", "value"), CheckStatusCode(200), ToWriter(nil, buf))
+		PostTimeout(context.Background(), time.Second, s.URL, WithBody(body), WithHeaders("test", "value"), CheckStatusCode(buf, nil, http.StatusOK), ToWriter(buf, nil))
 	}
 }
 

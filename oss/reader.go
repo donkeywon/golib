@@ -3,10 +3,9 @@ package oss
 import (
 	"context"
 	"net/http"
-	"time"
 
-	"github.com/donkeywon/golib/util/httpc"
 	"github.com/donkeywon/golib/httpio"
+	"github.com/donkeywon/golib/util/httpc"
 	"github.com/donkeywon/golib/util/oss"
 )
 
@@ -27,10 +26,10 @@ func NewReader(ctx context.Context, cfg *Cfg, opts ...httpc.Option) *Reader {
 	allHttpcOptions = append(allHttpcOptions, opts...)
 
 	r.Reader = httpio.NewReader(ctx,
-		time.Second*time.Duration(cfg.Timeout),
 		cfg.URL,
 		httpio.Offset(cfg.Offset),
 		httpio.Retry(cfg.Retry),
+		httpio.WithResponseHeaderTimeout(cfg.Timeout),
 		httpio.WithHTTPOptions(allHttpcOptions...),
 	)
 	return r

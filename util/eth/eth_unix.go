@@ -3,17 +3,20 @@
 package eth
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"os"
 	"strconv"
 	"strings"
-
-	"github.com/donkeywon/golib/errs"
 )
 
-// GetNicSpeed
-// get nic speed in Mbps.
-func GetNicSpeed(nic string) (int, error) {
+var (
+	ErrNegativeNicSpeed = errors.New("negative nic speed")
+)
+
+// GetNicSpeed in Mbps.
+func GetNicSpeed(ctx context.Context, nic string) (int, error) {
 	bs, err := os.ReadFile(fmt.Sprintf("/sys/class/net/%s/speed", nic))
 	if err != nil {
 		return 0, err
@@ -25,7 +28,7 @@ func GetNicSpeed(nic string) (int, error) {
 	}
 
 	if speed < 0 {
-		return speed, errs.New("nic speed is smaller than 0")
+		return speed, ErrNegativeNicSpeed
 	}
 
 	return speed, nil

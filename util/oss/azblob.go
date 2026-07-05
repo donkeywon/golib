@@ -22,19 +22,18 @@ var azblobURLSuffix = "core.windows.net"
 
 func CreateAppendBlob(ctx context.Context, url string, ak string, sk string) error {
 	var (
-		respBody   = bytes.NewBuffer(nil)
-		respStatus string
+		respBody       = bytes.NewBuffer(nil)
+		respStatusCode int
 	)
-	_, err := httpc.Put(ctx, commonTimeout, url,
+	_, err := httpc.PutTimeout(ctx, commonTimeout, url,
 		httpc.WithHeaders(HeaderXmsBlobType, "AppendBlob"),
 		azblobSignOption(ak, sk),
-		httpc.ToStatus(&respStatus),
-		httpc.ToBytesBuffer(respBody),
-		httpc.CheckStatusCode(http.StatusCreated),
+		httpc.CheckStatusCode(respBody, &respStatusCode, http.StatusCreated),
+		httpc.ToWriter(respBody, nil),
 	)
 
 	if err != nil {
-		return errs.Wrapf(err, "failed to request create append blob, respStatus: %s, respBody: %s", respStatus, respBody.String())
+		return errs.Wrapf(err, "failed to request create append blob, resp status code: %d, resp body: %s", respStatusCode, respBody.String())
 	}
 
 	return nil
@@ -42,18 +41,17 @@ func CreateAppendBlob(ctx context.Context, url string, ak string, sk string) err
 
 func SealAppendBlob(ctx context.Context, url string, ak string, sk string) error {
 	var (
-		respBody   = bytes.NewBuffer(nil)
-		respStatus string
+		respBody       = bytes.NewBuffer(nil)
+		respStatusCode int
 	)
 	url += "?comp=seal"
-	_, err := httpc.Put(ctx, commonTimeout, url,
+	_, err := httpc.PutTimeout(ctx, commonTimeout, url,
 		azblobSignOption(ak, sk),
-		httpc.ToStatus(&respStatus),
-		httpc.ToBytesBuffer(respBody),
-		httpc.CheckStatusCode(http.StatusOK),
+		httpc.CheckStatusCode(respBody, &respStatusCode, http.StatusOK),
+		httpc.ToWriter(respBody, nil),
 	)
 	if err != nil {
-		return errs.Wrapf(err, "failed to request seal append blob, respStatus: %s, respBody: %s", respStatus, respBody.String())
+		return errs.Wrapf(err, "failed to request seal append blob, resp status code: %d, resp body: %s", respStatusCode, respBody.String())
 	}
 
 	return nil
@@ -204,7 +202,10 @@ func azblobBuildCanonicalizedResource(u *url.URL, accountName string) (string, e
 
 			// Join the sorted key values separated by ','
 			// Then prepend "keyName:"; then add this string to the buffer
-			cr.WriteString("\n" + strings.ToLower(paramName) + ":" + strings.Join(paramValues, ","))
+			cr.WriteByte('\n')
+			cr.WriteString(strings.ToLower(paramName))
+			cr.WriteByte(':')
+			cr.WriteString(strings.Join(paramValues, ","))
 		}
 	}
 	return cr.String(), nil

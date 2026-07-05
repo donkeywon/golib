@@ -96,26 +96,25 @@ func (c *CmdStep) Start(ctx context.Context) error {
 	)
 	if c.cfg.DumpStdout {
 		stdoutBuf = bytes.NewBuffer(nil)
-		opts = append(opts, func(cmd *exec.Cmd) {
-			cmd.Stdout = stdoutBuf
-		})
+		opts = append(opts, cmds.DumpStdout(stdoutBuf))
 	}
 	if c.cfg.DumpStderr {
 		stderrBuf = bytes.NewBuffer(nil)
-		opts = append(opts, func(cmd *exec.Cmd) {
-			cmd.Stderr = stderrBuf
-		})
+		opts = append(opts, cmds.DumpStderr(stderrBuf))
 	}
 
 	opts = append(opts, c.options...)
-
-	cmd, err := cmds.Run(ctx, c.cfg.Name, c.cfg.Args, opts...)
+	cmd := exec.CommandContext(ctx, c.cfg.Name, c.cfg.Args...)
+	cmds.WithOptions(cmd, opts...)
+	err = cmd.Run()
 	isSignaled, isCoreDump, sig := cmds.IsSignaled(err)
 	exitCode := cmd.ProcessState.ExitCode()
 	if err == nil {
 		l.Info("cmd done", "exit_code", exitCode, "is_signaled", isSignaled, "is_coredump", isCoreDump, "signal", sig)
 	} else {
-		if isSignaled {
+		if errors.Is(err, errCanceled) {
+			l.Warn("cmd canceled", "exit_code", exitCode, "is_signaled", isSignaled, "is_coredump", isCoreDump, "signal", sig)
+		} else if isSignaled {
 			l.Warn("cmd signaled", "exit_code", exitCode, "is_signaled", isSignaled, "is_coredump", isCoreDump, "signal", sig)
 		} else {
 			l.Error("cmd failed", "exit_code", exitCode, "is_signaled", isSignaled, "is_coredump", isCoreDump, "signal", sig)

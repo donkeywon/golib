@@ -1,24 +1,37 @@
 package eth
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"fmt"
+	"os/exec"
 	"strconv"
 	"strings"
 
 	"github.com/donkeywon/golib/errs"
-	"github.com/donkeywon/golib/cmd"
 )
 
 // GetNicSpeed
 // get nic speed in Mbps.
-func GetNicSpeed(nic string) (int, error) {
-	result := cmd.Exec(context.Background(), "powershell", "-Command", fmt.Sprintf(`[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; Get-NetAdapter | Where-Object { $_.Name -eq "%s" } | ForEach-Object { "$($_.Name)|$($_.LinkSpeed)" }`, nic))
-	if result.Err() != nil {
-		return 0, errs.Wrap(result.Err(), "exec Get-NetAdapter failed")
+func GetNicSpeed(ctx context.Context, nic string) (int, error) {
+	c := exec.CommandContext(ctx, "powershell", "-Command", fmt.Sprintf(`[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; Get-NetAdapter | Where-Object { $_.Name -eq "%s" } | ForEach-Object { "$($_.Name)|$($_.LinkSpeed)" }`, nic))
+
+	stdoutBuf := bytes.NewBuffer(nil)
+	c.Stdout = stdoutBuf
+
+	err := c.Run()
+	if err != nil {
+		return 0, errs.Wrap(err, "exec Get-NetAdapter failed")
 	}
-	for _, line := range result.StdoutLines() {
-		if !strings.HasPrefix(line, nic) {
+
+	stdout := stdoutBuf.String()
+
+	scanner := bufio.NewScanner(strings.NewReader(stdout))
+	nicPrefix := nic + "|"
+	for scanner.Scan() {
+		line := scanner.Text()
+		if !strings.HasPrefix(line, nicPrefix) {
 			continue
 		}
 		if !strings.HasSuffix(line, "bps") {
@@ -51,5 +64,9 @@ func GetNicSpeed(nic string) (int, error) {
 		}
 	}
 
-	return 0, errs.Errorf("nic speed not found in Get-NetAdapter output: %s", result.String())
+	if scanner.Err() != nil {
+		return 0, errs.Wrap(scanner.Err(), "scan Get-NetAdapter stdout failed")
+	}
+
+	return 0, errs.Errorf("nic speed not found in Get-NetAdapter stdout: %s", stdout)
 }

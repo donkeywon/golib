@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"sync"
 	"time"
@@ -20,6 +21,10 @@ var (
 	ErrRangeUnsupported = errors.New("range unsupported")
 )
 
+const (
+	defaultResponseHeaderTimeout = time.Second * 15
+)
+
 type respBodyReader struct {
 	io.ReadCloser
 	r *Reader
@@ -32,8 +37,9 @@ func (r *respBodyReader) Read(p []byte) (n int, err error) {
 }
 
 type Reader struct {
-	url     string
-	timeout time.Duration
+	url string
+
+	c *http.Client
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -51,15 +57,14 @@ type Reader struct {
 	opt *option
 }
 
-func NewReader(ctx context.Context, timeout time.Duration, url string, opts ...Option) *Reader {
+func NewReader(ctx context.Context, url string, opts ...Option) *Reader {
 	if ctx == nil {
 		panic("nil context")
 	}
 
 	r := &Reader{
-		url:     url,
-		timeout: timeout,
-		opt:     newOption(),
+		url: url,
+		opt: newOption(),
 	}
 
 	for _, o := range opts {
@@ -73,7 +78,35 @@ func NewReader(ctx context.Context, timeout time.Duration, url string, opts ...O
 		r.end = r.opt.offset + r.opt.limit
 	}
 
+	if r.c == nil {
+		trans := &http.Transport{
+			Proxy: http.ProxyFromEnvironment,
+			DialContext: defaultTransportDialContext(&net.Dialer{
+				Timeout:   30 * time.Second,
+				KeepAlive: 30 * time.Second,
+			}),
+			ForceAttemptHTTP2:     true,
+			MaxIdleConns:          1,
+			MaxIdleConnsPerHost:   1,
+			MaxConnsPerHost:       1,
+			ResponseHeaderTimeout: defaultResponseHeaderTimeout,
+			IdleConnTimeout:       90 * time.Second,
+			TLSHandshakeTimeout:   10 * time.Second,
+			ExpectContinueTimeout: 1 * time.Second,
+		}
+		if r.opt.responseHeaderTimeout > 0 {
+			trans.ResponseHeaderTimeout = r.opt.responseHeaderTimeout
+		}
+		r.c = &http.Client{
+			Transport: trans,
+		}
+	}
+
 	return r
+}
+
+func defaultTransportDialContext(dialer *net.Dialer) func(context.Context, string, string) (net.Conn, error) {
+	return dialer.DialContext
 }
 
 func (r *Reader) Read(p []byte) (int, error) {
@@ -164,7 +197,7 @@ func (r *Reader) WriteTo(w io.Writer) (int64, error) {
 	}
 
 	if !r.supportRange {
-		_, err = r.get(httpc.ToWriter(&nw, w))
+		_, err = r.get(httpc.ToWriter(w, &nw))
 		return nw, err
 	}
 
@@ -186,7 +219,7 @@ func (r *Reader) retryHead() error {
 }
 
 func (r *Reader) head() error {
-	resp, err := httpc.Head(r.ctx, r.timeout, r.url, append(r.opt.httpOptions, httpc.CheckStatusCode(http.StatusOK))...)
+	resp, err := httpc.DoWithClient(r.ctx, http.MethodHead, r.url, r.c, append(r.opt.httpOptions, httpc.CheckStatusCode(nil, nil, http.StatusOK))...)
 	if err != nil {
 		return errs.Wrap(err, "head failed")
 	}
@@ -296,11 +329,11 @@ func (r *Reader) getPart(offset int64, n int64, opts ...httpc.Option) (*http.Res
 	ranges := fmt.Sprintf("bytes=%d-%d", offset, end)
 
 	allOpts := make([]httpc.Option, 0, len(r.opt.httpOptions)+len(opts)+2)
-	allOpts = append(allOpts, httpc.WithHeaders("Range", ranges), httpc.CheckStatusCode(http.StatusOK, http.StatusPartialContent))
+	allOpts = append(allOpts, httpc.WithHeaders("Range", ranges), httpc.CheckStatusCode(nil, nil, http.StatusOK, http.StatusPartialContent))
 	allOpts = append(allOpts, opts...)
 	allOpts = append(allOpts, r.opt.httpOptions...)
 
-	return httpc.Get(r.ctx, 0, r.url, allOpts...)
+	return httpc.DoWithClient(r.ctx, http.MethodGet, r.url, r.c, allOpts...)
 }
 
 func (r *Reader) retryGetNoRange() (*respBodyReader, error) {
@@ -326,10 +359,10 @@ func (r *Reader) retryGetNoRange() (*respBodyReader, error) {
 
 func (r *Reader) get(opts ...httpc.Option) (*http.Response, error) {
 	allOpts := make([]httpc.Option, 0, len(r.opt.httpOptions)+len(opts)+1)
-	allOpts = append(allOpts, httpc.CheckStatusCode(http.StatusOK))
+	allOpts = append(allOpts, httpc.CheckStatusCode(nil, nil, http.StatusOK))
 	allOpts = append(allOpts, opts...)
 	allOpts = append(allOpts, r.opt.httpOptions...)
-	return httpc.Get(r.ctx, 0, r.url, allOpts...)
+	return httpc.DoWithClient(r.ctx, http.MethodGet, r.url, r.c, allOpts...)
 }
 
 // Offset is current offset of read.

@@ -1,11 +1,12 @@
 package cmds
 
 import (
-	"bytes"
 	"context"
 	"errors"
+	"io"
 	"os"
 	"os/exec"
+	"strings"
 	"syscall"
 	"time"
 
@@ -18,25 +19,13 @@ const (
 
 type Option func(cmd *exec.Cmd)
 
-func Start(ctx context.Context, name string, args []string, opts ...Option) (*exec.Cmd, error) {
-	return execCmd(ctx, name, args, func(c *exec.Cmd) error { return c.Start() }, opts...)
-}
-
-func Run(ctx context.Context, name string, args []string, opts ...Option) (*exec.Cmd, error) {
-	return execCmd(ctx, name, args, func(c *exec.Cmd) error { return c.Run() }, opts...)
-}
-
-func execCmd(ctx context.Context, name string, args []string, f func(*exec.Cmd) error, opts ...Option) (*exec.Cmd, error) {
-	if ctx == nil {
-		panic("nil context")
-	}
-
-	c := exec.CommandContext(ctx, name, args...)
+func WithOptions(c *exec.Cmd, opts ...Option) {
 	for _, opt := range opts {
+		if opt == nil {
+			continue
+		}
 		opt(c)
 	}
-
-	return c, f(c)
 }
 
 func WorkingDir(dir string) Option {
@@ -53,13 +42,14 @@ func EnvMap(m map[string]string) Option {
 		if cmd.Env == nil {
 			cmd.Env = make([]string, 0, len(m))
 		}
-		buf := bytes.NewBuffer(nil)
+		var sb strings.Builder
 		for k, v := range m {
-			buf.WriteString(k)
-			buf.WriteByte('=')
-			buf.WriteString(v)
-			cmd.Env = append(cmd.Env, buf.String())
-			buf.Reset()
+			sb.Grow(len(k) + 1 + len(v))
+			sb.WriteString(k)
+			sb.WriteByte('=')
+			sb.WriteString(v)
+			cmd.Env = append(cmd.Env, sb.String())
+			sb.Reset()
 		}
 	}
 }
@@ -76,13 +66,14 @@ func EnvKVs(kvs ...string) Option {
 			cmd.Env = make([]string, 0, len(kvs)/2)
 		}
 
-		buf := bytes.NewBuffer(nil)
+		var sb strings.Builder
 		for i := 0; i < len(kvs); i += 2 {
-			buf.WriteString(kvs[i])
-			buf.WriteByte('=')
-			buf.WriteString(kvs[i+1])
-			cmd.Env = append(cmd.Env, buf.String())
-			buf.Reset()
+			sb.Grow(len(kvs[i]) + 1 + len(kvs[i+1]))
+			sb.WriteString(kvs[i])
+			sb.WriteByte('=')
+			sb.WriteString(kvs[i+1])
+			cmd.Env = append(cmd.Env, sb.String())
+			sb.Reset()
 		}
 	}
 }
@@ -98,7 +89,7 @@ func GracefulStop(waitDurationBetweenSignals time.Duration, signals ...os.Signal
 		waitDurationBetweenSignals = defaultWaitInterval
 	}
 	if len(signals) == 0 {
-		signals = []os.Signal{syscall.SIGKILL}
+		return nil
 	}
 
 	return func(cmd *exec.Cmd) {
@@ -116,6 +107,28 @@ func GracefulStop(waitDurationBetweenSignals time.Duration, signals ...os.Signal
 
 			return cmd.Process.Kill()
 		}
+	}
+}
+
+func DumpStdout(w io.Writer) Option {
+	return func(cmd *exec.Cmd) {
+		if cmd.Stdout == nil {
+			cmd.Stdout = w
+			return
+		}
+
+		cmd.Stdout = io.MultiWriter(cmd.Stdout, w)
+	}
+}
+
+func DumpStderr(w io.Writer) Option {
+	return func(cmd *exec.Cmd) {
+		if cmd.Stderr == nil {
+			cmd.Stderr = w
+			return
+		}
+
+		cmd.Stderr = io.MultiWriter(cmd.Stderr, w)
 	}
 }
 

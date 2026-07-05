@@ -11,7 +11,6 @@ import (
 	"strconv"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/donkeywon/golib/util/httpu"
 	"github.com/stretchr/testify/require"
@@ -90,7 +89,7 @@ func TestNoRangeRead(t *testing.T) {
 }
 
 func testRead(t *testing.T, s *httptest.Server) {
-	r := NewReader(context.TODO(), time.Second, s.URL)
+	r := NewReader(context.TODO(), s.URL)
 	defer r.Close()
 	bs := make([]byte, 4)
 	nr, err := r.Read(bs)
@@ -110,7 +109,7 @@ func TestNoRangeWriteTo(t *testing.T) {
 }
 
 func testWriteTo(t *testing.T, s *httptest.Server) {
-	r := NewReader(context.TODO(), time.Second, s.URL)
+	r := NewReader(context.TODO(), s.URL)
 	defer r.Close()
 	buf := bytes.NewBuffer(nil)
 	nr, err := io.Copy(buf, r)
