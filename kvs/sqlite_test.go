@@ -57,7 +57,7 @@ func TestNewSQLiteKVSCfg(t *testing.T) {
 // TestSetDefaults_ZeroValues covers both if-body branches:
 // Table=="" → defaultTable, PoolSize==0 → defaultPoolSize.
 func TestSetDefaults_ZeroValues(t *testing.T) {
-	cfg := &SQLiteKVSCfg{Path: "/tmp/x.db"} // Table="", PoolSize=0
+	cfg := SQLiteKVSCfg{Path: "/tmp/x.db"} // Table="", PoolSize=0
 	NewSQLiteKVS(cfg)
 	assert.Equal(t, defaultTable, cfg.Table)
 	assert.Equal(t, defaultPoolSize, cfg.PoolSize)
@@ -66,7 +66,7 @@ func TestSetDefaults_ZeroValues(t *testing.T) {
 // TestSetDefaults_AlreadySet covers both if-condition-false branches:
 // when Table and PoolSize are already non-zero the assignments are skipped.
 func TestSetDefaults_AlreadySet(t *testing.T) {
-	cfg := &SQLiteKVSCfg{Path: "/tmp/x.db", Table: "custom", PoolSize: 8}
+	cfg := SQLiteKVSCfg{Path: "/tmp/x.db", Table: "custom", PoolSize: 8}
 	NewSQLiteKVS(cfg)
 	assert.Equal(t, "custom", cfg.Table)
 	assert.Equal(t, 8, cfg.PoolSize)

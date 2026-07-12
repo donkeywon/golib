@@ -44,13 +44,13 @@ type DBModel struct {
 }
 
 type SQLiteKVSCfg struct {
-	Path     string `json:"path"     yaml:"path"     validate:"required"`
-	Table    string `json:"table"    yaml:"table"`
-	PoolSize int    `json:"poolSize" yaml:"poolSize"`
+	Path     string `json:"path"      yaml:"path"     validate:"required"`
+	Table    string `json:"table"     yaml:"table"`
+	PoolSize int    `json:"pool_size" yaml:"poolSize"`
 }
 
-func NewSQLiteKVSCfg() *SQLiteKVSCfg {
-	return &SQLiteKVSCfg{
+func NewSQLiteKVSCfg() SQLiteKVSCfg {
+	return SQLiteKVSCfg{
 		Table:    defaultTable,
 		PoolSize: defaultPoolSize,
 	}
@@ -66,7 +66,7 @@ func (c *SQLiteKVSCfg) setDefaults() {
 }
 
 type SQLiteKVS struct {
-	cfg *SQLiteKVSCfg
+	cfg SQLiteKVSCfg
 
 	pool *sqlitex.Pool
 
@@ -79,7 +79,7 @@ type SQLiteKVS struct {
 	sqlCleanOutdated   string
 }
 
-func NewSQLiteKVS(cfg *SQLiteKVSCfg) *SQLiteKVS {
+func NewSQLiteKVS(cfg SQLiteKVSCfg) *SQLiteKVS {
 	cfg.setDefaults()
 	return &SQLiteKVS{
 		cfg: cfg,
