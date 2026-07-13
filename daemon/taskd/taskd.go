@@ -519,7 +519,7 @@ func (td *taskd) removeTaskIfPaused(taskID string) (*task.Task, string) {
 	defer td.mu.Unlock()
 
 	e, exists := td.taskInfoMap[taskID]
-	if !exists || e.state != TaskStatePaused {
+	if !exists || TaskState(e.state.Load()) != TaskStatePaused {
 		return nil, ""
 	}
 	t := e.task
@@ -532,11 +532,13 @@ func (td *taskd) restorePaused(t *task.Task, pool string) {
 	td.mu.Lock()
 	defer td.mu.Unlock()
 
-	td.taskInfoMap[t.Cfg().ID] = &taskInfo{
-		task:  t,
-		state: TaskStatePaused,
-		pool:  pool,
+	info := &taskInfo{
+		task: t,
+		pool: pool,
 	}
+	info.state.Store(uint32(TaskStatePaused))
+
+	td.taskInfoMap[t.Cfg().ID] = info
 }
 
 func (td *taskd) getTask(taskID string) *task.Task {
@@ -565,22 +567,27 @@ func (td *taskd) listIDsByState(state TaskState) []string {
 
 func (td *taskd) hookTask(t *task.Task, err error, hooks []Hook, hookType string, extra *HookExtraData) {
 	for i, h := range hooks {
-		func(idx int, fn Hook) {
-			defer func() {
-				if p := recover(); p != nil {
-					attrs := []any{
-						"err", errs.PanicToErr(p),
-						"idx", idx,
-						"hook", reflects.GetFuncName(fn),
-						"hook_type", hookType,
-					}
-					if t != nil {
-						attrs = append(attrs, "task_id", t.Cfg().ID)
-					}
-					td.l.Error("panic on hook task", attrs...)
-				}
-			}()
-			fn(t, err, extra)
-		}(i, h)
+		td.hook(t, err, h, i, hookType, extra)
 	}
+}
+
+func (td *taskd) hook(t *task.Task, err error, h Hook, hookIdx int, hookType string, extra *HookExtraData) {
+	defer func() {
+		p := recover()
+		if p == nil {
+			return
+		}
+
+		var taskID string
+		if t != nil {
+			taskID = t.Cfg().ID
+		}
+		td.l.Error("panic on hook task",
+			"task_id", taskID,
+			"err", errs.PanicToErr(p),
+			"idx", hookIdx,
+			"hook", reflects.GetFuncName(h),
+			"hook_type", hookType)
+	}()
+	h(t, err, extra)
 }
