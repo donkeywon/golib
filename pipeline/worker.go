@@ -6,17 +6,19 @@ import (
 	"fmt"
 	"io"
 	"slices"
+	"sync"
 
 	"github.com/donkeywon/golib/errs"
 	"github.com/donkeywon/golib/runner"
-	"github.com/donkeywon/golib/util/reflects"
 )
 
 type Worker interface {
 	runner.Runner
 
-	WriteTo(io.Writer, ...WriterWrapFunc)
-	ReadFrom(io.Reader, ...ReaderWrapFunc)
+	Writer() io.Writer
+	Reader() io.Reader
+	WriteToWriter(io.Writer, ...WriterWrapFunc)
+	ReadFromReader(io.Reader, ...ReaderWrapFunc)
 }
 
 type BaseWorker struct {
@@ -31,8 +33,8 @@ type BaseWorker struct {
 	wwrappers []WriterWrapFunc
 	rwrappers []ReaderWrapFunc
 
-	wcloses []func() error
-	rcloses []func() error
+	forceCloseOnce func() error
+	closeOnce      func() error
 }
 
 func (wk *BaseWorker) Init(ctx context.Context) error {
@@ -42,6 +44,15 @@ func (wk *BaseWorker) Init(ctx context.Context) error {
 
 	wk.wrapWriters()
 	wk.wrapReaders()
+
+	wk.forceCloseOnce = sync.OnceValue(func() error {
+		return errors.Join(closeReaders(wk.rs), closeWriters(wk.ws))
+	})
+	wk.closeOnce = sync.OnceValue(func() error {
+		ws := slices.Clone(wk.ws)
+		slices.Reverse(ws)
+		return errors.Join(closeReaders(wk.rs), closeWriters(ws))
+	})
 
 	return nil
 }
@@ -54,85 +65,117 @@ func (wk *BaseWorker) Stop(ctx context.Context) error {
 	panic("not implemented")
 }
 
-func (wk *BaseWorker) Close() error {
-	return errors.Join(closes(wk.rcloses), closes(wk.wcloses))
+func (wk *BaseWorker) Close(force bool) error {
+	if force {
+		return wk.forceCloseOnce()
+	}
+
+	return wk.closeOnce()
 }
 
-func closes(cs []func() error) error {
-	var allErr []error
-	for _, c := range cs {
-		func(c func() error) {
-			defer func() {
-				p := recover()
-				if p != nil {
-					allErr = append(allErr, errs.PanicToErrWithMsg(p, fmt.Sprintf("panic on close %s", reflects.GetFuncName(c))))
-				}
-			}()
+func closeReader(r io.Reader) (err error) {
+	defer func() {
+		p := recover()
+		if p != nil {
+			err = errs.PanicToErrWithMsg(p, fmt.Sprintf("panic on close reader: %T", r))
+		}
+	}()
 
-			err := c()
-			if err != nil {
-				allErr = append(allErr, errs.Wrapf(err, "failed close %s", reflects.GetFuncName(c)))
-			}
-		}(c)
+	if c, ok := r.(io.Closer); ok {
+		e := c.Close()
+		if e != nil {
+			err = errs.Wrapf(e, "close reader failed: %T", r)
+		}
 	}
-	if len(allErr) == 0 {
-		return nil
-	}
-	if len(allErr) == 1 {
-		return allErr[0]
+	return err
+}
+
+type flusher interface {
+	Flush() error
+}
+
+type flusher2 interface {
+	Flush()
+}
+
+func closeWriters(ws []io.Writer) error {
+	allErr := make([]error, 0, len(ws))
+	for _, w := range ws {
+		err := closeWriter(w)
+		if err != nil {
+			allErr = append(allErr, err)
+		}
 	}
 	return errors.Join(allErr...)
 }
 
+func closeReaders(rs []io.Reader) error {
+	allErr := make([]error, 0, len(rs))
+	for _, r := range rs {
+		err := closeReader(r)
+		if err != nil {
+			allErr = append(allErr, err)
+		}
+	}
+	return errors.Join(allErr...)
+}
+
+func closeWriter(w io.Writer) (err error) {
+	defer func() {
+		p := recover()
+		if p != nil {
+			err = errs.PanicToErrWithMsg(p, fmt.Sprintf("panic on close writer: %T", w))
+		}
+	}()
+
+	switch c := w.(type) {
+	case io.Closer:
+		e := c.Close()
+		if e != nil {
+			err = errs.Wrapf(e, "close writer failed: %T", w)
+		}
+	case flusher:
+		e := c.Flush()
+		if e != nil {
+			err = errs.Wrapf(e, "flush writer failed: %T", w)
+		}
+	case flusher2:
+		c.Flush()
+	}
+
+	return err
+}
+
 func (wk *BaseWorker) wrapWriters() {
 	wk.ws = append(wk.ws, wk.w)
-	wk.appendCloseWriter(wk.w)
 	for _, wrapper := range wk.wwrappers {
 		wk.w = wrapper(wk.w)
 		wk.ws = append(wk.ws, wk.w)
-		wk.appendCloseWriter(wk.w)
 	}
-	slices.Reverse(wk.wcloses)
 }
 
 func (wk *BaseWorker) wrapReaders() {
 	wk.rs = append(wk.rs, wk.r)
-	wk.appendCloseReader(wk.r)
 	for _, wrapper := range wk.rwrappers {
 		wk.r = wrapper(wk.r)
 		wk.rs = append(wk.rs, wk.r)
-		wk.appendCloseReader(wk.r)
 	}
 }
 
-type noerrCloser interface {
-	Close()
+func (wk *BaseWorker) Writer() io.Writer {
+	return wk.w
 }
 
-func (wk *BaseWorker) appendCloseWriter(w io.Writer) {
-	switch c := w.(type) {
-	case io.Closer:
-		wk.wcloses = append(wk.wcloses, c.Close)
-	case noerrCloser:
-		wk.wcloses = append(wk.wcloses, func() error { c.Close(); return nil })
-	}
+func (wk *BaseWorker) Reader() io.Reader {
+	return wk.r
 }
 
-func (wk *BaseWorker) appendCloseReader(r io.Reader) {
-	switch c := r.(type) {
-	case io.Closer:
-		wk.rcloses = append(wk.rcloses, c.Close)
-	case noerrCloser:
-		wk.rcloses = append(wk.rcloses, func() error { c.Close(); return nil })
-	}
-}
-
-func (wk *BaseWorker) WriteTo(w io.Writer, wrappers ...WriterWrapFunc) {
+func (wk *BaseWorker) WriteToWriter(w io.Writer, wrappers ...WriterWrapFunc) {
 	wk.w = w
 	wk.wwrappers = wrappers
 }
 
-func (wk *BaseWorker) ReaderFrom(r io.Reader, wrappers ...ReaderWrapFunc) {
+func (wk *BaseWorker) ReadFromReader(r io.Reader, wrappers ...ReaderWrapFunc) {
 	wk.r = r
 	wk.rwrappers = wrappers
 }
