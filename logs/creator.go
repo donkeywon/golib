@@ -1,7 +1,6 @@
 package logs
 
 import (
-	"errors"
 	"io"
 	"log/slog"
 	"os"
@@ -101,7 +100,7 @@ func buildOutputs(c *RotateLoggerCreator) ([]io.Writer, error) {
 			outputs = append(outputs, os.Stderr)
 		default:
 			if !paths.DirExist(filepath.Dir(fp)) {
-				return nil, errors.New("log dir not exists: " + fp)
+				return nil, errs.New("log dir not exists: " + fp)
 			}
 			tj := &timberjack.Logger{
 				Filename:    fp,

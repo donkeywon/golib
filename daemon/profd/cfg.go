@@ -27,8 +27,8 @@ type Cfg struct {
 	WebAuthUser          string `yaml:"webAuthUser" env:"WEB_AUTH_USER"`
 	WebAuthPwd           string `yaml:"webAuthPwd" env:"WEB_AUTH_PWD"`
 
-	EnableGoPs bool   `yaml:"enableGoPs" env:"ENABLE_GOPS" long:"enable-gops" =description:"enable gops agent"`
-	GoPsAddr   string `yaml:"goPsAddr"   env:"GOPS_ADDR"   long:"gops-addr"   =description:"gops agent listen addr"`
+	EnableGoPs bool   `yaml:"enableGoPs" env:"ENABLE_GOPS" long:"enable-gops" description:"enable gops agent"`
+	GoPsAddr   string `yaml:"goPsAddr"   env:"GOPS_ADDR"   long:"gops-addr"   description:"gops agent listen addr"`
 
 	EnableStatsViz bool `yaml:"enableStatsViz" env:"ENABLE_STATS_VIZ" long:"enable-stats-viz" description:"enable statsviz, need httpd"`
 

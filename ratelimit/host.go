@@ -17,12 +17,12 @@ import (
 )
 
 func init() {
-	plugin.Reg(TypeHost, func() RxTxRateLimiter { return NewHostRateLimiter() }, func() any { return NewHostRateLimiterCfg() })
+	plugin.Reg(TypeHost, func() RxTxRateLimiter { return NewHost() }, func() any { return NewHostCfg() })
 }
 
 const TypeHost Type = "host"
 
-type HostRateLimiterCfg struct {
+type HostCfg struct {
 	Nic             string `json:"nic"              yaml:"nic"               validate:"required"`
 	MonitorInterval int    `json:"monitor_interval" yaml:"monitorInterval"   validate:"required"`
 	MaxPercent      int    `json:"max_percent"      yaml:"maxPercent"        validate:"gte=0,lte=100"`
@@ -30,12 +30,12 @@ type HostRateLimiterCfg struct {
 	MinMBps         int    `json:"min_mbps"         yaml:"minMBps"           validate:"gte=0"`
 }
 
-func NewHostRateLimiterCfg() *HostRateLimiterCfg {
-	return &HostRateLimiterCfg{}
+func NewHostCfg() *HostCfg {
+	return &HostCfg{}
 }
 
-type HostRateLimiter struct {
-	cfg *HostRateLimiterCfg
+type Host struct {
+	cfg *HostCfg
 
 	nicSpeedMBps int
 	maxMBps      int
@@ -57,17 +57,17 @@ type HostRateLimiter struct {
 	closed chan struct{}
 }
 
-func NewHostRateLimiter() *HostRateLimiter {
-	return &HostRateLimiter{
+func NewHost() *Host {
+	return &Host{
 		closed: make(chan struct{}),
 	}
 }
 
-func (h *HostRateLimiter) SetCfg(cfg any) {
-	h.cfg = cfg.(*HostRateLimiterCfg)
+func (h *Host) SetCfg(cfg any) {
+	h.cfg = cfg.(*HostCfg)
 }
 
-func (h *HostRateLimiter) Init(ctx context.Context) error {
+func (h *Host) Init(ctx context.Context) error {
 	err := v.Struct(h.cfg)
 	if err != nil {
 		return err
@@ -102,16 +102,16 @@ func (h *HostRateLimiter) Init(ctx context.Context) error {
 	return nil
 }
 
-func (h *HostRateLimiter) Close() error {
+func (h *Host) Close() error {
 	close(h.closed)
 	return nil
 }
 
-func (h *HostRateLimiter) NicSpeedMBps() int {
+func (h *Host) NicSpeedMBps() int {
 	return h.nicSpeedMBps
 }
 
-func (h *HostRateLimiter) RxWaitN(ctx context.Context, n int, timeout time.Duration) error {
+func (h *Host) RxWaitN(ctx context.Context, n int, timeout time.Duration) error {
 	if ctx == nil {
 		panic("nil context")
 	}
@@ -127,7 +127,7 @@ func (h *HostRateLimiter) RxWaitN(ctx context.Context, n int, timeout time.Durat
 	return err
 }
 
-func (h *HostRateLimiter) TxWaitN(ctx context.Context, n int, timeout time.Duration) error {
+func (h *Host) TxWaitN(ctx context.Context, n int, timeout time.Duration) error {
 	if ctx == nil {
 		panic("nil context")
 	}
@@ -143,7 +143,7 @@ func (h *HostRateLimiter) TxWaitN(ctx context.Context, n int, timeout time.Durat
 	return err
 }
 
-func (h *HostRateLimiter) monitor() {
+func (h *Host) monitor() {
 	interval := time.Duration(h.cfg.MonitorInterval) * time.Second
 	t := time.NewTicker(interval)
 	defer t.Stop()
@@ -179,7 +179,7 @@ func (h *HostRateLimiter) monitor() {
 	}
 }
 
-func (h *HostRateLimiter) monitorSelfSpeed() {
+func (h *Host) monitorSelfSpeed() {
 	rxPass := h.selfRxPass.Load()
 	txPass := h.selfTxPass.Load()
 	h.selfRxSpeedMBps = float64(rxPass-h.selfLastRxPass) / 1048576 / float64(h.cfg.MonitorInterval)
@@ -188,12 +188,12 @@ func (h *HostRateLimiter) monitorSelfSpeed() {
 	h.selfLastTxPass = txPass
 }
 
-func (h *HostRateLimiter) setRxTxLimit(rxL float64, txL float64) {
+func (h *Host) setRxTxLimit(rxL float64, txL float64) {
 	h.rxRL.SetLimit(rate.Limit(rxL * 1048576))
 	h.txRL.SetLimit(rate.Limit(txL * 1048576))
 }
 
-func (h *HostRateLimiter) handleNetDevStats(stat *net.IOCountersStat) {
+func (h *Host) handleNetDevStats(stat *net.IOCountersStat) {
 	curNicRxBytes := stat.BytesRecv
 	curNicTxBytes := stat.BytesSent
 
@@ -218,7 +218,7 @@ func (h *HostRateLimiter) handleNetDevStats(stat *net.IOCountersStat) {
 	}
 	if curNicTxBytes < h.lastNicTxBytes {
 		h.l.Warn("cur tx bytes is small than last tx bytes",
-			"last_nic_rx_bytes", h.lastNicTxBytes, "cur_nic_rx_bytes", curNicTxBytes)
+			"last_nic_tx_bytes", h.lastNicTxBytes, "cur_nic_tx_bytes", curNicTxBytes)
 	} else {
 		txSub = curNicTxBytes - h.lastNicTxBytes
 	}

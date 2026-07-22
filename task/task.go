@@ -257,7 +257,7 @@ func (t *Task) runStep(ctx context.Context, i int, typ step.Type, st step.Step, 
 	defer func() {
 		p := recover()
 		if p != nil {
-			err = errors.Join(err, errs.PanicToErrWithMsg(err, fmt.Sprintf("panic on run %s: %s(%d)", stepMsgName, typ, i)))
+			err = errors.Join(err, errs.PanicToErrWithMsg(p, fmt.Sprintf("panic on run %s: %s(%d)", stepMsgName, typ, i)))
 		}
 	}()
 

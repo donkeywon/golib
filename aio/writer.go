@@ -3,35 +3,37 @@ package aio
 import (
 	"io"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
 type loadOnceError struct {
-	err    error
-	loaded bool
+	err    atomic.Pointer[error]
+	loaded atomic.Bool
 }
 
 func (e *loadOnceError) Has() bool {
-	return e.err != nil
-}
-
-func (e *loadOnceError) Load() error {
-	if e.loaded {
-		return nil
-	}
-	return e.Err()
+	return e.err.Load() != nil
 }
 
 func (e *loadOnceError) Err() error {
-	if e.err == nil {
+	if e.loaded.Load() {
 		return nil
 	}
-	e.loaded = true
-	return e.err
+	return e.Load()
+}
+
+func (e *loadOnceError) Load() error {
+	err := e.err.Load()
+	if err == nil {
+		return nil
+	}
+	e.loaded.Store(true)
+	return *err
 }
 
 func (e *loadOnceError) Store(err error) {
-	e.err = err
+	e.err.Store(&err)
 }
 
 type AsyncWriter struct {
@@ -67,7 +69,7 @@ func NewAsyncWriter(w io.Writer, opts ...Option) *AsyncWriter {
 func (aw *AsyncWriter) Write(p []byte) (n int, err error) {
 	select {
 	case <-aw.closed:
-		return 0, aw.err.Err()
+		return 0, aw.err.Load()
 	default:
 	}
 
@@ -75,7 +77,7 @@ func (aw *AsyncWriter) Write(p []byte) (n int, err error) {
 
 	var nn int
 	for len(p) > 0 {
-		err = aw.err.Err()
+		err = aw.err.Load()
 		if err != nil {
 			return
 		}
@@ -111,7 +113,7 @@ func (aw *AsyncWriter) Close() error {
 
 		close(aw.bufChan)
 
-		err = aw.err.Load()
+		err = aw.err.Err()
 	})
 	return err
 }
@@ -127,7 +129,7 @@ func (aw *AsyncWriter) ReadFrom(r io.Reader) (n int64, err error) {
 
 	select {
 	case <-aw.closed:
-		return 0, aw.err.Err()
+		return 0, aw.err.Load()
 	default:
 	}
 
@@ -135,7 +137,7 @@ func (aw *AsyncWriter) ReadFrom(r io.Reader) (n int64, err error) {
 
 	var nn int
 	for {
-		err = aw.err.Err()
+		err = aw.err.Load()
 		if err != nil {
 			return
 		}
@@ -148,7 +150,7 @@ func (aw *AsyncWriter) ReadFrom(r io.Reader) (n int64, err error) {
 		aw.off += nn
 		n += int64(nn)
 
-		if err == io.EOF || err == nil && aw.off == len(aw.buf) {
+		if err == io.EOF || (err == nil && aw.off == len(aw.buf)) {
 			aw.flushNoLock()
 			aw.mu.Unlock()
 			unlocked = true
@@ -202,7 +204,10 @@ func (aw *AsyncWriter) flushNoLock() {
 	}
 
 	aw.buf = aw.buf[:aw.off]
-	aw.queue <- aw.buf
+	select {
+	case aw.queue <- aw.buf:
+	case <-aw.closed:
+	}
 	aw.buf = nil
 	aw.resetDeadline()
 }

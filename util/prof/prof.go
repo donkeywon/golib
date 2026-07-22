@@ -104,8 +104,12 @@ func Stop() error {
 	if atomic.LoadUint32(&profSwitch) != 1 {
 		return errors.New("not profiling")
 	}
-	stopCh <- struct{}{}
-	<-done
+	select {
+	case stopCh <- struct{}{}:
+		<-done
+	default:
+		return errors.New("already stopping")
+	}
 	return nil
 }
 

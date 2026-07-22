@@ -81,7 +81,7 @@ func RespReader(w http.ResponseWriter, statusCode int, r io.Reader, headersKV ..
 	w.WriteHeader(statusCode)
 	_, err := io.Copy(w, r)
 	if err != nil {
-		panic(err)
+		panic(errs.Wrap(err, "copy reader to http response body failed"))
 	}
 }
 

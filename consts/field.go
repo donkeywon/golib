@@ -18,8 +18,5 @@ const (
 
 	FieldResult = "result"
 
-	FieldFtpCode = "ftpCode"
-	FieldFtpMsg  = "ftpMsg"
-
 	FieldHash = "hash"
 )

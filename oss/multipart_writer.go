@@ -37,7 +37,7 @@ func (e *loadOnceError) Has() bool {
 	return len(e.err) > 0
 }
 
-func (e *loadOnceError) Load() error {
+func (e *loadOnceError) Err() error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
@@ -51,7 +51,7 @@ func (e *loadOnceError) Load() error {
 	return errors.Join(e.err...)
 }
 
-func (e *loadOnceError) Err() error {
+func (e *loadOnceError) Load() error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
@@ -161,7 +161,7 @@ func (w *MultiPartWriter) ReadFrom(r io.Reader) (int64, error) {
 			b     []byte
 		)
 		for {
-			err = w.parallelErrs.Err()
+			err = w.parallelErrs.Load()
 			if err != nil {
 				break
 			}
@@ -271,7 +271,7 @@ func (w *MultiPartWriter) Write(p []byte) (int, error) {
 
 	var b []byte
 	if w.cfg.Parallel > 1 {
-		err = w.parallelErrs.Err()
+		err = w.parallelErrs.Load()
 		if err != nil {
 			return 0, err
 		}
@@ -346,7 +346,7 @@ func (w *MultiPartWriter) Close() error {
 		w.cancel()
 
 		if w.cfg.Parallel > 1 {
-			parallelErr := w.parallelErrs.Load()
+			parallelErr := w.parallelErrs.Err()
 			hasParallelErr := w.parallelErrs.Has()
 			if hasParallelErr || alreadyCancelled {
 				err = errors.Join(err, parallelErr, w.abort())

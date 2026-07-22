@@ -4,13 +4,14 @@ import (
 	"errors"
 	"io"
 	"sync"
+	"sync/atomic"
 
 	"github.com/donkeywon/golib/util/iou"
 )
 
 type AsyncReader struct {
 	r             io.Reader
-	err           error
+	err           atomic.Pointer[error]
 	opt           *option
 	off           int
 	buf           []byte
@@ -38,7 +39,10 @@ func NewAsyncReader(r io.Reader, opts ...Option) *AsyncReader {
 func (ar *AsyncReader) Read(p []byte) (int, error) {
 	select {
 	case <-ar.closed:
-		return 0, ar.err
+		if e := ar.err.Load(); e != nil {
+			return 0, *e
+		}
+		return 0, nil
 	default:
 	}
 
@@ -118,7 +122,10 @@ func (ar *AsyncReader) prepareBuf() error {
 	b, ok := <-ar.queue
 	if !ok {
 		ar.bufChanOnce.Do(func() { close(ar.bufChan) })
-		return ar.err
+		if e := ar.err.Load(); e != nil {
+			return *e
+		}
+		return nil
 	}
 
 	if ar.buf != nil {
@@ -152,7 +159,7 @@ func (ar *AsyncReader) asyncRead() {
 		ar.queue <- b
 
 		if err != nil {
-			ar.err = err
+			ar.err.Store(&err)
 			return
 		}
 	}

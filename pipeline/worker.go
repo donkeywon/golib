@@ -19,6 +19,7 @@ type Worker interface {
 	Reader() io.Reader
 	WriteToWriter(io.Writer, ...WriterWrapFunc)
 	ReadFromReader(io.Reader, ...ReaderWrapFunc)
+	SupportZeroCopy() bool
 }
 
 type BaseWorker struct {
@@ -71,23 +72,6 @@ func (wk *BaseWorker) Close(force bool) error {
 	}
 
 	return wk.closeOnce()
-}
-
-func closeReader(r io.Reader) (err error) {
-	defer func() {
-		p := recover()
-		if p != nil {
-			err = errs.PanicToErrWithMsg(p, fmt.Sprintf("panic on close reader: %T", r))
-		}
-	}()
-
-	if c, ok := r.(io.Closer); ok {
-		e := c.Close()
-		if e != nil {
-			err = errs.Wrapf(e, "close reader failed: %T", r)
-		}
-	}
-	return err
 }
 
 type flusher interface {
@@ -146,6 +130,23 @@ func closeWriter(w io.Writer) (err error) {
 	return err
 }
 
+func closeReader(r io.Reader) (err error) {
+	defer func() {
+		p := recover()
+		if p != nil {
+			err = errs.PanicToErrWithMsg(p, fmt.Sprintf("panic on close reader: %T", r))
+		}
+	}()
+
+	if c, ok := r.(io.Closer); ok {
+		e := c.Close()
+		if e != nil {
+			err = errs.Wrapf(e, "close reader failed: %T", r)
+		}
+	}
+	return err
+}
+
 func (wk *BaseWorker) wrapWriters() {
 	wk.ws = append(wk.ws, wk.w)
 	for _, wrapper := range wk.wwrappers {
@@ -172,10 +173,22 @@ func (wk *BaseWorker) Reader() io.Reader {
 
 func (wk *BaseWorker) WriteToWriter(w io.Writer, wrappers ...WriterWrapFunc) {
 	wk.w = w
-	wk.wwrappers = wrappers
+	wk.wwrappers = append(wk.wwrappers, wrappers...)
 }
 
 func (wk *BaseWorker) ReadFromReader(r io.Reader, wrappers ...ReaderWrapFunc) {
 	wk.r = r
-	wk.rwrappers = wrappers
+	wk.rwrappers = append(wk.rwrappers, wrappers...)
+}
+
+func (wk *BaseWorker) WithWriterWrappers(wrappers ...WriterWrapFunc) {
+	wk.wwrappers = append(wk.wwrappers, wrappers...)
+}
+
+func (wk *BaseWorker) WithReaderWrappers(wrappers ...ReaderWrapFunc) {
+	wk.rwrappers = append(wk.rwrappers, wrappers...)
+}
+
+func (wk *BaseWorker) SupportZeroCopy() bool {
+	return false
 }

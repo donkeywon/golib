@@ -222,8 +222,7 @@ func (b *booter) Start(ctx context.Context) error {
 				return nil
 			}
 			if e != nil {
-				b.l.Error("daemon failed", "err", e, "daemon", daemonType)
-				return e
+				return errs.Wrapf(e, "daemon failed: %s", daemonType)
 			}
 
 			select {

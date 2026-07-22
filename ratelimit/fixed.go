@@ -10,35 +10,35 @@ import (
 )
 
 func init() {
-	plugin.Reg(TypeFixed, func() RxTxRateLimiter { return NewFixedRateLimiter() }, func() any { return NewFixedRateLimiterCfg() })
+	plugin.Reg(TypeFixed, func() RxTxRateLimiter { return NewFixed() }, func() any { return NewFixedCfg() })
 }
 
 const TypeFixed Type = "fixed"
 
-type FixedRateLimiterCfg struct {
+type FixedCfg struct {
 	N     int
 	Burst int
 }
 
-func NewFixedRateLimiterCfg() *FixedRateLimiterCfg {
-	return &FixedRateLimiterCfg{}
+func NewFixedCfg() *FixedCfg {
+	return &FixedCfg{}
 }
 
-type FixedRateLimiter struct {
-	cfg  *FixedRateLimiterCfg
+type Fixed struct {
+	cfg  *FixedCfg
 	txRl *rate.Limiter
 	rxRl *rate.Limiter
 }
 
-func NewFixedRateLimiter() *FixedRateLimiter {
-	return &FixedRateLimiter{}
+func NewFixed() *Fixed {
+	return &Fixed{}
 }
 
-func (frl *FixedRateLimiter) SetCfg(cfg any) {
-	frl.cfg = cfg.(*FixedRateLimiterCfg)
+func (frl *Fixed) SetCfg(cfg any) {
+	frl.cfg = cfg.(*FixedCfg)
 }
 
-func (frl *FixedRateLimiter) Init(ctx context.Context) error {
+func (frl *Fixed) Init(ctx context.Context) error {
 	if frl.cfg.N < 0 {
 		return errs.Errorf("fixed rate limiter N must ge 0: %d", frl.cfg.N)
 	}
@@ -50,7 +50,7 @@ func (frl *FixedRateLimiter) Init(ctx context.Context) error {
 	return nil
 }
 
-func (frl *FixedRateLimiter) waitN(ctx context.Context, n int, timeout time.Duration, rl *rate.Limiter) error {
+func (frl *Fixed) waitN(ctx context.Context, n int, timeout time.Duration, rl *rate.Limiter) error {
 	if n == 0 {
 		return nil
 	}
@@ -63,20 +63,20 @@ func (frl *FixedRateLimiter) waitN(ctx context.Context, n int, timeout time.Dura
 	return rl.WaitN(ctx, n)
 }
 
-func (frl *FixedRateLimiter) RxWaitN(ctx context.Context, n int, timeout time.Duration) error {
+func (frl *Fixed) RxWaitN(ctx context.Context, n int, timeout time.Duration) error {
 	return frl.waitN(ctx, n, timeout, frl.rxRl)
 }
 
-func (frl *FixedRateLimiter) TxWaitN(ctx context.Context, n int, timeout time.Duration) error {
+func (frl *Fixed) TxWaitN(ctx context.Context, n int, timeout time.Duration) error {
 	return frl.waitN(ctx, n, timeout, frl.txRl)
 }
 
-func (frl *FixedRateLimiter) SetRxLimit(n int, burst int) {
+func (frl *Fixed) SetRxLimit(n int, burst int) {
 	frl.rxRl.SetLimit(rate.Limit(n))
 	frl.rxRl.SetBurst(burst)
 }
 
-func (frl *FixedRateLimiter) SetTxLimit(n int, burst int) {
+func (frl *Fixed) SetTxLimit(n int, burst int) {
 	frl.txRl.SetLimit(rate.Limit(n))
 	frl.txRl.SetBurst(burst)
 }

@@ -58,7 +58,10 @@ func NewReader(filepath string, offset int64) (*Reader, error) {
 	if err != nil {
 		return nil, r.close(errs.Wrap(err, "create notify watcher failed"))
 	}
-	_ = r.watcher.Add(filepath)
+	err = r.watcher.Add(filepath)
+	if err != nil {
+		return nil, r.close(errs.Wrapf(err, "watch failed: %s", filepath))
+	}
 
 	return r, nil
 }
