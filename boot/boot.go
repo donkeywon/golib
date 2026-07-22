@@ -110,8 +110,10 @@ type options struct {
 
 func createOptions() *options {
 	return &options{
-		onCreated: make(map[DaemonType]OnCreatedFunc),
-		afterDone: make(map[DaemonType]AfterDoneFunc),
+		onCreated:     make(map[DaemonType]OnCreatedFunc),
+		afterDone:     make(map[DaemonType]AfterDoneFunc),
+		loggerCfgKey:  "log",
+		loggerCreator: &logs.StderrLoggerCreator{Format: "console_lite"},
 	}
 }
 

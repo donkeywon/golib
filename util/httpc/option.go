@@ -226,9 +226,6 @@ func ToString(s *string) Option {
 	return RespOptionFunc(func(resp *http.Response) error {
 		var sb strings.Builder
 		_, err := io.Copy(&sb, resp.Body)
-		if err == io.EOF {
-			err = nil
-		}
 		if err != nil {
 			return errs.Wrap(err, "read response body failed")
 		}

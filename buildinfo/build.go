@@ -6,7 +6,10 @@ import (
 )
 
 func init() {
-	info, ok := debug.ReadBuildInfo()
+	applyBuildInfo(debug.ReadBuildInfo())
+}
+
+func applyBuildInfo(info *debug.BuildInfo, ok bool) {
 	if !ok {
 		return
 	}

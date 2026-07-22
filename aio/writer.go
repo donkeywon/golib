@@ -119,10 +119,10 @@ func (aw *AsyncWriter) Close() error {
 }
 
 func (aw *AsyncWriter) ReadFrom(r io.Reader) (n int64, err error) {
-	var unlocked bool
+	var locked bool
 
 	defer func() {
-		if !unlocked {
+		if locked {
 			aw.mu.Unlock()
 		}
 	}()
@@ -143,9 +143,9 @@ func (aw *AsyncWriter) ReadFrom(r io.Reader) (n int64, err error) {
 		}
 
 		aw.mu.Lock()
-		unlocked = false
+		locked = true
 
-		aw.prepareBuf()
+		aw.prepareBuf() 
 		nn, err = r.Read(aw.buf[aw.off:])
 		aw.off += nn
 		n += int64(nn)
@@ -153,7 +153,7 @@ func (aw *AsyncWriter) ReadFrom(r io.Reader) (n int64, err error) {
 		if err == io.EOF || (err == nil && aw.off == len(aw.buf)) {
 			aw.flushNoLock()
 			aw.mu.Unlock()
-			unlocked = true
+			locked = false
 			if err == io.EOF {
 				err = nil
 				return
@@ -162,7 +162,7 @@ func (aw *AsyncWriter) ReadFrom(r io.Reader) (n int64, err error) {
 		}
 
 		aw.mu.Unlock()
-		unlocked = true
+		locked = false
 		if err == nil {
 			continue
 		}

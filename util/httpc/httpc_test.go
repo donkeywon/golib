@@ -3,28 +3,36 @@ package httpc
 import (
 	"bytes"
 	"context"
-	"fmt"
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
 
+	"github.com/donkeywon/golib/util/httpu"
 	"github.com/stretchr/testify/require"
 )
 
 func TestGet(t *testing.T) {
+	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, "test-value", r.Header.Get("test-header"))
+		body, _ := io.ReadAll(r.Body)
+		require.Equal(t, "abc", string(body))
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("response"))
+	}))
+	defer s.Close()
+
 	respBody := bytes.NewBuffer(nil)
-	reqBody := []byte("abc")
-	_, err := GetTimeout(context.Background(), time.Second, "http://127.0.0.1:8085/get",
+	_, err := GetTimeout(context.Background(), time.Second, s.URL,
 		WithHeaders("test-header", "test-value"),
-		WithBody(reqBody),
+		WithBody([]byte("abc")),
 		CheckStatusCode(respBody, nil, http.StatusOK),
 		ToWriter(respBody, nil),
 	)
-
 	require.NoError(t, err)
-	fmt.Println(respBody.String())
+	require.Equal(t, "response", respBody.String())
 }
 
 type testReqBody struct {
@@ -33,20 +41,27 @@ type testReqBody struct {
 }
 
 func TestPostJSON(t *testing.T) {
+	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, "test-value", r.Header.Get("test-header"))
+		require.Equal(t, httpu.MIMEJSON, r.Header.Get("Content-Type"))
+		var v testReqBody
+		json.NewDecoder(r.Body).Decode(&v)
+		require.Equal(t, "abc", v.FieldA)
+		require.Equal(t, 123, v.FieldB)
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("json response"))
+	}))
+	defer s.Close()
+
 	respBody := bytes.NewBuffer(nil)
-	reqBody := &testReqBody{
-		FieldA: "abc",
-		FieldB: 123,
-	}
-	_, err := PostTimeout(context.Background(), time.Second, "http://127.0.0.1:8085/post",
+	_, err := PostTimeout(context.Background(), time.Second, s.URL,
 		WithHeaders("test-header", "test-value"),
-		WithBodyJSON(reqBody),
+		WithBodyJSON(&testReqBody{FieldA: "abc", FieldB: 123}),
 		CheckStatusCode(respBody, nil, http.StatusOK),
 		ToWriter(respBody, nil),
 	)
-
 	require.NoError(t, err)
-	fmt.Println(respBody.String())
+	require.Equal(t, "json response", respBody.String())
 }
 
 var (

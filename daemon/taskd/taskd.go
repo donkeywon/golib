@@ -464,7 +464,7 @@ func (td *taskd) createTask(cfg task.Cfg) (t *task.Task, err error) {
 			err = errs.PanicToErrWithMsg(p, "panic on create task")
 		}
 	}()
-	return plugin.CreateWithCfg[*task.Task](task.PluginTypeTask, &cfg), nil
+	return plugin.CreateWithCfg[*task.Task](task.PluginTypeTask, cfg), nil
 }
 
 func (td *taskd) initTask(ctx context.Context, t *task.Task) (err error) {

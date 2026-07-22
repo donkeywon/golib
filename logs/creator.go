@@ -39,6 +39,31 @@ var (
 	DefaultLevel = &slog.LevelVar{}
 )
 
+type StderrLoggerCreator struct {
+	Format string       `env:"FORMAT"          long:"format"          yaml:"format"         description:"log line format"`
+	Level  slog.Leveler `env:"LEVEL"           long:"level"           yaml:"level"          description:"minimum enabled logging level"`
+}
+
+func NewStderrLoggerCreator() *StderrLoggerCreator {
+	return &StderrLoggerCreator{}
+}
+
+func (c *StderrLoggerCreator) Create() (*slog.Logger, error) {
+	var h slog.Handler
+	opts := &slog.HandlerOptions{
+		AddSource: true,
+		Level:     c.Level,
+	}
+	if c.Format == "json" {
+		h = slog.NewJSONHandler(os.Stderr, opts)
+	} else if c.Format == "console_lite" {
+		h = NewConsoleLiteHandler(os.Stderr, opts)
+	} else {
+		h = slog.NewTextHandler(os.Stderr, opts)
+	}
+	return slog.New(h), nil
+}
+
 type RotateLoggerCreator struct {
 	Filepath       string       `env:"FILEPATH"        long:"filepath"        yaml:"filepath"       description:"log file path"`
 	Format         string       `env:"FORMAT"          long:"format"          yaml:"format"         description:"log line format"`
@@ -80,6 +105,8 @@ func (r *RotateLoggerCreator) Create() (*slog.Logger, error) {
 	for i := range outputs {
 		if r.Format == "json" {
 			handlers = append(handlers, slog.NewJSONHandler(outputs[i], opts))
+		} else if r.Format == "console_lite" {
+			handlers = append(handlers, NewConsoleLiteHandler(outputs[i], opts))
 		} else {
 			handlers = append(handlers, slog.NewTextHandler(outputs[i], opts))
 		}

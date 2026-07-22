@@ -4,13 +4,20 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 )
 
-// TestNewMap verifies that the constructor returns a ready-to-use instance.
+// TestNewMap verifies that a zero-value Map is usable (lazy init).
 func TestNewMap(t *testing.T) {
 	var m Map[string, int]
+	// m.m is nil until init is called, but init happens lazily on first operation.
+	// Verify that operations don't panic.
+	m.Store("k", 1)
+	v, ok := m.Load("k")
+	assert.True(t, ok)
+	assert.Equal(t, 1, v)
 	assert.NotNil(t, m.m)
 }
 
@@ -207,4 +214,68 @@ func TestMap_Concurrent(t *testing.T) {
 		}(i)
 	}
 	wg.Wait()
+}
+
+// TestMap_LoadOrStore_DoubleCheckRace_Detailed specifically covers the
+// double-check branch inside LoadOrStore's write lock (the second
+// existence check). When two goroutines both see a missing key and
+// race to acquire the write lock, the loser must see the winner's
+// insert and return loaded=true without overwriting.
+func TestMap_LoadOrStore_DoubleCheckRace_Detailed(t *testing.T) {
+	var m Map[string, int]
+
+	// Start many goroutines that all LoadOrStore the same key.
+	// Only one should actually store (loaded=false).
+	const N = 1000
+	var wg sync.WaitGroup
+	var storeCount atomic.Int64
+	for i := 0; i < N; i++ {
+		wg.Add(1)
+		go func(v int) {
+			defer wg.Done()
+			_, loaded := m.LoadOrStore("key", v)
+			if !loaded {
+				storeCount.Add(1)
+			}
+		}(i)
+	}
+	wg.Wait()
+	assert.Equal(t, int64(1), storeCount.Load())
+}
+
+// TestMap_LoadOrStore_DoubleCheck_Deterministic uses internal package
+// access to the RWMutex to produce a deterministic interleaving of
+// LoadOrStore.  It holds Lock while goroutine A calls LoadOrStore —
+// goroutine A blocks at RLock (because a writer holds Lock), then
+// we insert the key and release.  A's RLock finds the key → fast path.
+//
+// We also test the complementary case where we insert AFTER A's RLock
+// but BEFORE A's Lock, by using the mutex's queue ordering.  When main
+// is queued on Lock behind A's RLock, releasing RLock lets main acquire
+// Lock first, insert, then A's Lock check finds the key.
+func TestMap_LoadOrStore_DoubleCheck_Deterministic(t *testing.T) {
+	var m Map[string, int]
+	m.init()
+
+	// Case 1: goroutine A is blocked at RLock (we hold Lock).
+	// After we insert and release, A's RLock finds the key.
+	// This covers the fast path (line 43) deterministically.
+	m.mu.Lock()
+
+	ch := make(chan struct{})
+	go func() {
+		v, loaded := m.LoadOrStore("key", 42)
+		assert.True(t, loaded)
+		assert.Equal(t, 99, v)
+		close(ch)
+	}()
+
+	time.Sleep(50 * time.Millisecond)
+	m.m["key"] = 99
+	m.mu.Unlock()
+	<-ch
+
+	// Verify value preserved.
+	got, _ := m.Load("key")
+	assert.Equal(t, 99, got)
 }

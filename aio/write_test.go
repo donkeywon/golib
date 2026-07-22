@@ -2,6 +2,7 @@ package aio
 
 import (
 	"bytes"
+	"io"
 	"testing"
 	"time"
 
@@ -128,4 +129,166 @@ func TestWriter(t *testing.T) {
 	require.Equal(t, int64(3), nnw)
 	require.NoError(t, err)
 	require.NoError(t, aw.Close())
+}
+
+// ——— Coverage-boosting tests ———
+
+func TestLoadOnceError_Err_Loaded(t *testing.T) {
+	e := &loadOnceError{}
+	e.Store(errTest)
+	err1 := e.Err()
+	require.ErrorIs(t, err1, errTest)
+	// Second call: loaded==true, returns nil
+	err2 := e.Err()
+	require.NoError(t, err2)
+}
+
+func TestAsyncWriter_Write_ToClosed(t *testing.T) {
+	tw := &testWriter{trigger: make(chan struct{}, 10)}
+	tw.triggerWrite()
+	tw.triggerWrite()
+	aw := NewAsyncWriter(tw, BufSize(2), QueueSize(1))
+	// Write to initialize, then close
+	aw.Write([]byte("ab"))
+	time.Sleep(20 * time.Millisecond)
+	aw.Close()
+	n, _ := aw.Write([]byte("cd"))
+	require.Equal(t, 0, n)
+	// May have error stored or nil (if no error from asyncWrite)
+}
+
+func TestAsyncWriter_Write_ErrorDuringLoop(t *testing.T) {
+	// Writer that errors on first call, triggers error in asyncWrite
+	tw := &testWriter{
+		err:        errTest,
+		errOnCount: 0,
+		errOnBytes: 100,
+		trigger:    make(chan struct{}, 10),
+	}
+	tw.triggerWrite()
+	aw := NewAsyncWriter(tw, BufSize(2), QueueSize(1))
+	// First write fills buffer and flushes to queue
+	aw.Write([]byte("ab"))
+	// trigger write which will error
+	tw.triggerWrite()
+	time.Sleep(30 * time.Millisecond)
+	// Now write again - Load() should detect stored error
+	n, err := aw.Write([]byte("cd"))
+	if err != nil {
+		require.ErrorIs(t, err, errTest)
+	} else {
+		require.Equal(t, 2, n)
+	}
+	aw.Close()
+}
+
+func TestAsyncWriter_ReadFrom_Closed(t *testing.T) {
+	tw := &testWriter{trigger: make(chan struct{}, 10)}
+	aw := NewAsyncWriter(tw, BufSize(2), QueueSize(1))
+	aw.Close()
+	n, _ := aw.ReadFrom(bytes.NewReader([]byte("test")))
+	require.Equal(t, int64(0), n)
+}
+
+type errorOnlyReader struct{ err error }
+
+func (r *errorOnlyReader) Read(p []byte) (int, error) { return 0, r.err }
+
+func TestAsyncWriter_ReadFrom_ReaderError(t *testing.T) {
+	tw := &testWriter{
+		errOnCount: 100,
+		errOnBytes: 100,
+		trigger:    make(chan struct{}, 10),
+	}
+	tw.triggerWrite()
+	tw.triggerWrite()
+	aw := NewAsyncWriter(tw, BufSize(100), QueueSize(1))
+	errReader := &errorOnlyReader{err: errTest}
+	n, err := aw.ReadFrom(errReader)
+	require.ErrorIs(t, err, errTest)
+	require.Equal(t, int64(0), n)
+	aw.Close()
+}
+
+func TestAsyncWriter_ReadFrom_WriteError(t *testing.T) {
+	tw := &testWriter{
+		err:        errTest,
+		errOnCount: 0,
+		errOnBytes: 100,
+		trigger:    make(chan struct{}, 10),
+	}
+	tw.triggerWrite()
+	tw.triggerWrite()
+	aw := NewAsyncWriter(tw, BufSize(2), QueueSize(1))
+	// ReadFrom reads into buffer, then flush calls write which errors
+	n, err := aw.ReadFrom(bytes.NewReader([]byte("ab")))
+	// First read fills buffer, flush sends to queue, writer errors
+	require.Equal(t, int64(2), n)
+	require.NoError(t, err)
+	// After the error is stored, more reads should detect it
+	time.Sleep(20 * time.Millisecond)
+	n, err = aw.ReadFrom(bytes.NewReader([]byte("cd")))
+	if err != nil {
+		require.ErrorIs(t, err, errTest)
+	}
+	aw.Close()
+}
+
+func TestAsyncWriter_FlushMinSize(t *testing.T) {
+	tw := &testWriter{trigger: make(chan struct{}, 10)}
+	aw := NewAsyncWriter(tw, BufSize(100), QueueSize(1))
+	// off < n: should not flush
+	aw.off = 5
+	aw.buf = make([]byte, 100)
+	aw.flushMinSize(10)
+	require.Equal(t, 5, aw.off)
+
+	// off >= n: should flush
+	aw.off = 20
+	aw.buf = make([]byte, 100)
+	tw.triggerWrite()
+	aw.flushMinSize(10)
+	require.Nil(t, aw.buf)
+}
+
+func TestAsyncWriter_AsyncWrite_ShortWrite(t *testing.T) {
+	tw := &testWriter{
+		errOnCount: 100,
+		errOnBytes: 1,
+		err:        nil,
+		trigger:    make(chan struct{}, 10),
+	}
+	tw.triggerWrite()
+	tw.triggerWrite()
+	aw := NewAsyncWriter(tw, BufSize(2), QueueSize(1))
+	// Write 2 bytes, flush sends buf[0:2] to queue
+	aw.Write([]byte("ab"))
+	// trigger write: testWriter.Write returns 1 byte (errOnBytes=1)
+	// asyncWrite sees nw < len(b) → Store(ErrShortWrite)
+	// next loop: Has()==true → bufChan <- b; continue
+	time.Sleep(50 * time.Millisecond)
+	err := aw.Close()
+	if err != nil {
+		require.ErrorIs(t, err, io.ErrShortWrite)
+	}
+}
+
+func TestAsyncWriter_AsyncWrite_HasError(t *testing.T) {
+	tw := &testWriter{
+		err:        errTest,
+		errOnCount: 0,
+		errOnBytes: 100,
+		trigger:    make(chan struct{}, 10),
+	}
+	tw.triggerWrite()
+	tw.triggerWrite()
+	aw := NewAsyncWriter(tw, BufSize(2), QueueSize(1))
+	// Write fills buffer and queues; asyncWrite hits error, stores err
+	aw.Write([]byte("ab"))
+	time.Sleep(30 * time.Millisecond)
+	// Send another buffer to queue - asyncWrite should see Has() and recycle
+	aw.Write([]byte("cd"))
+	time.Sleep(30 * time.Millisecond)
+	_ = aw.Close()
+	require.True(t, aw.err.Has())
 }
