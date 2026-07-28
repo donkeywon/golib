@@ -1,4 +1,4 @@
-package oss
+package ossu
 
 import (
 	"crypto/hmac"

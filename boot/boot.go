@@ -267,14 +267,14 @@ func (b *booter) Start(ctx context.Context) error {
 
 func (b *booter) Stop(ctx context.Context) error {
 	allErr := make([]error, 0, len(_daemonTypes))
-	for i := len(_daemonTypes) - 1; i >= 0; i-- {
+	for _, typ := range slices.Backward(_daemonTypes) {
 		select {
 		case <-ctx.Done():
-			return ctx.Err()
+			return errors.Join(append(allErr, ctx.Err())...)
 		default:
-			err := runner.StopAndWait(ctx, b.daemonsMap[_daemonTypes[i]])
+			err := runner.StopAndWait(ctx, b.daemonsMap[typ])
 			if err != nil {
-				allErr = append(allErr, errs.Wrapf(err, "stop daemon failed: %s", _daemonTypes[i]))
+				allErr = append(allErr, errs.Wrapf(err, "stop daemon failed: %s", typ))
 			}
 		}
 	}

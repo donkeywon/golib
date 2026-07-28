@@ -26,7 +26,7 @@ type HostCfg struct {
 	Nic             string `json:"nic"              yaml:"nic"               validate:"required"`
 	MonitorInterval int    `json:"monitor_interval" yaml:"monitorInterval"   validate:"required"`
 	MaxPercent      int    `json:"max_percent"      yaml:"maxPercent"        validate:"gte=0,lte=100"`
-	MaxMBps         int    `json:"max_mbps"         yaml:"maxMBps"`
+	MaxMBps         int    `json:"max_mbps"         yaml:"maxMBps"           validate:"gte=0"`
 	MinMBps         int    `json:"min_mbps"         yaml:"minMBps"           validate:"gte=0"`
 }
 

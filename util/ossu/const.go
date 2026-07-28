@@ -1,4 +1,4 @@
-package oss
+package ossu
 
 const (
 	HeaderXmsDate      = "X-Ms-Date"

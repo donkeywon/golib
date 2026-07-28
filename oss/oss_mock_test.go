@@ -15,7 +15,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/donkeywon/golib/util/oss"
+	"github.com/donkeywon/golib/util/ossu"
 	"github.com/johannesboyne/gofakes3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -258,7 +258,7 @@ func newFakeS3Server(t *testing.T) (*httptest.Server, *s3Backend) {
 			body, _ := io.ReadAll(r.Body)
 			pos, _ := strconv.Atoi(query.Get("position"))
 			nextPos := pos + len(body)
-			w.Header().Set(oss.HeaderOSSAppendNextPositionHeader, strconv.Itoa(nextPos))
+			w.Header().Set(ossu.HeaderOSSAppendNextPositionHeader, strconv.Itoa(nextPos))
 			w.WriteHeader(http.StatusOK)
 			return
 		}
@@ -1407,9 +1407,9 @@ func TestAppendWriter_ReadFrom_NoContentLength(t *testing.T) {
 	cfg.PartSize = 10
 
 	// Override NeedContentLength to return false, forcing sequential upload
-	orig := oss.NeedContentLength
-	oss.NeedContentLength = func(ctx context.Context, url string) bool { return false }
-	defer func() { oss.NeedContentLength = orig }()
+	orig := ossu.NeedContentLength
+	ossu.NeedContentLength = func(ctx context.Context, url string) bool { return false }
+	defer func() { ossu.NeedContentLength = orig }()
 
 	w := NewAppendWriter(context.Background(), cfg)
 	defer w.Close()
@@ -1490,7 +1490,7 @@ func TestAppendWriter_Write_FlakyServer(t *testing.T) {
 			body, _ := io.ReadAll(r.Body)
 			pos, _ := strconv.Atoi(query.Get("position"))
 			nextPos := pos + len(body)
-			w.Header().Set(oss.HeaderOSSAppendNextPositionHeader, strconv.Itoa(nextPos))
+			w.Header().Set(ossu.HeaderOSSAppendNextPositionHeader, strconv.Itoa(nextPos))
 			w.WriteHeader(http.StatusOK)
 			return
 		}

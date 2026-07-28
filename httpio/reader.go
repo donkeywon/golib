@@ -78,7 +78,9 @@ func NewReader(ctx context.Context, url string, opts ...Option) *Reader {
 		r.end = r.opt.offset + r.opt.limit
 	}
 
-	if r.c == nil {
+	if r.opt.client != nil {
+		r.c = r.opt.client
+	} else {
 		trans := &http.Transport{
 			Proxy: http.ProxyFromEnvironment,
 			DialContext: defaultTransportDialContext(&net.Dialer{

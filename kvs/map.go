@@ -83,8 +83,19 @@ func (m *Map[K, V]) Range(f func(k K, v V) bool) {
 	m.init()
 
 	m.mu.RLock()
-	defer m.mu.RUnlock()
-	for k, v := range m.m {
+	keys := make([]K, 0, len(m.m))
+	for k := range m.m {
+		keys = append(keys, k)
+	}
+	m.mu.RUnlock()
+
+	for _, k := range keys {
+		m.mu.RLock()
+		v, exists := m.m[k]
+		m.mu.RUnlock()
+		if !exists {
+			continue
+		}
 		if !f(k, v) {
 			break
 		}

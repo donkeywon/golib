@@ -6,7 +6,7 @@ import (
 
 	"github.com/donkeywon/golib/httpio"
 	"github.com/donkeywon/golib/util/httpc"
-	"github.com/donkeywon/golib/util/oss"
+	"github.com/donkeywon/golib/util/ossu"
 )
 
 type Reader struct {
@@ -21,7 +21,7 @@ func NewReader(ctx context.Context, cfg *Cfg, opts ...httpc.Option) *Reader {
 	cfg.setDefaults()
 	allHttpcOptions := make([]httpc.Option, 0, 1+len(opts))
 	allHttpcOptions = append(allHttpcOptions, httpc.ReqOptionFunc(func(r *http.Request) error {
-		return oss.Sign(r, cfg.Ak, cfg.Sk, cfg.Region)
+		return ossu.Sign(r, cfg.Ak, cfg.Sk, cfg.Region)
 	}))
 	allHttpcOptions = append(allHttpcOptions, opts...)
 

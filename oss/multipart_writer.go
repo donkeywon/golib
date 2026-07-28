@@ -19,7 +19,7 @@ import (
 	"github.com/donkeywon/golib/util/httpc"
 	"github.com/donkeywon/golib/util/httpu"
 	"github.com/donkeywon/golib/util/iou"
-	"github.com/donkeywon/golib/util/oss"
+	"github.com/donkeywon/golib/util/ossu"
 )
 
 type UploadHook func(uploadWorker int, partNo int, partSize int, etag string, err error)
@@ -269,24 +269,29 @@ func (w *MultiPartWriter) Write(p []byte) (int, error) {
 		return 0, err
 	}
 
-	var b []byte
 	if w.cfg.Parallel > 1 {
-		err = w.parallelErrs.Load()
-		if err != nil {
-			return 0, err
-		}
+		var total int
+		for len(p) > 0 {
+			err = w.parallelErrs.Load()
+			if err != nil {
+				return total, err
+			}
 
-		select {
-		case b = <-w.bufChan:
-		default:
-			b = make([]byte, w.cfg.PartSize)
+			var b []byte
+			select {
+			case b = <-w.bufChan:
+			default:
+				b = make([]byte, w.cfg.PartSize)
+			}
+			b = b[:cap(b)]
+			nc := copy(b, p)
+			b = b[:nc]
+			w.parallelChan <- &uploadPartReq{partNo: w.curPartNo, b: b}
+			w.curPartNo++
+			total += nc
+			p = p[nc:]
 		}
-		b = b[:cap(b)]
-		nc := copy(b, p)
-		b = b[:nc]
-		w.parallelChan <- &uploadPartReq{partNo: w.curPartNo, b: b}
-		w.curPartNo++
-		return len(p), nil
+		return total, nil
 	}
 
 	r := w.retryUploadPart(w.curPartNo, p)
@@ -385,9 +390,9 @@ func (w *MultiPartWriter) init() error {
 		return nil
 	}
 
-	w.isBlob = oss.IsAzblob(w.cfg.URL)
+	w.isBlob = ossu.IsAzblob(w.cfg.URL)
 	w.ctx, w.cancel = context.WithCancel(w.ctx)
-	w.needContentLength = oss.NeedContentLength(w.ctx, w.cfg.URL)
+	w.needContentLength = ossu.NeedContentLength(w.ctx, w.cfg.URL)
 
 	var err error
 	if !w.isBlob {
@@ -538,7 +543,7 @@ func (w *MultiPartWriter) complete() error {
 }
 
 func (w *MultiPartWriter) addAuth(req *http.Request) error {
-	return oss.Sign(req, w.cfg.Ak, w.cfg.Sk, w.cfg.Region)
+	return ossu.Sign(req, w.cfg.Ak, w.cfg.Sk, w.cfg.Region)
 }
 
 func (w *MultiPartWriter) initMultiPart() (string, error) {

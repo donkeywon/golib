@@ -14,7 +14,7 @@ import (
 	"github.com/avast/retry-go/v4"
 	"github.com/donkeywon/golib/errs"
 	"github.com/donkeywon/golib/util/httpc"
-	"github.com/donkeywon/golib/util/oss"
+	"github.com/donkeywon/golib/util/ossu"
 )
 
 const appendURLSuffix = "?append"
@@ -35,8 +35,8 @@ func NewAppendWriter(ctx context.Context, cfg *Cfg) *AppendWriter {
 	cfg.setDefaults()
 	w := &AppendWriter{
 		cfg:               cfg,
-		needContentLength: oss.NeedContentLength(ctx, cfg.URL),
-		isBlob:            oss.IsAzblob(cfg.URL),
+		needContentLength: ossu.NeedContentLength(ctx, cfg.URL),
+		isBlob:            ossu.IsAzblob(cfg.URL),
 	}
 	w.ctx, w.cancel = context.WithCancel(ctx)
 	w.offset = cfg.Offset
@@ -126,7 +126,7 @@ func (w *AppendWriter) sealBlob() error {
 	}
 	return retry.Do(
 		func() error {
-			return oss.SealAppendBlob(w.ctx, w.cfg.URL, w.cfg.Ak, w.cfg.Sk)
+			return ossu.SealAppendBlob(w.ctx, w.cfg.URL, w.cfg.Ak, w.cfg.Sk)
 		},
 		retry.Attempts(uint(w.cfg.Retry)),
 		retry.RetryIf(func(err error) bool {
@@ -146,7 +146,7 @@ func (w *AppendWriter) init() error {
 		return nil
 	}
 	err := retry.Do(
-		func() error { return oss.CreateAppendBlob(w.ctx, w.cfg.URL, w.cfg.Ak, w.cfg.Sk) },
+		func() error { return ossu.CreateAppendBlob(w.ctx, w.cfg.URL, w.cfg.Ak, w.cfg.Sk) },
 		retry.Attempts(uint(w.cfg.Retry)),
 		retry.RetryIf(func(err error) bool {
 			select {
@@ -166,7 +166,7 @@ func (w *AppendWriter) init() error {
 }
 
 func (w *AppendWriter) addAuth(req *http.Request) error {
-	return oss.Sign(req, w.cfg.Ak, w.cfg.Sk, w.cfg.Region)
+	return ossu.Sign(req, w.cfg.Ak, w.cfg.Sk, w.cfg.Region)
 }
 
 func (w *AppendWriter) retryAppendPart(p []byte) error {
@@ -202,7 +202,7 @@ func (w *AppendWriter) appendPart(opts ...httpc.Option) error {
 	if w.isBlob {
 		url = w.cfg.URL + "?comp=appendblock"
 		allOpts = append(allOpts,
-			httpc.WithHeaders(oss.HeaderAzblobAppendPositionHeader, strconv.FormatInt(w.offset, 10)),
+			httpc.WithHeaders(ossu.HeaderAzblobAppendPositionHeader, strconv.FormatInt(w.offset, 10)),
 			httpc.CheckStatusCode(respBody, &respStatusCode, http.StatusCreated),
 		)
 	} else {
@@ -221,7 +221,7 @@ func (w *AppendWriter) appendPart(opts ...httpc.Option) error {
 		return nil
 	}
 
-	pos, exists, err := oss.GetNextPositionFromResponse(resp)
+	pos, exists, err := ossu.GetNextPositionFromResponse(resp)
 	if err != nil {
 		return errs.Wrap(err, "failed to get next position from response")
 	}
