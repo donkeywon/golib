@@ -3,12 +3,11 @@ package httpd
 import (
 	"context"
 	"errors"
-	"log/slog"
 	"net/http"
 
 	"github.com/donkeywon/golib/boot"
-	"github.com/donkeywon/golib/logs"
 	"github.com/donkeywon/golib/runner"
+	"github.com/rs/zerolog"
 )
 
 const DaemonTypeHTTPd boot.DaemonType = "httpd"
@@ -22,7 +21,7 @@ type HTTPd interface {
 	Use(...func(http.Handler) http.Handler)
 	Handle(string, http.Handler)
 	HandleFunc(string, func(http.ResponseWriter, *http.Request))
-	Logger() *slog.Logger
+	Logger() *zerolog.Logger
 }
 
 type Router interface {
@@ -37,7 +36,7 @@ type httpd struct {
 	cfg Cfg
 	s   *http.Server
 
-	l           *slog.Logger
+	l           *zerolog.Logger
 	r           Router
 	patterns    []string
 	handlers    []http.Handler
@@ -49,7 +48,7 @@ func New() boot.Daemon {
 }
 
 func (h *httpd) Init(ctx context.Context) error {
-	h.l = logs.FromCtx(ctx)
+	h.l = zerolog.Ctx(ctx)
 	if h.r == nil {
 		h.r = http.NewServeMux()
 	}
@@ -101,7 +100,7 @@ func (h *httpd) Server() *http.Server {
 	return h.s
 }
 
-func (h *httpd) Logger() *slog.Logger {
+func (h *httpd) Logger() *zerolog.Logger {
 	return h.l
 }
 

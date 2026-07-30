@@ -2,12 +2,11 @@ package ratelimit
 
 import (
 	"context"
-	"log/slog"
 	"testing"
 	"time"
 
-	"github.com/donkeywon/golib/logs"
 	"github.com/donkeywon/golib/plugin"
+	"github.com/rs/zerolog"
 	"github.com/shirou/gopsutil/v4/net"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -72,7 +71,7 @@ func TestHost_TxWaitN_NilContextPanics(t *testing.T) {
 func TestHost_Init_ValidationFails(t *testing.T) {
 	h := NewHost()
 	h.cfg = &HostCfg{}
-	ctx := logs.CtxWith(context.Background(), mustCreateNopLogger())
+	ctx := mustCreateNopLogger().WithContext(context.Background())
 	err := h.Init(ctx)
 	require.Error(t, err)
 }
@@ -111,7 +110,7 @@ func TestHost_TxWaitN_Timeout(t *testing.T) {
 func TestHost_Init_MinMBpsCalculation(t *testing.T) {
 	h := NewHost()
 	h.cfg = &HostCfg{Nic: "eth0", MonitorInterval: 1}
-	ctx := logs.CtxWith(context.Background(), mustCreateNopLogger())
+	ctx := mustCreateNopLogger().WithContext(context.Background())
 	err := h.Init(ctx)
 	require.Error(t, err) // eth0 might not exist or validation fails
 }
@@ -132,12 +131,8 @@ func TestI2MBps(t *testing.T) {
 	assert.Equal(t, "0 MB/s", result)
 }
 
-func mustCreateNopLogger() *slog.Logger {
-	l, err := logs.NopLoggerCreator.Create()
-	if err != nil {
-		panic(err)
-	}
-	return l
+func mustCreateNopLogger() *zerolog.Logger {
+	return &zerolog.Logger{}
 }
 
 func TestCalcLimit(t *testing.T) {
@@ -247,7 +242,7 @@ func TestHost_TxWaitN_WithTimeout(t *testing.T) {
 func TestHost_Init_Success(t *testing.T) {
 	h := NewHost()
 	h.cfg = &HostCfg{Nic: "enp3s0", MonitorInterval: 10, MaxPercent: 50, MaxMBps: 100, MinMBps: 5}
-	ctx := logs.CtxWith(context.Background(), mustCreateNopLogger())
+	ctx := mustCreateNopLogger().WithContext(context.Background())
 	err := h.Init(ctx)
 	require.NoError(t, err)
 	assert.Equal(t, 125, h.nicSpeedMBps) // 1000/8=125
@@ -260,7 +255,7 @@ func TestHost_Init_Success(t *testing.T) {
 func TestHost_Init_GetNicSpeedError(t *testing.T) {
 	h := NewHost()
 	h.cfg = &HostCfg{Nic: "no_such_nic_xyz", MonitorInterval: 1, MaxPercent: 80}
-	ctx := logs.CtxWith(context.Background(), mustCreateNopLogger())
+	ctx := mustCreateNopLogger().WithContext(context.Background())
 	err := h.Init(ctx)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "get nic speed failed")

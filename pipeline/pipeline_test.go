@@ -3,13 +3,11 @@ package pipeline
 import (
 	"context"
 	"io"
-	"log/slog"
 	"os"
 	"sync"
 	"testing"
 	"time"
 
-	"github.com/donkeywon/golib/logs"
 	"github.com/donkeywon/golib/runner"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -863,13 +861,10 @@ func TestCopyWorker_Start_StoppingCancelsError_Pipeline(t *testing.T) {
 	err := cw.BaseWorker.Init(context.Background())
 	require.NoError(t, err)
 
-	// Use a context with a logger.
-	ctx := logs.CtxWith(context.Background(), slog.Default())
-
 	// Start copyWorker via runner.Start.
 	startDone := make(chan error, 1)
 	go func() {
-		startDone <- runner.Start(ctx, cw)
+		startDone <- runner.Start(context.Background(), cw)
 	}()
 
 	// Wait for it to start.

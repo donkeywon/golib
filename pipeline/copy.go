@@ -6,7 +6,7 @@ import (
 	"io"
 
 	"github.com/donkeywon/golib/errs"
-	"github.com/donkeywon/golib/logs"
+	"github.com/rs/zerolog"
 )
 
 type copyWorker struct {
@@ -38,7 +38,7 @@ func (c *copyWorker) Start(ctx context.Context) (err error) {
 	select {
 	case <-c.Stopping():
 		if err != nil {
-			logs.FromCtx(ctx).Warn("copy stopped manually", "err", err)
+			zerolog.Ctx(ctx).Warn().Err(err).Msg("copy stopped manually")
 			err = nil
 		}
 	default:

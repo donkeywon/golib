@@ -2,14 +2,13 @@ package metricsd
 
 import (
 	"context"
-	"log/slog"
 	"net/http"
 
 	"github.com/VictoriaMetrics/metrics"
 	"github.com/donkeywon/golib/boot"
 	"github.com/donkeywon/golib/daemon/httpd"
-	"github.com/donkeywon/golib/logs"
 	"github.com/donkeywon/golib/runner"
+	"github.com/rs/zerolog"
 )
 
 const DaemonTypeMetricsd boot.DaemonType = "metricsd"
@@ -33,7 +32,7 @@ type metricsd struct {
 	cfg Cfg
 
 	httpd httpd.HTTPd
-	l     *slog.Logger
+	l     *zerolog.Logger
 }
 
 func New() boot.Daemon {
@@ -41,7 +40,7 @@ func New() boot.Daemon {
 }
 
 func (p *metricsd) Init(ctx context.Context) error {
-	p.l = logs.FromCtx(ctx)
+	p.l = zerolog.Ctx(ctx)
 
 	p.httpd = boot.Get[httpd.HTTPd](httpd.DaemonTypeHTTPd)
 	p.httpd.Handle(p.cfg.HTTPEndpointPath, http.HandlerFunc(p.httpHandler))

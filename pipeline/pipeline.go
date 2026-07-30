@@ -38,7 +38,7 @@ func (p *Pipeline) Init(ctx context.Context) error {
 			panic(fmt.Sprintf("writer or reader already exists between workers: %T(%d) and %T(%d)", p.ws[i], i, p.ws[i+1], i+1))
 		}
 
-		if p.ws[i].SupportZeroCopy() && p.ws[i+1].SupportZeroCopy() {
+		if p.ws[i].SupportZeroCopy() && p.ws[i+1].SupportZeroCopy() && !p.ws[i].WriterWrapped() && !p.ws[i+1].ReaderWrapped() {
 			pr, pw, err = os.Pipe()
 			if err != nil {
 				return errs.Wrap(err, "create os pipe failed")

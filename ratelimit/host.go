@@ -3,15 +3,14 @@ package ratelimit
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"sync/atomic"
 	"time"
 
 	"github.com/donkeywon/golib/errs"
-	"github.com/donkeywon/golib/logs"
 	"github.com/donkeywon/golib/plugin"
 	"github.com/donkeywon/golib/util/eth"
 	"github.com/donkeywon/golib/util/v"
+	"github.com/rs/zerolog"
 	"github.com/shirou/gopsutil/v4/net"
 	"golang.org/x/time/rate"
 )
@@ -53,7 +52,7 @@ type Host struct {
 	lastNicRxBytes uint64
 	lastNicTxBytes uint64
 
-	l      *slog.Logger
+	l      *zerolog.Logger
 	closed chan struct{}
 }
 
@@ -73,9 +72,9 @@ func (h *Host) Init(ctx context.Context) error {
 		return err
 	}
 
-	h.l = logs.FromCtx(ctx)
+	h.l = zerolog.Ctx(ctx)
 
-	h.l.Info("use nic", "nic", h.cfg.Nic)
+	h.l.Info().Str("nic", h.cfg.Nic).Msg("use nic")
 	nicSpeedMbps, err := eth.GetNicSpeed(ctx, h.cfg.Nic)
 	if err != nil {
 		return errs.Wrapf(err, "get nic speed failed: %s", h.cfg.Nic)
@@ -91,11 +90,7 @@ func (h *Host) Init(ctx context.Context) error {
 	h.rxRL = rate.NewLimiter(rate.Limit(h.maxMBps*1048576), h.maxMBps*1048576)
 	h.txRL = rate.NewLimiter(rate.Limit(h.maxMBps*1048576), h.maxMBps*1048576)
 
-	h.l.Info("nic rate limit info",
-		"nic_speed", i2MBps(h.nicSpeedMBps),
-		"max", i2MBps(h.maxMBps),
-		"min", i2MBps(h.cfg.MinMBps),
-	)
+	h.l.Info().Str("nic_speed", i2MBps(h.nicSpeedMBps)).Str("max", i2MBps(h.maxMBps)).Str("min", i2MBps(h.cfg.MinMBps)).Msg("nic rate limit info")
 
 	go h.monitor()
 
@@ -158,7 +153,7 @@ func (h *Host) monitor() {
 			stats, err := net.IOCounters(true)
 			if err != nil {
 				h.setRxTxLimit(float64(h.cfg.MinMBps), float64(h.cfg.MinMBps))
-				h.l.Error("get nic stats fail, use min limit", "err", err, "min_limit", i2MBps(h.cfg.MinMBps))
+				h.l.Error().Err(err).Str("min_limit", i2MBps(h.cfg.MinMBps)).Msg("get nic stats fail, use min limit")
 				continue
 			}
 
@@ -170,7 +165,7 @@ func (h *Host) monitor() {
 			}
 			if i == len(stats) {
 				h.setRxTxLimit(float64(h.cfg.MinMBps), float64(h.cfg.MinMBps))
-				h.l.Error("nic stats not found, use min limit", "nic", nic, "min_limit", i2MBps(h.cfg.MinMBps), "stats", stats)
+				h.l.Error().Str("nic", nic).Str("min_limit", i2MBps(h.cfg.MinMBps)).Any("stats", stats).Msg("nic stats not found, use min limit")
 				continue
 			}
 
@@ -199,8 +194,7 @@ func (h *Host) handleNetDevStats(stat *net.IOCountersStat) {
 
 	if h.lastNicRxBytes == 0 || h.lastNicTxBytes == 0 {
 		h.setRxTxLimit(float64(h.cfg.MinMBps), float64(h.cfg.MinMBps))
-		h.l.Debug("last rx or tx is 0, use min limit",
-			"last_nic_rx_bytes", h.lastNicRxBytes, "last_nic_tx_bytes", h.lastNicTxBytes, "min", i2MBps(h.cfg.MinMBps))
+		h.l.Debug().Uint64("last_nic_rx_bytes", h.lastNicRxBytes).Uint64("last_nic_tx_bytes", h.lastNicTxBytes).Str("min", i2MBps(h.cfg.MinMBps)).Msg("last rx or tx is 0, use min limit")
 		h.lastNicRxBytes = curNicRxBytes
 		h.lastNicTxBytes = curNicTxBytes
 		return
@@ -211,14 +205,12 @@ func (h *Host) handleNetDevStats(stat *net.IOCountersStat) {
 		txSub uint64
 	)
 	if curNicRxBytes < h.lastNicRxBytes {
-		h.l.Warn("cur rx bytes is small than last rx bytes",
-			"last_nic_rx_bytes", h.lastNicRxBytes, "cur_nic_rx_bytes", curNicRxBytes)
+		h.l.Warn().Uint64("last_nic_rx_bytes", h.lastNicRxBytes).Uint64("cur_nic_rx_bytes", curNicRxBytes).Msg("cur rx bytes is small than last rx bytes")
 	} else {
 		rxSub = curNicRxBytes - h.lastNicRxBytes
 	}
 	if curNicTxBytes < h.lastNicTxBytes {
-		h.l.Warn("cur tx bytes is small than last tx bytes",
-			"last_nic_tx_bytes", h.lastNicTxBytes, "cur_nic_tx_bytes", curNicTxBytes)
+		h.l.Warn().Uint64("last_nic_tx_bytes", h.lastNicTxBytes).Uint64("cur_nic_tx_bytes", curNicTxBytes).Msg("cur tx bytes is small than last tx bytes")
 	} else {
 		txSub = curNicTxBytes - h.lastNicTxBytes
 	}
@@ -227,12 +219,17 @@ func (h *Host) handleNetDevStats(stat *net.IOCountersStat) {
 	txMBps := float64(txSub) / float64(1048576) / float64(h.cfg.MonitorInterval)
 	rxLimit := calcLimit(rxMBps, float64(h.maxMBps), float64(h.cfg.MinMBps), float64(h.nicSpeedMBps), h.selfRxSpeedMBps)
 	txLimit := calcLimit(txMBps, float64(h.maxMBps), float64(h.cfg.MinMBps), float64(h.nicSpeedMBps), h.selfTxSpeedMBps)
-	h.l.Info("nic limit",
-		"nic_speed", i2MBps(h.nicSpeedMBps), "rx_speed", f2MBps(rxMBps), "tx_speed", f2MBps(txMBps),
-		"rx_limit", f2MBps(rxLimit), "tx_limit", f2MBps(txLimit),
-		"max", i2MBps(h.maxMBps), "min", i2MBps(h.cfg.MinMBps),
-		"nic_rx_bytes", curNicRxBytes, "nic_tx_bytes", curNicTxBytes,
-	)
+	h.l.Info().
+		Str("nic_speed", i2MBps(h.nicSpeedMBps)).
+		Str("rx_speed", f2MBps(rxMBps)).
+		Str("tx_speed", f2MBps(txMBps)).
+		Str("rx_limit", f2MBps(rxLimit)).
+		Str("tx_limit", f2MBps(txLimit)).
+		Str("max", i2MBps(h.maxMBps)).
+		Str("min", i2MBps(h.cfg.MinMBps)).
+		Uint64("nic_rx_bytes", curNicRxBytes).
+		Uint64("nic_tx_bytes", curNicTxBytes).
+		Msg("nic limit")
 	h.setRxTxLimit(rxLimit, txLimit)
 
 	h.lastNicRxBytes = curNicRxBytes

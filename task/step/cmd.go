@@ -11,10 +11,10 @@ import (
 
 	"github.com/donkeywon/golib/consts"
 	"github.com/donkeywon/golib/errs"
-	"github.com/donkeywon/golib/logs"
 	"github.com/donkeywon/golib/plugin"
 	"github.com/donkeywon/golib/util/cmds"
 	"github.com/donkeywon/golib/util/v"
+	"github.com/rs/zerolog"
 )
 
 var errCanceled = errors.New("canceled")
@@ -60,7 +60,7 @@ func (c *CmdStep) Init(ctx context.Context) error {
 }
 
 func (c *CmdStep) Start(ctx context.Context) error {
-	l := logs.FromCtx(ctx)
+	l := zerolog.Ctx(ctx).With().Str("cmd", c.cfg.Name).Logger()
 
 	c.ctx, c.cancel = context.WithCancelCause(ctx)
 	defer c.cancel(errCanceled)
@@ -104,27 +104,27 @@ func (c *CmdStep) Start(ctx context.Context) error {
 	}
 
 	opts = append(opts, c.options...)
-	cmd := exec.CommandContext(ctx, c.cfg.Name, c.cfg.Args...)
+	cmd := exec.CommandContext(c.ctx, c.cfg.Name, c.cfg.Args...)
 	cmds.WithOptions(cmd, opts...)
 	err = cmd.Run()
-	isSignaled, isCoreDump, sig := cmds.IsSignaled(err)
-	exitCode := cmd.ProcessState.ExitCode()
 	if err == nil {
-		l.Info("cmd done", "exit_code", exitCode, "is_signaled", isSignaled, "is_coredump", isCoreDump, "signal", sig)
+		l.Info().Msg("cmd done")
 	} else {
+		isSignaled, isCoreDump, sig := cmds.IsSignaled(err)
+		exitCode := cmd.ProcessState.ExitCode()
+		c.Store(consts.FieldCmdExitCode, exitCode)
+		c.Store(consts.FieldCmdIsSignaled, isSignaled)
+		c.Store(consts.FieldCmdSignal, int(sig))
+		c.Store(consts.FieldCmdIsCoredump, isCoreDump)
+
 		if errors.Is(err, errCanceled) {
-			l.Warn("cmd canceled", "exit_code", exitCode, "is_signaled", isSignaled, "is_coredump", isCoreDump, "signal", sig)
+			l.Warn().Int("exit_code", exitCode).Bool("is_signaled", isSignaled).Bool("is_coredump", isCoreDump).Str("signal", sig.String()).Msg("cmd canceled")
 		} else if isSignaled {
-			l.Warn("cmd signaled", "exit_code", exitCode, "is_signaled", isSignaled, "is_coredump", isCoreDump, "signal", sig)
+			l.Warn().Int("exit_code", exitCode).Bool("is_signaled", isSignaled).Bool("is_coredump", isCoreDump).Str("signal", sig.String()).Msg("cmd signaled")
 		} else {
-			l.Error("cmd failed", "exit_code", exitCode, "is_signaled", isSignaled, "is_coredump", isCoreDump, "signal", sig)
+			l.Error().Int("exit_code", exitCode).Bool("is_signaled", isSignaled).Bool("is_coredump", isCoreDump).Str("signal", sig.String()).Msg("cmd failed")
 		}
 	}
-
-	c.Store(consts.FieldCmdExitCode, exitCode)
-	c.Store(consts.FieldCmdIsSignaled, isSignaled)
-	c.Store(consts.FieldCmdSignal, int(sig))
-	c.Store(consts.FieldCmdIsCoredump, isCoreDump)
 
 	if c.cfg.DumpStdout {
 		c.Store(consts.FieldCmdStdout, stdoutBuf.Bytes())

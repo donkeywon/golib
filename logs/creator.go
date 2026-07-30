@@ -2,32 +2,55 @@ package logs
 
 import (
 	"io"
-	"log/slog"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/DeRuina/timberjack"
 	"github.com/donkeywon/golib/errs"
+	"github.com/donkeywon/golib/util"
 	"github.com/donkeywon/golib/util/paths"
+	"github.com/petermattis/goid"
+	"github.com/rs/zerolog"
 )
 
+func init() {
+	zerolog.TimeFieldFormat = time.RFC3339Nano
+	zerolog.CallerMarshalFunc = func(pc uintptr, file string, line int) string {
+		keep := 2
+		for i := len(file) - 1; i >= 0; i-- {
+			if file[i] == '/' {
+				keep--
+				if keep == 0 {
+					file = file[i+1:]
+					break
+				}
+			}
+		}
+		return file + ":" + strconv.Itoa(line)
+	}
+	zerolog.ErrorStackMarshaler = func(err error) any {
+		return errs.ErrToStackString(err)
+	}
+}
+
 type Creator interface {
-	Create() (*slog.Logger, error)
+	Create() (zerolog.Logger, error)
 }
 
 var NopLoggerCreator Creator = nop{}
 
 type nop struct{}
 
-func (n nop) Create() (*slog.Logger, error) {
-	return slog.New(slog.DiscardHandler), nil
+func (n nop) Create() (zerolog.Logger, error) {
+	return zerolog.Nop(), nil
 }
 
 const (
 	FilepathSplitter      = ","
-	DefaultFormat         = "json"
-	DefaultFilepath       = "stdout"
+	DefaultFilepath       = "stderr"
 	DefaultMaxFileSize    = 100
 	DefaultMaxBackups     = 30
 	DefaultMaxAge         = 30
@@ -35,96 +58,62 @@ const (
 	DefaultCompression    = "zstd"
 )
 
-var (
-	DefaultLevel = &slog.LevelVar{}
-)
-
-type StderrLoggerCreator struct {
-	Format string       `env:"FORMAT"          long:"format"          yaml:"format"         description:"log line format"`
-	Level  slog.Leveler `env:"LEVEL"           long:"level"           yaml:"level"          description:"minimum enabled logging level"`
-}
-
-func NewStderrLoggerCreator() *StderrLoggerCreator {
-	return &StderrLoggerCreator{}
-}
-
-func (c *StderrLoggerCreator) Create() (*slog.Logger, error) {
-	var h slog.Handler
-	opts := &slog.HandlerOptions{
-		AddSource: true,
-		Level:     c.Level,
-	}
-	if c.Format == "json" {
-		h = slog.NewJSONHandler(os.Stderr, opts)
-	} else if c.Format == "console_lite" {
-		h = NewConsoleLiteHandler(os.Stderr, opts)
-	} else {
-		h = slog.NewTextHandler(os.Stderr, opts)
-	}
-	return slog.New(h), nil
-}
-
 type RotateLoggerCreator struct {
-	Filepath       string       `env:"FILEPATH"        long:"filepath"        yaml:"filepath"       description:"log file path"`
-	Format         string       `env:"FORMAT"          long:"format"          yaml:"format"         description:"log line format"`
-	MaxFileSize    int          `env:"MAX_FILE_SIZE"   long:"max-file-size"   yaml:"maxFileSize"    description:"maximum size in megabytes of the log file before it gets rotated"`
-	MaxBackups     int          `env:"MAX_BACKUPS"     long:"max-backups"     yaml:"maxBackups"     description:"maximum number of old log files to retain"`
-	MaxAge         int          `env:"MAX_AGE"         long:"max-age"         yaml:"maxAge"         description:"maximum number of days to retain old log files based on the timestamp encoded in their filename"`
-	Level          slog.Leveler `env:"LEVEL"           long:"level"           yaml:"level"          description:"minimum enabled logging level"`
-	EnableCompress bool         `env:"ENABLE_COMPRESS" long:"enable-compress" yaml:"enableCompress" description:"enable compress using gzip after log rotate"`
-	Compression    string       `env:"COMPRESSION"     long:"compression"     yaml:"compression"    description:"gzip or zstd"`
+	Level          zerolog.Level `env:"LEVEL"           long:"level"           yaml:"level"          description:"minimum enabled logging level"`
+	Filepath       string        `env:"FILEPATH"        long:"filepath"        yaml:"filepath"       description:"log file path"`
+	MaxFileSize    int           `env:"MAX_FILE_SIZE"   long:"max-file-size"   yaml:"maxFileSize"    description:"maximum size in megabytes of the log file before it gets rotated"`
+	MaxBackups     int           `env:"MAX_BACKUPS"     long:"max-backups"     yaml:"maxBackups"     description:"maximum number of old log files to retain"`
+	MaxAge         int           `env:"MAX_AGE"         long:"max-age"         yaml:"maxAge"         description:"maximum number of days to retain old log files based on the timestamp encoded in their filename"`
+	EnableCompress bool          `env:"ENABLE_COMPRESS" long:"enable-compress" yaml:"enableCompress" description:"enable compress using gzip after log rotate"`
+	Compression    string        `env:"COMPRESSION"     long:"compression"     yaml:"compression"    description:"gzip or zstd"`
 }
 
-func NewRotateLoggerCreator() *RotateLoggerCreator {
-	return &RotateLoggerCreator{
-		Level:          DefaultLevel,
+func NewRotateLoggerCreator() RotateLoggerCreator {
+	return RotateLoggerCreator{
+		Level:          zerolog.InfoLevel,
 		Filepath:       DefaultFilepath,
 		MaxFileSize:    DefaultMaxFileSize,
 		MaxBackups:     DefaultMaxBackups,
 		MaxAge:         DefaultMaxAge,
 		EnableCompress: DefaultEnableCompress,
-		Format:         DefaultFormat,
 		Compression:    DefaultCompression,
 	}
 }
 
-func (r *RotateLoggerCreator) Create() (*slog.Logger, error) {
-	outputs, err := buildOutputs(r)
+func (r RotateLoggerCreator) Create() (zerolog.Logger, error) {
+	outputs, err := buildOutputs(&r)
 	if err != nil {
-		return nil, errs.Wrapf(err, "build logger outputs failed: %s", r.Filepath)
+		return zerolog.Nop(), errs.Wrapf(err, "build logger outputs failed: %s", r.Filepath)
 	}
 	if len(outputs) == 0 {
-		return nil, errs.Errorf("empty logger outputs")
+		return zerolog.Nop(), errs.Errorf("empty logger outputs")
 	}
 
-	opts := &slog.HandlerOptions{
-		AddSource: true,
-		Level:     r.Level,
-	}
-	handlers := make([]slog.Handler, 0, len(outputs))
-	for i := range outputs {
-		if r.Format == "json" {
-			handlers = append(handlers, slog.NewJSONHandler(outputs[i], opts))
-		} else if r.Format == "console_lite" {
-			handlers = append(handlers, NewConsoleLiteHandler(outputs[i], opts))
-		} else {
-			handlers = append(handlers, slog.NewTextHandler(outputs[i], opts))
-		}
-	}
-	return slog.New(slog.NewMultiHandler(handlers...)), nil
+	l := zerolog.New(zerolog.MultiLevelWriter(outputs...)).
+		With().Stack().Caller().Timestamp().Logger().
+		Hook(zerolog.HookFunc(func(e *zerolog.Event, level zerolog.Level, message string) {
+			e.Int64("goid", goid.Get())
+		}))
+	return l, nil
 }
 
 func buildOutputs(c *RotateLoggerCreator) ([]io.Writer, error) {
-	fps := uniqueStrings(strings.Split(c.Filepath, FilepathSplitter))
+	fps := util.Unique(strings.Split(c.Filepath, FilepathSplitter))
 	var outputs []io.Writer
 	for _, fp := range fps {
 		fp = strings.TrimSpace(fp)
 		fpl := strings.ToLower(fp)
 		switch fpl {
 		case "stdout":
-			outputs = append(outputs, os.Stdout)
+			outputs = append(outputs, zerolog.NewConsoleWriter(func(w *zerolog.ConsoleWriter) {
+				w.Out = os.Stdout
+				w.TimeFormat = "0102 15:04:05.000000"
+			}))
 		case "stderr":
-			outputs = append(outputs, os.Stderr)
+			outputs = append(outputs, zerolog.NewConsoleWriter(func(w *zerolog.ConsoleWriter) {
+				w.Out = os.Stderr
+				w.TimeFormat = "0102 15:04:05.000000"
+			}))
 		default:
 			if !paths.DirExist(filepath.Dir(fp)) {
 				return nil, errs.New("log dir not exists: " + fp)
@@ -142,24 +131,4 @@ func buildOutputs(c *RotateLoggerCreator) ([]io.Writer, error) {
 		}
 	}
 	return outputs, nil
-}
-
-func uniqueStrings(strs []string) []string {
-	if len(strs) <= 1 {
-		return strs
-	}
-
-	result := make([]string, 0, len(strs))
-	seen := make(map[string]struct{}, len(strs))
-
-	for _, str := range strs {
-		if _, ok := seen[str]; ok {
-			continue
-		}
-
-		seen[str] = struct{}{}
-		result = append(result, str)
-	}
-
-	return result
 }

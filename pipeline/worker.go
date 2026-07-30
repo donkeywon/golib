@@ -19,6 +19,10 @@ type Worker interface {
 	Reader() io.Reader
 	WriteToWriter(io.Writer, ...WriterWrapFunc)
 	ReadFromReader(io.Reader, ...ReaderWrapFunc)
+	WithWriterWrappers(...WriterWrapFunc)
+	WithReaderWrappers(...ReaderWrapFunc)
+	WriterWrapped() bool
+	ReaderWrapped() bool
 	SupportZeroCopy() bool
 }
 
@@ -187,6 +191,14 @@ func (wk *BaseWorker) WithWriterWrappers(wrappers ...WriterWrapFunc) {
 
 func (wk *BaseWorker) WithReaderWrappers(wrappers ...ReaderWrapFunc) {
 	wk.rwrappers = append(wk.rwrappers, wrappers...)
+}
+
+func (wk *BaseWorker) WriterWrapped() bool {
+	return len(wk.wwrappers) > 0
+}
+
+func (wk *BaseWorker) ReaderWrapped() bool {
+	return len(wk.rwrappers) > 0
 }
 
 func (wk *BaseWorker) SupportZeroCopy() bool {

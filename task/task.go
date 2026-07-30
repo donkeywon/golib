@@ -4,16 +4,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log/slog"
 
 	"github.com/donkeywon/golib/errs"
 	"github.com/donkeywon/golib/kvs"
-	"github.com/donkeywon/golib/logs"
 	"github.com/donkeywon/golib/plugin"
 	"github.com/donkeywon/golib/runner"
 	"github.com/donkeywon/golib/task/step"
 	"github.com/donkeywon/golib/util/reflects"
 	"github.com/donkeywon/golib/util/v"
+	"github.com/rs/zerolog"
 )
 
 var (
@@ -69,7 +68,7 @@ type Task struct {
 	steps      []step.Step
 	deferSteps []step.Step
 
-	l      *slog.Logger
+	l      *zerolog.Logger
 	cancel context.CancelFunc
 }
 
@@ -105,7 +104,7 @@ func (t *Task) Init(ctx context.Context) error {
 }
 
 func (t *Task) Start(ctx context.Context) (err error) {
-	t.l = logs.FromCtx(ctx)
+	t.l = zerolog.Ctx(ctx)
 	ctx, t.cancel = context.WithCancel(ctx)
 
 	defer func() {
@@ -161,7 +160,7 @@ func (t *Task) runSteps(ctx context.Context) error {
 		err = hookStep(ctx, t.beforeStepRunHooks, i, typ, st, nil, t, false)
 		if err != nil {
 			if errors.Is(err, ErrSkip) {
-				t.l.Info("skip step", "hook_err", err, "step_idx", i, "step_type", typ)
+				t.l.Info().Err(err).Int("step_idx", i).Str("step_type", string(typ)).Msg("skip step")
 				continue
 			}
 			return errs.Wrapf(err, "hook before run step failed: %s(%d)", typ, i)
@@ -182,7 +181,7 @@ func (t *Task) runSteps(ctx context.Context) error {
 
 		if errors.Is(herr, ErrSkip) {
 			if err != nil {
-				t.l.Info("skip step err", "hook_err", herr, "step_err", err, "step_idx", i, "step_type", typ)
+				t.l.Info().AnErr("hook_err", err).AnErr("step_err", err).Int("step_idx", i).Str("step_type", string(typ)).Msg("skip step err")
 			}
 			continue
 		}
@@ -212,7 +211,7 @@ func (t *Task) runDeferSteps(ctx context.Context) error {
 		err := hookStep(ctx, t.beforeDeferStepRunHooks, i, typ, st, nil, t, true)
 		if err != nil {
 			if errors.Is(err, ErrSkip) {
-				t.l.Info("skip defer step", "hook_err", err, "defer_step_idx", i, "defer_step_type", typ)
+				t.l.Info().Err(err).Int("defer_step_idx", i).Str("defer_step_type", string(typ)).Msg("skip defer step")
 				continue
 			}
 			allErr = append(allErr, errs.Wrapf(err, "hook before run defer step failed: %s(%d)", typ, i))
@@ -233,7 +232,7 @@ func (t *Task) runDeferSteps(ctx context.Context) error {
 
 		if errors.Is(herr, ErrSkip) {
 			if err != nil {
-				t.l.Info("skip defer step err", "hook_err", herr, "defer_step_err", err, "defer_step_idx", i, "defer_step_type", typ)
+				t.l.Info().AnErr("hook_err", herr).AnErr("defer_step_err", err).Int("defer_step_idx", i).Str("defer_step_type", string(typ)).Msg("skip defer step err")
 			}
 			continue
 		}

@@ -3,19 +3,18 @@ package taskd
 import (
 	"context"
 	"errors"
-	"log/slog"
 	"sync"
 	"sync/atomic"
 
 	"github.com/alitto/pond/v2"
 	"github.com/donkeywon/golib/boot"
 	"github.com/donkeywon/golib/errs"
-	"github.com/donkeywon/golib/logs"
 	"github.com/donkeywon/golib/plugin"
 	"github.com/donkeywon/golib/runner"
 	"github.com/donkeywon/golib/task"
 	"github.com/donkeywon/golib/util/reflects"
 	"github.com/donkeywon/golib/util/v"
+	"github.com/rs/zerolog"
 )
 
 const DaemonTypeTaskd boot.DaemonType = "taskd"
@@ -85,7 +84,7 @@ type taskd struct {
 	runner.Base
 
 	cfg    *Cfg
-	l      *slog.Logger
+	l      *zerolog.Logger
 	ctx    context.Context
 	cancel context.CancelFunc
 
@@ -121,7 +120,7 @@ func (td *taskd) Init(ctx context.Context) error {
 }
 
 func (td *taskd) Start(ctx context.Context) error {
-	td.l = logs.FromCtx(ctx)
+	td.l = zerolog.Ctx(ctx)
 	td.ctx, td.cancel = context.WithCancel(ctx)
 
 	<-td.Stopping()
@@ -582,12 +581,7 @@ func (td *taskd) hook(t *task.Task, err error, h Hook, hookIdx int, hookType str
 		if t != nil {
 			taskID = t.Cfg().ID
 		}
-		td.l.Error("panic on hook task",
-			"task_id", taskID,
-			"err", errs.PanicToErr(p),
-			"idx", hookIdx,
-			"hook", reflects.GetFuncName(h),
-			"hook_type", hookType)
+		td.l.Error().Err(errs.PanicToErr(p)).Str("task_id", taskID).Int("idx", hookIdx).Str("hook", reflects.GetFuncName(h)).Str("hook_type", hookType).Msg("panic on hook task")
 	}()
 	h(t, err, extra)
 }

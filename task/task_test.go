@@ -3,14 +3,13 @@ package task
 import (
 	"context"
 	"errors"
-	"log/slog"
 	"testing"
 	"time"
 
-	"github.com/donkeywon/golib/logs"
 	"github.com/donkeywon/golib/plugin"
 	"github.com/donkeywon/golib/runner"
 	"github.com/donkeywon/golib/task/step"
+	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -326,7 +325,8 @@ func (s *testStep) Stop(ctx context.Context) error {
 // newTestTask creates a Task initialized with the given steps and cfg types.
 func newTestTask(steps []step.Step, stepTypes []step.Type) *Task {
 	t := New()
-	t.l = slog.New(slog.DiscardHandler)
+	l := zerolog.Nop()
+	t.l = &l
 	cfgs := make([]step.Cfg, len(steps))
 	for i := range steps {
 		typ := step.Type("test")
@@ -343,7 +343,8 @@ func newTestTask(steps []step.Step, stepTypes []step.Type) *Task {
 // newTestTaskWithDefer creates a Task initialized with the given defer steps.
 func newTestTaskWithDefer(steps []step.Step) *Task {
 	t := New()
-	t.l = slog.New(slog.DiscardHandler)
+	l := zerolog.Nop()
+	t.l = &l
 	cfgs := make([]step.Cfg, len(steps))
 	for i := range steps {
 		cfgs[i] = step.Cfg{Type: "test", Cfg: nil}
@@ -356,7 +357,8 @@ func newTestTaskWithDefer(steps []step.Step) *Task {
 // newTestTaskWithBoth creates a Task with both regular and defer steps.
 func newTestTaskWithBoth(steps, deferSteps []step.Step) *Task {
 	t := New()
-	t.l = slog.New(slog.DiscardHandler)
+	l := zerolog.Nop()
+	t.l = &l
 	stepCfgs := make([]step.Cfg, len(steps))
 	for i := range steps {
 		stepCfgs[i] = step.Cfg{Type: "test", Cfg: nil}
@@ -378,7 +380,7 @@ func newTS() *testStep {
 
 // loggerCtx returns a context with a discard logger, as expected by Task.Start.
 func loggerCtx() context.Context {
-	return logs.CtxWith(context.Background(), slog.New(slog.DiscardHandler))
+	return zerolog.Nop().WithContext(context.Background())
 }
 
 // =============================================================================

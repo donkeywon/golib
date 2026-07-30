@@ -3,17 +3,16 @@ package taskd
 import (
 	"context"
 	"errors"
-	"log/slog"
 	"testing"
 	"time"
 
 	"github.com/alitto/pond/v2"
 	"github.com/donkeywon/golib/boot"
-	"github.com/donkeywon/golib/logs"
 	"github.com/donkeywon/golib/plugin"
 	"github.com/donkeywon/golib/runner"
 	"github.com/donkeywon/golib/task"
 	"github.com/donkeywon/golib/task/step"
+	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -570,7 +569,8 @@ func TestOnTaskDone(t *testing.T) {
 
 func TestHookTask_NilTask(t *testing.T) {
 	td := &taskd{taskInfoMap: make(map[string]*taskInfo)}
-	td.l = slog.New(slog.DiscardHandler)
+	l := zerolog.Nop()
+	td.l = &l
 	called := false
 	hooks := []Hook{func(tt *task.Task, err error, extra *HookExtraData) {
 		assert.Nil(t, tt)
@@ -583,7 +583,8 @@ func TestHookTask_NilTask(t *testing.T) {
 
 func TestHookTask_WithTask(t *testing.T) {
 	td := &taskd{taskInfoMap: make(map[string]*taskInfo)}
-	td.l = slog.New(slog.DiscardHandler)
+	l := zerolog.Nop()
+	td.l = &l
 	tk := task.New()
 	tk.SetCfg(makeCfg("hook-test"))
 	called := false
@@ -597,7 +598,8 @@ func TestHookTask_WithTask(t *testing.T) {
 
 func TestHookTask_WithError(t *testing.T) {
 	td := &taskd{taskInfoMap: make(map[string]*taskInfo)}
-	td.l = slog.New(slog.DiscardHandler)
+	l := zerolog.Nop()
+	td.l = &l
 	testErr := errors.New("test error")
 	called := false
 	hooks := []Hook{func(tt *task.Task, err error, extra *HookExtraData) {
@@ -610,7 +612,8 @@ func TestHookTask_WithError(t *testing.T) {
 
 func TestHookTask_WithExtraData(t *testing.T) {
 	td := &taskd{taskInfoMap: make(map[string]*taskInfo)}
-	td.l = slog.New(slog.DiscardHandler)
+	l := zerolog.Nop()
+	td.l = &l
 	extra := &HookExtraData{Wait: true}
 	called := false
 	hooks := []Hook{func(tt *task.Task, err error, extra *HookExtraData) {
@@ -623,7 +626,8 @@ func TestHookTask_WithExtraData(t *testing.T) {
 
 func TestHookTask_MultipleHooks(t *testing.T) {
 	td := &taskd{taskInfoMap: make(map[string]*taskInfo)}
-	td.l = slog.New(slog.DiscardHandler)
+	l := zerolog.Nop()
+	td.l = &l
 	count := 0
 	hooks := []Hook{
 		func(tt *task.Task, err error, extra *HookExtraData) { count++ },
@@ -636,7 +640,8 @@ func TestHookTask_MultipleHooks(t *testing.T) {
 
 func TestHookTask_EmptyHooks(t *testing.T) {
 	td := &taskd{taskInfoMap: make(map[string]*taskInfo)}
-	td.l = slog.New(slog.DiscardHandler)
+	l := zerolog.Nop()
+	td.l = &l
 	// Should not panic
 	td.hookTask(nil, nil, nil, "test", nil)
 	td.hookTask(nil, nil, []Hook{}, "test", nil)
@@ -644,7 +649,8 @@ func TestHookTask_EmptyHooks(t *testing.T) {
 
 func TestHook_PanicRecovery(t *testing.T) {
 	td := &taskd{taskInfoMap: make(map[string]*taskInfo)}
-	td.l = slog.New(slog.DiscardHandler)
+	l := zerolog.Nop()
+	td.l = &l
 	called := false
 	td.hook(nil, nil, func(tk *task.Task, err error, extra *HookExtraData) {
 		called = true
@@ -656,7 +662,8 @@ func TestHook_PanicRecovery(t *testing.T) {
 
 func TestHook_PanicRecovery_WithTaskID(t *testing.T) {
 	td := &taskd{taskInfoMap: make(map[string]*taskInfo)}
-	td.l = slog.New(slog.DiscardHandler)
+	l := zerolog.Nop()
+	td.l = &l
 	tk := task.New()
 	// Use a cfg with an ID so hook's recover can log it
 	cfg := makeCfg("panic-task")
@@ -673,7 +680,8 @@ func TestHook_PanicRecovery_NoLogger(t *testing.T) {
 	// hook's recover handler calls td.l.Error which needs a logger.
 	// Even with a discard handler, hooks should not propagate panics.
 	td := &taskd{taskInfoMap: make(map[string]*taskInfo)}
-	td.l = slog.New(slog.DiscardHandler)
+	l := zerolog.Nop()
+	td.l = &l
 	called := false
 	td.hook(nil, nil, func(tk *task.Task, err error, extra *HookExtraData) {
 		called = true
@@ -685,7 +693,6 @@ func TestHook_PanicRecovery_NoLogger(t *testing.T) {
 // ---------------------------------------------------------------------------
 // createTask
 // ---------------------------------------------------------------------------
-
 
 // ---------------------------------------------------------------------------
 // initTask
@@ -730,10 +737,6 @@ func TestCreateInit_InvalidCfg(t *testing.T) {
 	assert.Contains(t, err.Error(), "invalid task cfg")
 }
 
-
-
-
-
 // ---------------------------------------------------------------------------
 // createInitSubmit
 // ---------------------------------------------------------------------------
@@ -744,7 +747,8 @@ func makeInitializedTaskd(t *testing.T) *taskd {
 		taskInfoMap: make(map[string]*taskInfo),
 		pools:       make(map[string]pond.Pool),
 	}
-	td.l = slog.New(slog.DiscardHandler)
+	l := zerolog.Nop()
+	td.l = &l
 	td.cfg = &Cfg{Pools: []PoolCfg{
 		{Name: "default", Size: 5, QueueSize: 10},
 		{Name: "io", Size: 3, QueueSize: 50},
@@ -760,8 +764,9 @@ func makeInitializedTaskd(t *testing.T) *taskd {
 // This is needed so ErrStopping paths can be tested.
 func startAndStopTaskd(t *testing.T, td *taskd) {
 	t.Helper()
-	td.l = slog.New(slog.DiscardHandler)
-	ctx := logs.CtxWith(context.Background(), td.l)
+	l := zerolog.Nop()
+	td.l = &l
+	ctx := td.l.WithContext(context.Background())
 
 	// Initialize runner.Base channels
 	td.Base.Init(ctx)
@@ -887,7 +892,7 @@ func TestStopTask_ErrStopping(t *testing.T) {
 func TestStopTask_RemovePaused(t *testing.T) {
 	td := &taskd{
 		taskInfoMap: make(map[string]*taskInfo),
-		l:           slog.New(slog.DiscardHandler),
+		l:           &zerolog.Logger{},
 	}
 	tk := task.New()
 	tk.SetCfg(makeCfg("paused-stop"))
@@ -903,7 +908,7 @@ func TestStopTask_RemovePaused(t *testing.T) {
 func TestStopTask_ErrTaskNotExists(t *testing.T) {
 	td := &taskd{
 		taskInfoMap: make(map[string]*taskInfo),
-		l:           slog.New(slog.DiscardHandler),
+		l:           &zerolog.Logger{},
 	}
 	err := td.StopTask(context.Background(), "ghost")
 	assert.ErrorIs(t, err, ErrTaskNotExists)
@@ -922,14 +927,14 @@ func TestStopTask_ErrTaskNotExists(t *testing.T) {
 func TestStopTask_Success(t *testing.T) {
 	td := &taskd{
 		taskInfoMap: make(map[string]*taskInfo),
-		l:           slog.New(slog.DiscardHandler),
+		l:           &zerolog.Logger{},
 	}
 
 	tk := task.New()
 	tk.SetCfg(makeCfg("stop-me"))
 
 	// Start the task so Started channel is closed, but don't stop it
-	ctx := logs.CtxWith(context.Background(), slog.New(slog.DiscardHandler))
+	ctx := zerolog.Nop().WithContext(context.Background())
 	tk.Base.Init(ctx)
 
 	done := make(chan struct{})
@@ -969,7 +974,7 @@ func TestPauseTask_ErrStopping(t *testing.T) {
 func TestPauseTask_ErrTaskNotExists(t *testing.T) {
 	td := &taskd{
 		taskInfoMap: make(map[string]*taskInfo),
-		l:           slog.New(slog.DiscardHandler),
+		l:           &zerolog.Logger{},
 	}
 	err := td.PauseTask(context.Background(), "ghost")
 	assert.ErrorIs(t, err, ErrTaskNotExists)
@@ -978,7 +983,7 @@ func TestPauseTask_ErrTaskNotExists(t *testing.T) {
 func TestPauseTask_ErrTaskNotStarted(t *testing.T) {
 	td := &taskd{
 		taskInfoMap: make(map[string]*taskInfo),
-		l:           slog.New(slog.DiscardHandler),
+		l:           &zerolog.Logger{},
 	}
 	tk := task.New()
 	tk.SetCfg(makeCfg("not-started"))
@@ -1008,7 +1013,7 @@ func TestResumeTask_ErrStopping(t *testing.T) {
 func TestResumeTask_ErrTaskNotPaused(t *testing.T) {
 	td := &taskd{
 		taskInfoMap: make(map[string]*taskInfo),
-		l:           slog.New(slog.DiscardHandler),
+		l:           &zerolog.Logger{},
 	}
 	// No task info at all
 	tt, err := td.ResumeTask(context.Background(), "ghost")
@@ -1052,7 +1057,7 @@ func TestWaitAllTaskDone_WithCompletedTasks(t *testing.T) {
 	td.taskInfoMap["done2"].state.Store(uint32(TaskStateRunning))
 
 	// Use runner.Start + runner.Stop to properly close Done channels
-	ctx := logs.CtxWith(context.Background(), slog.New(slog.DiscardHandler))
+	ctx := zerolog.Nop().WithContext(context.Background())
 
 	for _, tk := range []*task.Task{tk1, tk2} {
 		tk.Base.Init(ctx)
@@ -1251,7 +1256,7 @@ func TestInitTask_Panic(t *testing.T) {
 func TestStopTask_ErrTaskAlreadyStopping(t *testing.T) {
 	td := &taskd{
 		taskInfoMap: make(map[string]*taskInfo),
-		l:           slog.New(slog.DiscardHandler),
+		l:           &zerolog.Logger{},
 	}
 
 	// Create a task with no steps so Start returns immediately
@@ -1259,7 +1264,7 @@ func TestStopTask_ErrTaskAlreadyStopping(t *testing.T) {
 	tk.SetCfg(makeCfg("stopping-test"))
 
 	// Start and stop the task so its Stopping channel is closed
-	ctx := logs.CtxWith(context.Background(), slog.New(slog.DiscardHandler))
+	ctx := zerolog.Nop().WithContext(context.Background())
 	tk.Base.Init(ctx)
 	go func() { _ = runner.Start(ctx, tk) }()
 	time.Sleep(10 * time.Millisecond)
@@ -1280,13 +1285,13 @@ func TestStopTask_ErrTaskAlreadyStopping(t *testing.T) {
 func TestPauseTask_ErrTaskAlreadyStopping(t *testing.T) {
 	td := &taskd{
 		taskInfoMap: make(map[string]*taskInfo),
-		l:           slog.New(slog.DiscardHandler),
+		l:           &zerolog.Logger{},
 	}
 
 	tk := task.New()
 	tk.SetCfg(makeCfg("pausing-stop-test"))
 
-	ctx := logs.CtxWith(context.Background(), slog.New(slog.DiscardHandler))
+	ctx := zerolog.Nop().WithContext(context.Background())
 	tk.Base.Init(ctx)
 	go func() { _ = runner.Start(ctx, tk) }()
 	time.Sleep(10 * time.Millisecond)
@@ -1306,14 +1311,14 @@ func TestPauseTask_ErrTaskAlreadyStopping(t *testing.T) {
 func TestPauseTask_Success(t *testing.T) {
 	td := &taskd{
 		taskInfoMap: make(map[string]*taskInfo),
-		l:           slog.New(slog.DiscardHandler),
+		l:           &zerolog.Logger{},
 	}
 
 	tk := task.New()
 	tk.SetCfg(makeCfg("pause-me"))
 
 	// Start the task so Started channel is closed, but don't stop it
-	ctx := logs.CtxWith(context.Background(), slog.New(slog.DiscardHandler))
+	ctx := zerolog.Nop().WithContext(context.Background())
 	tk.Base.Init(ctx)
 
 	var startErr error
@@ -1357,14 +1362,14 @@ func TestPauseTask_Success(t *testing.T) {
 func TestPauseTask_AlreadyPausing(t *testing.T) {
 	td := &taskd{
 		taskInfoMap: make(map[string]*taskInfo),
-		l:           slog.New(slog.DiscardHandler),
+		l:           &zerolog.Logger{},
 	}
 
 	tk := task.New()
 	tk.SetCfg(makeCfg("was-pausing"))
 
 	// Start the task
-	ctx := logs.CtxWith(context.Background(), slog.New(slog.DiscardHandler))
+	ctx := zerolog.Nop().WithContext(context.Background())
 	tk.Base.Init(ctx)
 
 	done := make(chan struct{})
@@ -1392,7 +1397,6 @@ func TestPauseTask_AlreadyPausing(t *testing.T) {
 // ---------------------------------------------------------------------------
 // ResumeTask - resume fails, restorePaused called
 // ---------------------------------------------------------------------------
-
 
 // ---------------------------------------------------------------------------
 // createTask — success path (bug fixed: &cfg → cfg)
@@ -1445,7 +1449,7 @@ func TestCreateInitSubmit_Success(t *testing.T) {
 	td := &taskd{
 		taskInfoMap: make(map[string]*taskInfo),
 		pools:       make(map[string]pond.Pool),
-		l:           slog.New(slog.DiscardHandler),
+		l:           &zerolog.Logger{},
 	}
 	td.cfg = &Cfg{Pools: []PoolCfg{{Name: "default", Size: 5, QueueSize: 10}}}
 	td.Init(context.Background())
@@ -1467,7 +1471,7 @@ func TestResumeTask_Success(t *testing.T) {
 	td := &taskd{
 		taskInfoMap: make(map[string]*taskInfo),
 		pools:       make(map[string]pond.Pool),
-		l:           slog.New(slog.DiscardHandler),
+		l:           &zerolog.Logger{},
 	}
 	td.cfg = &Cfg{Pools: []PoolCfg{{Name: "default", Size: 5, QueueSize: 10}}}
 	td.Init(context.Background())

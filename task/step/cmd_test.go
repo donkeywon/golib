@@ -7,17 +7,14 @@ import (
 	"testing"
 
 	"github.com/donkeywon/golib/logs"
+	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 // loggerCtx returns a context with a nop slog.Logger for use in tests.
 func loggerCtx() context.Context {
-	l, err := logs.NopLoggerCreator.Create()
-	if err != nil {
-		panic(err)
-	}
-	return logs.CtxWith(context.Background(), l)
+	return zerolog.Nop().WithContext(context.Background())
 }
 
 func TestNewCmdStepCfg(t *testing.T) {

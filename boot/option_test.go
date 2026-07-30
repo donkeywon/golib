@@ -90,39 +90,6 @@ func TestOnCreated_MultipleTypes(t *testing.T) {
 	assert.Equal(t, []string{"daemon1", "daemon2"}, order)
 }
 
-func TestAfterDone(t *testing.T) {
-	called := false
-	opt := AfterDone("test-daemon", func(ctx context.Context) {
-		called = true
-	})
-	b := newBooter()
-	opt(b)
-	assert.Len(t, b.options.afterDone, 1)
-
-	b.options.afterDone["test-daemon"](context.Background())
-	assert.True(t, called)
-}
-
-func TestAfterDone_MultipleTypes(t *testing.T) {
-	order := make([]string, 0)
-	b := newBooter()
-
-	opt1 := AfterDone("daemon1", func(ctx context.Context) {
-		order = append(order, "daemon1")
-	})
-	opt2 := AfterDone("daemon2", func(ctx context.Context) {
-		order = append(order, "daemon2")
-	})
-
-	opt1(b)
-	opt2(b)
-	assert.Len(t, b.options.afterDone, 2)
-
-	b.options.afterDone["daemon2"](context.Background())
-	b.options.afterDone["daemon1"](context.Background())
-	assert.Equal(t, []string{"daemon2", "daemon1"}, order)
-}
-
 func TestCreateOptions(t *testing.T) {
 	opts := createOptions()
 	require.NotNil(t, opts)
@@ -132,9 +99,7 @@ func TestCreateOptions(t *testing.T) {
 	assert.Nil(t, opts.loggerCreator)
 	assert.Empty(t, opts.envPrefix)
 	assert.NotNil(t, opts.onCreated)
-	assert.NotNil(t, opts.afterDone)
 	assert.Empty(t, opts.onCreated)
-	assert.Empty(t, opts.afterDone)
 }
 
 func TestOption_Composition(t *testing.T) {

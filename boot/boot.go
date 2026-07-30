@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log/slog"
 	"os"
 	"os/signal"
 	"reflect"
@@ -26,6 +25,7 @@ import (
 	"github.com/goccy/go-yaml/ast"
 	"github.com/goccy/go-yaml/parser"
 	"github.com/jessevdk/go-flags"
+	"github.com/rs/zerolog"
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
@@ -105,15 +105,13 @@ type options struct {
 	loggerCreator logs.Creator
 	envPrefix     string
 	onCreated     map[DaemonType]OnCreatedFunc
-	afterDone     map[DaemonType]AfterDoneFunc
 }
 
 func createOptions() *options {
 	return &options{
 		onCreated:     make(map[DaemonType]OnCreatedFunc),
-		afterDone:     make(map[DaemonType]AfterDoneFunc),
 		loggerCfgKey:  "log",
-		loggerCreator: &logs.StderrLoggerCreator{Format: "console_lite"},
+		loggerCreator: &logs.RotateLoggerCreator{Filepath: "stderr"},
 	}
 }
 
@@ -125,7 +123,7 @@ type booter struct {
 	flagParser *flags.Parser
 
 	daemonsMap map[DaemonType]Daemon
-	l          *slog.Logger
+	l          zerolog.Logger
 }
 
 func create(opt ...Option) *booter {
@@ -168,12 +166,12 @@ func (b *booter) Init(ctx context.Context) error {
 	}
 	if b.options.PrintVersion {
 		fmt.Fprint(os.Stdout,
-			"Version:"+buildinfo.Version+"\n"+
-				"BuildTime:"+buildinfo.BuildTime+"\n"+
-				"CommitTime:"+buildinfo.CommitTime.Local().Format(time.DateTime)+"\n"+
-				"Revision:"+buildinfo.Revision+"\n"+
-				"GoVersion:"+runtime.Version()+"\n"+
-				"Arch:"+runtime.GOARCH+"\n")
+			"version:"+buildinfo.Version+"\n"+
+				"build_time:"+buildinfo.BuildTime+"\n"+
+				"commit_time:"+buildinfo.CommitTime.Local().Format(time.DateTime)+"\n"+
+				"revision:"+buildinfo.Revision+"\n"+
+				"go:"+runtime.Version()+"\n"+
+				"arch:"+runtime.GOARCH+"\n")
 		os.Exit(0)
 	}
 
@@ -192,14 +190,14 @@ func (b *booter) Init(ctx context.Context) error {
 		return errs.Wrap(err, "create logger failed")
 	}
 
-	b.l.Info("init", "version", buildinfo.Version, "build_time", buildinfo.BuildTime, "revision", buildinfo.Revision, "commit_time", buildinfo.CommitTime)
+	b.l.Info().Str("version", buildinfo.Version).Str("build_time", buildinfo.BuildTime).Str("revision", buildinfo.Revision).Time("commit_time", buildinfo.CommitTime).Msg("init")
 
 	for name, cfg := range b.cfgMap {
-		b.l.Debug("load config", "name", name, "cfg", cfg)
+		b.l.Debug().Str("name", name).Any("cfg", cfg).Msg("load config")
 	}
 
 	b.createDaemons(ctx)
-	err = b.initDaemons(logs.CtxWith(ctx, b.l))
+	err = b.initDaemons(b.l.WithContext(ctx))
 	if err != nil {
 		return errs.Wrap(err, "init daemons failed")
 	}
@@ -218,7 +216,7 @@ func (b *booter) Start(ctx context.Context) error {
 	for _, daemonType := range _daemonTypes {
 		daemon := b.daemonsMap[daemonType]
 		errg.Go(func() error {
-			ctx = logs.CtxWith(ctx, b.l.With("daemon", daemonType))
+			ctx = b.l.With().Str("daemon", string(daemonType)).Logger().WithContext(ctx)
 			e := runner.Start(ctx, daemon)
 			if errors.Is(e, context.Canceled) && errors.Is(context.Cause(ctx), errCanceled) {
 				return nil
@@ -232,7 +230,7 @@ func (b *booter) Start(ctx context.Context) error {
 				return nil
 			default:
 			}
-			b.l.Error("daemon done, should not happen", "daemon", daemonType)
+			b.l.Error().Str("daemon", string(daemonType)).Msg("daemon done, should not happen")
 			e = errs.Errorf("daemon done, should not happen: %s", daemonType)
 			return e
 		})
@@ -248,18 +246,18 @@ func (b *booter) Start(ctx context.Context) error {
 
 	select {
 	case sig := <-termSigCh:
-		b.l.Info("received signal", "signal", sig.String())
+		b.l.Info().Str("signal", sig.String()).Msg("received signal")
 		go func() {
 			e := runner.Stop(ctx, b)
 			if e != nil {
-				b.l.Error("stop booter failed", "err", e)
+				b.l.Error().Err(e).Msg("stop booter failed")
 			}
 		}()
 	case sig := <-intSigCh:
-		b.l.Info("received signal", "signal", sig.String())
+		b.l.Info().Str("signal", sig.String()).Msg("received signal")
 		cancel(errCanceled)
 	case <-b.Stopping():
-		b.l.Info("stopping")
+		b.l.Info().Msg("stopping")
 	}
 
 	return errg.Wait()

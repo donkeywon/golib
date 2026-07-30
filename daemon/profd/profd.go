@@ -3,7 +3,6 @@ package profd
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"net/http"
 	"net/http/pprof"
 	"strconv"
@@ -14,13 +13,13 @@ import (
 	"github.com/donkeywon/golib/boot"
 	"github.com/donkeywon/golib/daemon/httpd"
 	"github.com/donkeywon/golib/errs"
-	"github.com/donkeywon/golib/logs"
 	"github.com/donkeywon/golib/runner"
 	"github.com/donkeywon/golib/util/httpu"
 	"github.com/donkeywon/golib/util/prof"
 	"github.com/felixge/fgprof"
 	"github.com/google/gops/agent"
 	"github.com/maruel/panicparse/v2/stack/webstack"
+	"github.com/rs/zerolog"
 )
 
 const DaemonTypeProfd boot.DaemonType = "profd"
@@ -34,7 +33,7 @@ type Profd interface {
 
 type profd struct {
 	runner.Base
-	*slog.Logger
+	*zerolog.Logger
 
 	cfg Cfg
 
@@ -53,7 +52,7 @@ func New() boot.Daemon {
 }
 
 func (p *profd) Init(ctx context.Context) error {
-	p.Logger = logs.FromCtx(ctx)
+	p.Logger = zerolog.Ctx(ctx)
 	p.httpd = boot.Get[httpd.HTTPd](httpd.DaemonTypeHTTPd)
 
 	var err error
@@ -63,22 +62,13 @@ func (p *profd) Init(ctx context.Context) error {
 			if !p.cfg.SkipStartupErr {
 				return errs.Wrap(err, "startup profiling failed")
 			}
-			p.Error("startup profiling failed", "err", err,
-				"mode", p.cfg.StartupProfilingMode,
-				"duration", fmt.Sprintf("%ds", p.cfg.StartupProfilingSec),
-				"filepath", filepath)
+			p.Error().Err(err).Str("mode", p.cfg.StartupProfilingMode).Str("duration", fmt.Sprintf("%ds", p.cfg.StartupProfilingSec)).Str("filepath", filepath).Msg("startup profiling failed")
 		} else {
-			p.Info("startup profiling",
-				"mode", p.cfg.StartupProfilingMode,
-				"duration", fmt.Sprintf("%ds", p.cfg.StartupProfilingSec),
-				"filepath", filepath)
+			p.Info().Str("mode", p.cfg.StartupProfilingMode).Str("duration", fmt.Sprintf("%ds", p.cfg.StartupProfilingSec)).Str("filepath", filepath).Msg("startup profiling")
 			go func() {
 				select {
 				case <-done:
-					p.Info("startup profiling done",
-						"mode", p.cfg.StartupProfilingMode,
-						"duration", fmt.Sprintf("%ds", p.cfg.StartupProfilingSec),
-						"filepath", filepath)
+					p.Info().Str("mode", p.cfg.StartupProfilingMode).Str("duration", fmt.Sprintf("%ds", p.cfg.StartupProfilingSec)).Str("filepath", filepath).Msg("startup profiling done")
 				case <-p.Stopping():
 					return
 				}
@@ -92,7 +82,7 @@ func (p *profd) Init(ctx context.Context) error {
 			if !p.cfg.SkipStartupErr {
 				return errs.Wrap(err, "init statsviz failed")
 			}
-			p.Error("init statsviz failed", "err", err)
+			p.Error().Err(err).Msg("init statsviz failed")
 		} else {
 			p.httpd.Handle(p.cfg.Prefix+"/debug/statsviz/", p.midSecure(p.statsvizServer.Index()))
 			p.httpd.Handle(p.cfg.Prefix+"/debug/statsviz/ws", p.midSecure(p.statsvizServer.Ws()))
@@ -130,7 +120,7 @@ func (p *profd) Init(ctx context.Context) error {
 			if !p.cfg.SkipStartupErr {
 				return errs.Wrap(err, "init gops agent failed")
 			}
-			p.Error("init gops agent failed", "err", err, "addr", p.cfg.GoPsAddr)
+			p.Error().Err(err).Str("addr", p.cfg.GoPsAddr).Msg("init gops agent failed")
 		}
 	}
 
@@ -141,7 +131,7 @@ func (p *profd) Stop(ctx context.Context) error {
 	if p.cfg.EnableStartupProfiling && prof.IsRunning() {
 		err := prof.Stop()
 		if err != nil {
-			p.Warn("prof stop failed when stopping", "err", err)
+			p.Warn().Err(err).Msg("prof stop failed when stopping")
 		}
 	}
 	return nil
@@ -172,12 +162,12 @@ func (p *profd) startProf(w http.ResponseWriter, r *http.Request) {
 		httpu.RespBytes(w, http.StatusInternalServerError, []byte(err.Error()))
 		return
 	}
-	p.Info("start profiling", "mode", mode, "dir", paramDir, "timeout", timeout, "filepath", filepath)
+	p.Info().Str("mode", mode).Str("dir", paramDir).Int("timeout_sec", timeout).Str("filepath", filepath).Msg("start profiling")
 	if done != nil {
 		go func() {
 			select {
 			case <-done:
-				p.Info("profiling done", "mode", mode, "dir", paramDir, "timeout", timeout, "filepath", filepath)
+				p.Info().Str("mode", mode).Str("dir", paramDir).Int("timeout_sec", timeout).Str("filepath", filepath).Msg("profiling done")
 			case <-p.Stopping():
 			}
 		}()

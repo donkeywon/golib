@@ -5,15 +5,14 @@ import (
 	"context"
 	"database/sql"
 	"io"
-	"log/slog"
 	"strconv"
 	"time"
 
 	"github.com/donkeywon/golib/boot"
 	"github.com/donkeywon/golib/daemon/metricsd"
 	"github.com/donkeywon/golib/errs"
-	"github.com/donkeywon/golib/logs"
 	"github.com/donkeywon/golib/runner"
+	"github.com/rs/zerolog"
 )
 
 const DaemonTypeDBP boot.DaemonType = "dbp"
@@ -31,7 +30,7 @@ type dbp struct {
 	cfg      Cfg
 	dbs      map[string]*sql.DB
 	metricsd metricsd.Metricsd
-	l        *slog.Logger
+	l        *zerolog.Logger
 }
 
 func New() boot.Daemon {
@@ -41,7 +40,7 @@ func New() boot.Daemon {
 }
 
 func (d *dbp) Init(ctx context.Context) error {
-	d.l = logs.FromCtx(ctx)
+	d.l = zerolog.Ctx(ctx)
 	for _, dbCfg := range d.cfg.Pools {
 		db, err := sql.Open(dbCfg.Type, dbCfg.DSN)
 		if err != nil {
@@ -94,7 +93,7 @@ func (d *dbp) waitDBReady(ctx context.Context, db *sql.DB, name string, typ stri
 			}
 
 			t.Reset(time.Second)
-			d.l.Warn("check db ready failed", "err", err, "name", name, "type", typ)
+			d.l.Warn().Err(err).Str("name", name).Str("type", typ).Msg("check db ready failed")
 		}
 	}
 }
@@ -121,7 +120,7 @@ func (d *dbp) closeAll() {
 		}
 		err := db.Close()
 		if err != nil {
-			d.l.Error("close db failed", "err", err, "name", dbCfg.Name, "type", dbCfg.Type)
+			d.l.Error().Err(err).Str("name", dbCfg.Name).Str("type", dbCfg.Type).Msg("close db failed")
 		}
 	}
 }

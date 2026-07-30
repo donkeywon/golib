@@ -7,7 +7,6 @@ import (
 )
 
 type OnCreatedFunc func(context.Context)
-type AfterDoneFunc func(context.Context)
 
 type Option func(*booter)
 
@@ -39,11 +38,5 @@ func WithLoggerCreator(cfgKey string, c logs.Creator) Option {
 func OnCreated(t DaemonType, f OnCreatedFunc) Option {
 	return func(b *booter) {
 		b.options.onCreated[t] = f
-	}
-}
-
-func AfterDone(t DaemonType, f AfterDoneFunc) Option {
-	return func(b *booter) {
-		b.options.afterDone[t] = f
 	}
 }
