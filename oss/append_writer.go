@@ -21,7 +21,7 @@ const appendURLSuffix = "?append"
 
 type AppendWriter struct {
 	ctx               context.Context
-	cfg               *Cfg
+	cfg               Cfg
 	cancel            context.CancelFunc
 	bufw              *bufio.Writer
 	offset            int64
@@ -31,7 +31,7 @@ type AppendWriter struct {
 	blobCreated       bool
 }
 
-func NewAppendWriter(ctx context.Context, cfg *Cfg) *AppendWriter {
+func NewAppendWriter(ctx context.Context, cfg Cfg) *AppendWriter {
 	cfg.setDefaults()
 	w := &AppendWriter{
 		cfg:               cfg,
@@ -138,6 +138,7 @@ func (w *AppendWriter) sealBlob() error {
 			}
 		}),
 		retry.LastErrorOnly(true),
+		retry.Context(w.ctx),
 	)
 }
 
@@ -157,6 +158,7 @@ func (w *AppendWriter) init() error {
 			}
 		}),
 		retry.LastErrorOnly(true),
+		retry.Context(w.ctx),
 	)
 	if err != nil {
 		return errs.Wrap(err, "create append blob failed")
@@ -184,6 +186,7 @@ func (w *AppendWriter) retryAppendPart(p []byte) error {
 			}
 		}),
 		retry.LastErrorOnly(true),
+		retry.Context(w.ctx),
 	)
 }
 

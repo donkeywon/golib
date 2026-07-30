@@ -296,8 +296,8 @@ func newFakeS3Server(t *testing.T) (*httptest.Server, *s3Backend) {
 }
 
 // fakeS3Cfg creates a Cfg pointed at the given httptest server.
-func fakeS3Cfg(srv *httptest.Server, key string) *Cfg {
-	return &Cfg{
+func fakeS3Cfg(srv *httptest.Server, key string) Cfg {
+	return Cfg{
 		URL:      srv.URL + "/test-bucket/" + key,
 		Ak:       "AKIAIOSFODNN7EXAMPLE",
 		Sk:       "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
@@ -311,8 +311,8 @@ func fakeS3Cfg(srv *httptest.Server, key string) *Cfg {
 
 // fakeBlobCfg creates a Cfg for Azure Blob testing.
 // The URL contains "core.windows.net" to make IsAzblob return true.
-func fakeBlobCfg(srv *httptest.Server, key string) *Cfg {
-	return &Cfg{
+func fakeBlobCfg(srv *httptest.Server, key string) Cfg {
+	return Cfg{
 		URL:      srv.URL + "/test-blob.core.windows.net/test-container/" + key,
 		Ak:       "AKIAIOSFODNN7EXAMPLE",
 		Sk:       "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
@@ -330,7 +330,7 @@ func fakeBlobCfg(srv *httptest.Server, key string) *Cfg {
 
 func TestCfg_SetDefaults(t *testing.T) {
 	// All zero values → should be set to defaults
-	c := &Cfg{}
+	c := Cfg{}
 	c.setDefaults()
 	assert.Equal(t, 1, c.Retry)
 	assert.Equal(t, 60*time.Second, c.Timeout)
@@ -338,7 +338,7 @@ func TestCfg_SetDefaults(t *testing.T) {
 	assert.Equal(t, 1, c.Parallel)
 
 	// Non-zero values should be preserved
-	c2 := &Cfg{Retry: 5, Timeout: 10 * time.Second, PartSize: 100, Parallel: 2}
+	c2 := Cfg{Retry: 5, Timeout: 10 * time.Second, PartSize: 100, Parallel: 2}
 	c2.setDefaults()
 	assert.Equal(t, 5, c2.Retry)
 	assert.Equal(t, 10*time.Second, c2.Timeout)
@@ -346,7 +346,7 @@ func TestCfg_SetDefaults(t *testing.T) {
 	assert.Equal(t, 2, c2.Parallel)
 
 	// Mixed: some zero, some non-zero
-	c3 := &Cfg{Retry: 3, Timeout: 0, PartSize: 0, Parallel: 4}
+	c3 := Cfg{Retry: 3, Timeout: 0, PartSize: 0, Parallel: 4}
 	c3.setDefaults()
 	assert.Equal(t, 3, c3.Retry)
 	assert.Equal(t, 60*time.Second, c3.Timeout)
@@ -1500,7 +1500,7 @@ func TestAppendWriter_Write_FlakyServer(t *testing.T) {
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
 
-	cfg := &Cfg{
+	cfg := Cfg{
 		URL:      srv.URL + "/test-bucket/flaky-key",
 		Ak:       "AKIAIOSFODNN7EXAMPLE",
 		Sk:       "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
@@ -1543,7 +1543,7 @@ func TestAppendWriter_Write_MissingPositionHeader(t *testing.T) {
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
 
-	cfg := &Cfg{
+	cfg := Cfg{
 		URL:      srv.URL + "/test-bucket/noheader-key",
 		Ak:       "AKIAIOSFODNN7EXAMPLE",
 		Sk:       "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
@@ -1596,7 +1596,7 @@ func TestMultiPartWriter_Write_FlakyUpload(t *testing.T) {
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
 
-	cfg := &Cfg{
+	cfg := Cfg{
 		URL:      srv.URL + "/test-bucket/flaky-upload-key",
 		Ak:       "AKIAIOSFODNN7EXAMPLE",
 		Sk:       "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
@@ -1639,7 +1639,7 @@ func TestMultiPartWriter_Write_MissingETag(t *testing.T) {
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
 
-	cfg := &Cfg{
+	cfg := Cfg{
 		URL:      srv.URL + "/test-bucket/noetag-key",
 		Ak:       "AKIAIOSFODNN7EXAMPLE",
 		Sk:       "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
@@ -1679,7 +1679,7 @@ func TestAppendWriter_Blob_InitRetryFailure(t *testing.T) {
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
 
-	cfg := &Cfg{
+	cfg := Cfg{
 		URL:      srv.URL + "/test-blob.core.windows.net/test-container/fail-init",
 		Ak:       "AKIAIOSFODNN7EXAMPLE",
 		Sk:       "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
@@ -1729,7 +1729,7 @@ func TestAppendWriter_Blob_SealRetryFailure(t *testing.T) {
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
 
-	cfg := &Cfg{
+	cfg := Cfg{
 		URL:      srv.URL + "/test-blob.core.windows.net/test-container/fail-seal",
 		Ak:       "AKIAIOSFODNN7EXAMPLE",
 		Sk:       "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
@@ -1777,7 +1777,7 @@ func TestAppendWriter_Write_RetryContextCancel(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 	defer cancel()
 
-	cfg := &Cfg{
+	cfg := Cfg{
 		URL:      srv.URL + "/test-bucket/retry-cancel-key",
 		Ak:       "AKIAIOSFODNN7EXAMPLE",
 		Sk:       "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
@@ -1833,7 +1833,7 @@ func TestMultiPartWriter_Blob_FlakyComplete(t *testing.T) {
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
 
-	cfg := &Cfg{
+	cfg := Cfg{
 		URL:      srv.URL + "/test-blob.core.windows.net/test-container/flaky-complete",
 		Ak:       "AKIAIOSFODNN7EXAMPLE",
 		Sk:       "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",

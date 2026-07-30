@@ -11,10 +11,10 @@ import (
 
 type Reader struct {
 	*httpio.Reader
-	cfg *Cfg
+	cfg Cfg
 }
 
-func NewReader(ctx context.Context, cfg *Cfg, opts ...httpc.Option) *Reader {
+func NewReader(ctx context.Context, cfg Cfg, opts ...httpc.Option) *Reader {
 	r := &Reader{
 		cfg: cfg,
 	}

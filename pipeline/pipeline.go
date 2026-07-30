@@ -18,8 +18,13 @@ type Pipeline struct {
 	ws []Worker
 }
 
-func (p *Pipeline) Add(ws ...Worker) {
+func New() *Pipeline {
+	return &Pipeline{}
+}
+
+func (p *Pipeline) Add(ws ...Worker) *Pipeline {
 	p.ws = append(p.ws, ws...)
+	return p
 }
 
 func (p *Pipeline) Init(ctx context.Context) error {

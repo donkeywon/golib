@@ -92,7 +92,7 @@ type MultiPartWriter struct {
 	bufChan           chan []byte
 	bufw              *bufio.Writer
 	cancel            context.CancelFunc
-	cfg               *Cfg
+	cfg               Cfg
 	uploadID          string
 	parts             []*Part
 	blockList         []string
@@ -111,7 +111,7 @@ type MultiPartWriter struct {
 	completeHooks     []CompleteHook
 }
 
-func NewMultiPartWriter(ctx context.Context, cfg *Cfg) *MultiPartWriter {
+func NewMultiPartWriter(ctx context.Context, cfg Cfg) *MultiPartWriter {
 	cfg.setDefaults()
 	w := &MultiPartWriter{
 		ctx: ctx,
@@ -452,7 +452,7 @@ func (w *MultiPartWriter) abort() error {
 	_, err := retry.DoWithData(
 		func() (*http.Response, error) {
 			respBody.Reset()
-			return httpc.DeleteTimeout(w.ctx, w.cfg.Timeout, w.cfg.URL+"?uploadId="+w.uploadID,
+			return httpc.DeleteTimeout(context.Background(), w.cfg.Timeout, w.cfg.URL+"?uploadId="+w.uploadID,
 				httpc.ReqOptionFunc(w.addAuth),
 				httpc.CheckStatusCode(respBody, &respStatusCode, http.StatusNoContent),
 			)
@@ -517,7 +517,7 @@ func (w *MultiPartWriter) complete() error {
 	_, err = retry.DoWithData(
 		func() (*http.Response, error) {
 			respBody.Reset()
-			return httpc.DoTimeout(w.ctx, w.cfg.Timeout, method, url,
+			return httpc.DoTimeout(context.Background(), w.cfg.Timeout, method, url,
 				httpc.WithBodyMarshal(body, contentType, xml.Marshal),
 				httpc.ReqOptionFunc(w.addAuth),
 				httpc.CheckStatusCode(respBody, &respStatusCode, checkStatusCode),
@@ -564,6 +564,7 @@ func (w *MultiPartWriter) initMultiPart() (string, error) {
 		},
 		retry.LastErrorOnly(true),
 		retry.Attempts(uint(w.cfg.Retry)),
+		retry.Context(w.ctx),
 	)
 
 	if err != nil {
@@ -595,6 +596,7 @@ func (w *MultiPartWriter) retryUploadPart(partNo int, b []byte) *uploadPartResul
 			}
 		}),
 		retry.LastErrorOnly(true),
+		retry.Context(w.ctx),
 	)
 	return r
 }

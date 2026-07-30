@@ -8,7 +8,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/donkeywon/golib/aio"
+	"github.com/donkeywon/golib/oss"
 	"github.com/donkeywon/golib/runner"
+	"github.com/klauspost/compress/zstd"
+	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -978,4 +982,50 @@ func TestPipeline_Init_MixedZeroCopy(t *testing.T) {
 
 	assert.NotNil(t, w1.Writer())
 	assert.NotNil(t, w2.Reader())
+}
+
+func compressWrapper(w io.Writer) io.Writer {
+	zw, err := zstd.NewWriter(w, zstd.WithEncoderLevel(zstd.SpeedFastest))
+	if err != nil {
+		panic("create zstd writer failed")
+	}
+	return zw
+}
+
+func TestPipelineMultiWorker(t *testing.T) {
+	l := zerolog.New(zerolog.NewConsoleWriter(func(w *zerolog.ConsoleWriter) {
+		w.TimeFormat = time.DateTime
+	})).With().Timestamp().Caller().Logger()
+	ctx := l.WithContext(t.Context())
+
+	w := NewCmdWorker("cat", "test.file")
+
+	ossw := oss.NewMultiPartWriter(ctx, oss.Cfg{
+		URL:      "http://127.0.0.1:9110/test/test.file",
+		Ak:       "",
+		Sk:       "",
+		Parallel: 2,
+		PartSize: 5 * 1024 * 1024,
+		Timeout:  10 * time.Second,
+	})
+	ossw.OnUploadPart(func(uploadWorker, partNo, partSize int, etag string, err error) {
+		l.Info().Int("part_no", partNo).Int("part_size", partSize).Str("etag", etag).Msg("upload")
+	})
+	ossw.OnComplete(func(uploadID, body string, err error) {
+		l.Info().Str("upload_id", uploadID).Str("body", body).Msg("complete")
+	})
+
+	w.WriteToWriter(ossw, BufWrite(5*1024*1024), AsyncWrite(aio.BufSize(32*1024), aio.QueueSize(16)), compressWrapper)
+
+	p := New().Add(w)
+
+	err := runner.Init(ctx, p)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = runner.Start(ctx, p)
+	if err != nil {
+		t.Fatal(err)
+	}
 }

@@ -43,10 +43,6 @@ type BaseWorker struct {
 }
 
 func (wk *BaseWorker) Init(ctx context.Context) error {
-	if wk.r == nil || wk.w == nil {
-		panic("nil reader or writer")
-	}
-
 	wk.wrapWriters()
 	wk.wrapReaders()
 
@@ -152,6 +148,9 @@ func closeReader(r io.Reader) (err error) {
 }
 
 func (wk *BaseWorker) wrapWriters() {
+	if wk.w == nil {
+		return
+	}
 	wk.ws = append(wk.ws, wk.w)
 	for _, wrapper := range wk.wwrappers {
 		wk.w = wrapper(wk.w)
@@ -160,6 +159,9 @@ func (wk *BaseWorker) wrapWriters() {
 }
 
 func (wk *BaseWorker) wrapReaders() {
+	if wk.r == nil {
+		return
+	}
 	wk.rs = append(wk.rs, wk.r)
 	for _, wrapper := range wk.rwrappers {
 		wk.r = wrapper(wk.r)

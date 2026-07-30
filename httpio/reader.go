@@ -217,7 +217,7 @@ func (r *Reader) init() error {
 func (r *Reader) retryHead() error {
 	return retry.Do(func() error {
 		return r.head()
-	}, retry.Attempts(uint(r.opt.retry)), retry.LastErrorOnly(true))
+	}, retry.Attempts(uint(r.opt.retry)), retry.LastErrorOnly(true), retry.Context(r.ctx))
 }
 
 func (r *Reader) head() error {
@@ -245,6 +245,7 @@ func (r *Reader) retryRemainWriteTo(w io.Writer) (int64, error) {
 			return err
 		},
 		retry.Attempts(uint(r.opt.retry)),
+		retry.Context(r.ctx),
 	)
 	return nw, err
 }
@@ -276,6 +277,7 @@ func (r *Reader) retryReadFromRemain(p []byte) (int, error) {
 			return err != nil && err != io.EOF
 		}),
 		retry.LastErrorOnly(true),
+		retry.Context(r.ctx),
 	)
 	return nr, err
 }
@@ -306,6 +308,7 @@ func (r *Reader) retryGetRemain() (io.ReadCloser, error) {
 			return r.getRemain()
 		},
 		retry.Attempts(uint(r.opt.retry)),
+		retry.Context(r.ctx),
 	)
 }
 
@@ -349,6 +352,7 @@ func (r *Reader) retryGetNoRange() (*respBodyReader, error) {
 			}))
 		},
 		retry.Attempts(uint(r.opt.retry)),
+		retry.Context(r.ctx),
 	)
 	if err != nil {
 		if respBody != nil {
