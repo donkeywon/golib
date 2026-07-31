@@ -121,8 +121,7 @@ func TestStartWithCancelledContext(t *testing.T) {
 
 // TestStartContextCancellationDuringStart verifies that cancelling the context
 // during Start triggers a clean shutdown via the monitoring goroutine.
-// The Start call returns nil (clean shutdown), not context.Canceled,
-// because the cancellation is handled as a graceful stop signal.
+// The Start call returns ctx.Err() to signal the cancellation reason.
 func TestStartContextCancellationDuringStart(t *testing.T) {
 	r := &testRunner{}
 
@@ -142,8 +141,8 @@ func TestStartContextCancellationDuringStart(t *testing.T) {
 	cancel()
 
 	err := <-done
-	if err != nil {
-		t.Fatalf("Start returned unexpected error: %v", err)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected context.Canceled, got %v", err)
 	}
 	// Stop should be called via the monitoring goroutine on cancellation.
 	if !r.stopCalled.Load() {

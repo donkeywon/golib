@@ -101,7 +101,7 @@ func Start(ctx context.Context, r Runner) (err error) {
 		if stopErr != nil {
 			allErr = append(allErr, errs.Wrap(stopErr, "stop runner failed"))
 		}
-		if canceled {
+		if canceled && ctx.Err() != err {
 			allErr = append(allErr, ctx.Err())
 		}
 		err = errors.Join(allErr...)
