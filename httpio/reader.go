@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/avast/retry-go/v4"
@@ -32,7 +33,7 @@ type respBodyReader struct {
 
 func (r *respBodyReader) Read(p []byte) (n int, err error) {
 	n, err = r.ReadCloser.Read(p)
-	r.r.offset += int64(n)
+	atomic.AddInt64(&r.r.offset, int64(n))
 	return
 }
 
@@ -302,19 +303,13 @@ func (r *Reader) readFromRemain(p []byte) (n int, err error) {
 	return n, err
 }
 
-func (r *Reader) retryGetRemain() (io.ReadCloser, error) {
-	return retry.DoWithData(
-		func() (io.ReadCloser, error) {
-			return r.getRemain()
-		},
-		retry.Attempts(uint(r.opt.retry)),
-		retry.Context(r.ctx),
-	)
-}
-
 func (r *Reader) getRemain() (*respBodyReader, error) {
 	var respBody io.ReadCloser
-	_, err := r.getPart(r.Offset(), r.end-r.Offset(), httpc.RespOptionFunc(func(resp *http.Response) error {
+	n := r.Len()
+	if n <= 0 {
+		return nil, io.EOF
+	}
+	_, err := r.getPart(r.Offset(), n, httpc.RespOptionFunc(func(resp *http.Response) error {
 		respBody = resp.Body
 		resp.Body = io.NopCloser(resp.Body)
 		return nil
@@ -353,6 +348,12 @@ func (r *Reader) retryGetNoRange() (*respBodyReader, error) {
 		},
 		retry.Attempts(uint(r.opt.retry)),
 		retry.Context(r.ctx),
+		retry.OnRetry(func(attempt uint, err error) {
+			if err != nil && respBody != nil {
+				respBody.Close()
+				respBody = nil
+			}
+		}),
 	)
 	if err != nil {
 		if respBody != nil {
@@ -373,7 +374,7 @@ func (r *Reader) get(opts ...httpc.Option) (*http.Response, error) {
 
 // Offset is current offset of read.
 func (r *Reader) Offset() int64 {
-	return r.offset
+	return atomic.LoadInt64(&r.offset)
 }
 
 // Len returns content length need read, -1 means unknown.
@@ -381,7 +382,7 @@ func (r *Reader) Len() int64 {
 	if r.end <= 0 {
 		return -1
 	}
-	return r.end - r.offset
+	return r.end - r.Offset()
 }
 
 func (r *Reader) Size() int64 {
