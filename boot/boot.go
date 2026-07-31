@@ -107,12 +107,18 @@ type options struct {
 	onCreated     map[DaemonType]OnCreatedFunc
 }
 
-func createOptions() *options {
-	return &options{
+func createOptions(opt ...Option) *options {
+	options := &options{
 		onCreated:     make(map[DaemonType]OnCreatedFunc),
 		loggerCfgKey:  "log",
 		loggerCreator: &logs.RotateLoggerCreator{Filepath: "stderr"},
 	}
+
+	for _, o := range opt {
+		o(options)
+	}
+
+	return options
 }
 
 type booter struct {
@@ -127,16 +133,10 @@ type booter struct {
 }
 
 func create(opt ...Option) *booter {
-	b := &booter{
-		options:    createOptions(),
+	return &booter{
+		options:    createOptions(opt...),
 		daemonsMap: make(map[DaemonType]Daemon, len(_daemonTypes)),
 	}
-
-	for _, o := range opt {
-		o(b)
-	}
-
-	return b
 }
 
 func (b *booter) Init(ctx context.Context) error {
@@ -162,6 +162,7 @@ func (b *booter) Init(ctx context.Context) error {
 			os.Exit(0)
 		}
 
+		// flag parser output content
 		os.Exit(1)
 	}
 	if b.options.PrintVersion {
@@ -189,6 +190,8 @@ func (b *booter) Init(ctx context.Context) error {
 	if err != nil {
 		return errs.Wrap(err, "create logger failed")
 	}
+	defaultContextLogger := b.l.With().Bool("logger_not_in_ctx", true).Logger()
+	zerolog.DefaultContextLogger = &defaultContextLogger
 
 	b.l.Info().Str("version", buildinfo.Version).Str("build_time", buildinfo.BuildTime).Str("revision", buildinfo.Revision).Time("commit_time", buildinfo.CommitTime).Msg("init")
 
@@ -197,7 +200,7 @@ func (b *booter) Init(ctx context.Context) error {
 	}
 
 	b.createDaemons(ctx)
-	err = b.initDaemons(b.l.WithContext(ctx))
+	err = b.initDaemons(ctx)
 	if err != nil {
 		return errs.Wrap(err, "init daemons failed")
 	}
@@ -216,9 +219,10 @@ func (b *booter) Start(ctx context.Context) error {
 	for _, daemonType := range _daemonTypes {
 		daemon := b.daemonsMap[daemonType]
 		errg.Go(func() error {
-			ctx = b.l.With().Str("daemon", string(daemonType)).Logger().WithContext(ctx)
-			e := runner.Start(ctx, daemon)
+			dctx := b.l.With().Str("daemon", string(daemonType)).Logger().WithContext(ctx)
+			e := runner.Start(dctx, daemon)
 			if errors.Is(e, context.Canceled) && errors.Is(context.Cause(ctx), errCanceled) {
+				b.l.Info().Str("daemon", string(daemonType)).Err(e).Msg("daemon canceled")
 				return nil
 			}
 			if e != nil {
@@ -248,13 +252,22 @@ func (b *booter) Start(ctx context.Context) error {
 	case sig := <-termSigCh:
 		b.l.Info().Str("signal", sig.String()).Msg("received signal")
 		go func() {
-			e := runner.Stop(ctx, b)
+			e := runner.Stop(context.WithoutCancel(ctx), b)
 			if e != nil {
 				b.l.Error().Err(e).Msg("stop booter failed")
 			}
 		}()
+		select {
+		case sig := <-termSigCh:
+			b.l.Info().Str("signal", sig.String()).Msg("received signal twice, canceling")
+			cancel(errCanceled)
+		case sig := <-intSigCh:
+			b.l.Info().Str("signal", sig.String()).Msg("received signal twice, canceling")
+			cancel(errCanceled)
+		case <-b.StopDone():
+		}
 	case sig := <-intSigCh:
-		b.l.Info().Str("signal", sig.String()).Msg("received signal")
+		b.l.Info().Str("signal", sig.String()).Msg("received signal, canceling")
 		cancel(errCanceled)
 	case <-b.Stopping():
 		b.l.Info().Msg("stopping")
@@ -270,7 +283,8 @@ func (b *booter) Stop(ctx context.Context) error {
 		case <-ctx.Done():
 			return errors.Join(append(allErr, ctx.Err())...)
 		default:
-			err := runner.StopAndWait(ctx, b.daemonsMap[typ])
+			dctx := b.l.With().Str("daemon", string(typ)).Logger().WithContext(ctx)
+			err := runner.StopAndWait(dctx, b.daemonsMap[typ])
 			if err != nil {
 				allErr = append(allErr, errs.Wrapf(err, "stop daemon failed: %s", typ))
 			}
@@ -285,9 +299,10 @@ func (b *booter) createDaemons(ctx context.Context) {
 		daemon := plugin.CreateWithCfg[Daemon](daemonType, reflect.ValueOf(cfg).Elem().Interface())
 		b.daemonsMap[daemonType] = daemon
 
+		dctx := b.l.With().Str("daemon", string(daemonType)).Logger().WithContext(ctx)
 		onCreated := b.options.onCreated[daemonType]
 		if onCreated != nil {
-			onCreated(ctx)
+			onCreated(dctx)
 		}
 	}
 }
@@ -295,8 +310,9 @@ func (b *booter) createDaemons(ctx context.Context) {
 func (b *booter) initDaemons(ctx context.Context) error {
 	var err error
 	for _, daemonType := range _daemonTypes {
+		dctx := b.l.With().Str("daemon", string(daemonType)).Logger().WithContext(ctx)
 		daemon := b.daemonsMap[daemonType]
-		err = runner.Init(ctx, daemon)
+		err = runner.Init(dctx, daemon)
 		if err != nil {
 			return errs.Wrapf(err, "init daemon failed: %s", daemonType)
 		}

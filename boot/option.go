@@ -8,17 +8,17 @@ import (
 
 type OnCreatedFunc func(context.Context)
 
-type Option func(*booter)
+type Option func(*options)
 
 func CfgPath(cfgPath string) Option {
-	return func(b *booter) {
-		b.options.CfgPath = cfgPath
+	return func(o *options) {
+		o.CfgPath = cfgPath
 	}
 }
 
 func EnvPrefix(envPrefix string) Option {
-	return func(b *booter) {
-		b.options.envPrefix = envPrefix
+	return func(o *options) {
+		o.envPrefix = envPrefix
 	}
 }
 
@@ -29,14 +29,14 @@ func WithLoggerCreator(cfgKey string, c logs.Creator) Option {
 	if c == nil {
 		panic("nil logger creator")
 	}
-	return func(b *booter) {
-		b.options.loggerCfgKey = cfgKey
-		b.options.loggerCreator = c
+	return func(o *options) {
+		o.loggerCfgKey = cfgKey
+		o.loggerCreator = c
 	}
 }
 
 func OnCreated(t DaemonType, f OnCreatedFunc) Option {
-	return func(b *booter) {
-		b.options.onCreated[t] = f
+	return func(o *options) {
+		o.onCreated[t] = f
 	}
 }

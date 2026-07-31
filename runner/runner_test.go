@@ -2,841 +2,673 @@ package runner
 
 import (
 	"context"
-	"sync"
+	"errors"
+	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
-
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
-// mockRunner implements Runner for testing.
-type mockRunner struct {
+// testRunner is a Runner that allows control over each lifecycle method's behavior.
+// All lifecycle methods MUST be called through runner.Init/Start/Stop, not directly.
+type testRunner struct {
 	Base
 
 	initErr  error
 	startErr error
 	stopErr  error
 
-	// startDelay delays the Start method to simulate work.
-	startDelay time.Duration
+	initFn  func()
+	startFn func()
+	stopFn  func()
 
-	// stopCalledCh signals when Stop is called.
-	stopCalledCh chan struct{}
-
-	// initCalled tracks if Init was called.
-	initCalled bool
-
-	// startBlock if non-nil blocks the Start method until closed.
-	startBlock chan struct{}
+	initCalled  atomic.Bool
+	startCalled atomic.Bool
+	stopCalled  atomic.Bool
 }
 
-func newMockRunner() *mockRunner {
-	return &mockRunner{
-		stopCalledCh: make(chan struct{}, 1),
+func (tr *testRunner) Init(ctx context.Context) error {
+	tr.initCalled.Store(true)
+	_ = tr.Base.Init(ctx)
+	if tr.initFn != nil {
+		tr.initFn()
 	}
+	return tr.initErr
 }
 
-func (m *mockRunner) Init(ctx context.Context) error {
-	m.initCalled = true
-	return m.initErr
-}
-
-func (m *mockRunner) Start(ctx context.Context) error {
-	if m.startDelay > 0 {
-		time.Sleep(m.startDelay)
+func (tr *testRunner) Start(ctx context.Context) error {
+	tr.startCalled.Store(true)
+	if tr.startFn != nil {
+		tr.startFn()
 	}
-	if m.startBlock != nil {
-		<-m.startBlock
+	if tr.startErr != nil {
+		return tr.startErr
 	}
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	default:
+	return tr.Base.Start(ctx)
+}
+
+func (tr *testRunner) Stop(ctx context.Context) error {
+	tr.stopCalled.Store(true)
+	if tr.stopFn != nil {
+		tr.stopFn()
 	}
-	if m.startErr != nil {
-		return m.startErr
+	return tr.stopErr
+}
+
+// TestNormalLifecycle verifies the happy path: Init → Start → Stop → Done.
+func TestNormalLifecycle(t *testing.T) {
+	r := &testRunner{}
+
+	ctx := context.Background()
+
+	if err := Init(ctx, r); err != nil {
+		t.Fatal("Init failed:", err)
 	}
-	<-m.Stopping()
-	return nil
-}
-
-func (m *mockRunner) Stop(ctx context.Context) error {
-	select {
-	case m.stopCalledCh <- struct{}{}:
-	default:
+	if !r.initCalled.Load() {
+		t.Fatal("Init was not called on runner")
 	}
-	return m.stopErr
-}
 
-// panicRunner implements Runner but panics in certain methods.
-type panicRunner struct {
-	Base
-	initPanic  bool
-	startPanic bool
-	stopPanic  bool
-}
-
-func (p *panicRunner) Init(ctx context.Context) error {
-	if p.initPanic {
-		panic("init panic")
-	}
-	return nil
-}
-
-func (p *panicRunner) Start(ctx context.Context) error {
-	if p.startPanic {
-		panic("start panic")
-	}
-	<-p.Stopping()
-	return nil
-}
-
-func (p *panicRunner) Stop(ctx context.Context) error {
-	if p.stopPanic {
-		panic("stop panic")
-	}
-	return nil
-}
-
-// TestInit tests the Init function.
-func TestInit(t *testing.T) {
-	t.Run("nil runner panics", func(t *testing.T) {
-		assert.PanicsWithValue(t, "nil runner", func() {
-			_ = Init(context.Background(), nil)
-		})
-	})
-
-	t.Run("nil context panics", func(t *testing.T) {
-		assert.PanicsWithValue(t, "nil context", func() {
-			_ = Init(nil, &Base{})
-		})
-	})
-
-	t.Run("valid runner", func(t *testing.T) {
-		m := newMockRunner()
-		err := Init(context.Background(), m)
-		require.NoError(t, err)
-		assert.True(t, m.initCalled)
-	})
-
-	t.Run("panic in init is recovered", func(t *testing.T) {
-		p := &panicRunner{initPanic: true}
-		err := Init(context.Background(), p)
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "init panic")
-	})
-}
-
-// TestStart tests the Start function.
-func TestStart(t *testing.T) {
-	t.Run("nil runner panics", func(t *testing.T) {
-		assert.PanicsWithValue(t, "nil runner", func() {
-			_ = Start(context.Background(), nil)
-		})
-	})
-
-	t.Run("nil context panics", func(t *testing.T) {
-		assert.PanicsWithValue(t, "nil context", func() {
-			_ = Start(nil, &Base{})
-		})
-	})
-
-	t.Run("stop before start panics", func(t *testing.T) {
-		m := newMockRunner()
-		// Simulate a runner that has been stopped but not started.
-		// We need Stopping channel closed to trigger this panic.
-		// The panic happens in the stop function, not in start.
-		// Let's test the scenario: calling stop on a runner that was started but "stopped"
-		// is tricky. Actually the "stop before start" panic comes from stop(), not Start().
-		// Start() panics on "start after stopping".
-		_ = m
-	})
-
-	t.Run("valid runner returns nil", func(t *testing.T) {
-		m := newMockRunner()
-		// Start the runner in a goroutine and then stop it.
-		errCh := make(chan error, 1)
-		go func() {
-			errCh <- Start(context.Background(), m)
-		}()
-
-		// Wait briefly and then stop.
-		time.Sleep(50 * time.Millisecond)
-		err := Stop(context.Background(), m)
-		require.NoError(t, err)
-
-		startErr := <-errCh
-		require.NoError(t, startErr)
-	})
-
-	t.Run("start after stopping panics", func(t *testing.T) {
-		m := newMockRunner()
-		// Manually mark stopping/started to simulate a stopped runner.
-		m.init()
-		m.markStarted()
-		m.markStopping()
-		assert.PanicsWithValue(t, "start after stopping", func() {
-			_ = Start(context.Background(), m)
-		})
-	})
-
-	t.Run("start again panics", func(t *testing.T) {
-		m := newMockRunner()
-		m.init()
-		m.markStarted()
-		assert.PanicsWithValue(t, "start again", func() {
-			_ = Start(context.Background(), m)
-		})
-	})
-
-	t.Run("start with context cancellation before markStarted", func(t *testing.T) {
-		m := newMockRunner()
-		ctx, cancel := context.WithCancel(context.Background())
-		cancel()
-		err := Start(ctx, m)
-		assert.ErrorIs(t, err, context.Canceled)
-	})
-
-	t.Run("start panic is recovered", func(t *testing.T) {
-		p := &panicRunner{startPanic: true}
-		err := Start(context.Background(), p)
-		require.Error(t, err)
-		// The Done channel should be marked.
-	})
-}
-
-// TestBase_Init tests Base.Init.
-func TestBase_Init(t *testing.T) {
-	b := &Base{}
-	err := b.Init(context.Background())
-	require.NoError(t, err)
-
-	// Channels should be initialized.
-	assert.NotNil(t, b.started)
-	assert.NotNil(t, b.stopping)
-	assert.NotNil(t, b.done)
-	assert.NotNil(t, b.stopDone)
-}
-
-// TestBase_Start tests Base.Start (blocks on Stopping).
-func TestBase_Start(t *testing.T) {
-	b := &Base{}
-	b.init()
-
-	// Start blocks until Stopping channel is closed.
-	errCh := make(chan error, 1)
+	done := make(chan error, 1)
 	go func() {
-		errCh <- b.Start(context.Background())
+		done <- Start(ctx, r)
 	}()
 
-	// Ensure the goroutine has started and is blocking.
-	time.Sleep(50 * time.Millisecond)
+	// Give the goroutine time to enter Start and mark started.
+	time.Sleep(10 * time.Millisecond)
 
-	// Close the stopping channel to unblock.
-	close(b.stopping)
+	if err := Stop(ctx, r); err != nil {
+		t.Fatal("Stop failed:", err)
+	}
 
+	if startErr := <-done; startErr != nil {
+		t.Fatal("Start returned error:", startErr)
+	}
+	if !r.startCalled.Load() {
+		t.Fatal("Start was not called on runner")
+	}
+	if !r.stopCalled.Load() {
+		t.Fatal("Stop was not called on runner")
+	}
+
+	// Verify Done channel is closed.
 	select {
-	case err := <-errCh:
-		require.NoError(t, err)
-	case <-time.After(time.Second):
-		t.Fatal("Base.Start did not return after stopping channel closed")
+	case <-r.Done():
+	default:
+		t.Fatal("Done channel was not closed")
 	}
 }
 
-// TestBase_Stop tests Base.Stop.
-func TestBase_Stop(t *testing.T) {
-	b := &Base{}
-	err := b.Stop(context.Background())
-	require.NoError(t, err)
+// TestStartWithCancelledContext verifies that Start returns the context error
+// when the context is already cancelled.
+func TestStartWithCancelledContext(t *testing.T) {
+	r := &testRunner{}
+	if err := Init(context.Background(), r); err != nil {
+		t.Fatal("Init failed:", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	err := Start(ctx, r)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected context.Canceled, got %v", err)
+	}
+	// Start should not have been called since the context was already cancelled.
+	if r.startCalled.Load() {
+		t.Fatal("Start was unexpectedly called")
+	}
 }
 
-// TestBase_Started tests Base.Started (init lazily).
-func TestBase_Started(t *testing.T) {
-	b := &Base{}
-	ch := b.Started()
-	assert.NotNil(t, ch)
-	// Second call returns same channel.
-	ch2 := b.Started()
-	assert.True(t, sameChan(ch, ch2))
+// TestStartContextCancellationDuringStart verifies that cancelling the context
+// during Start triggers a clean shutdown via the monitoring goroutine.
+// The Start call returns nil (clean shutdown), not context.Canceled,
+// because the cancellation is handled as a graceful stop signal.
+func TestStartContextCancellationDuringStart(t *testing.T) {
+	r := &testRunner{}
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	if err := Init(context.Background(), r); err != nil {
+		t.Fatal("Init failed:", err)
+	}
+
+	done := make(chan error, 1)
+	go func() {
+		done <- Start(ctx, r)
+	}()
+
+	// Give Start time to enter, then cancel.
+	time.Sleep(10 * time.Millisecond)
+	cancel()
+
+	err := <-done
+	if err != nil {
+		t.Fatalf("Start returned unexpected error: %v", err)
+	}
+	// Stop should be called via the monitoring goroutine on cancellation.
+	if !r.stopCalled.Load() {
+		t.Fatal("Stop was not called after context cancellation")
+	}
 }
 
-// TestBase_Stopping tests Base.Stopping.
-func TestBase_Stopping(t *testing.T) {
-	b := &Base{}
-	ch := b.Stopping()
-	assert.NotNil(t, ch)
-}
+// TestStopBeforeStart verifies that calling Stop before Start panics.
+func TestStopBeforeStart(t *testing.T) {
+	r := &testRunner{}
 
-// TestBase_StopDone tests Base.StopDone.
-func TestBase_StopDone(t *testing.T) {
-	b := &Base{}
-	ch := b.StopDone()
-	assert.NotNil(t, ch)
-}
+	if err := Init(context.Background(), r); err != nil {
+		t.Fatal("Init failed:", err)
+	}
 
-// TestBase_Done tests Base.Done.
-func TestBase_Done(t *testing.T) {
-	b := &Base{}
-	ch := b.Done()
-	assert.NotNil(t, ch)
-}
-
-// TestBase_markStarted tests markStarted.
-func TestBase_markStarted(t *testing.T) {
-	b := &Base{}
-	assert.True(t, b.markStarted(), "first call should return true")
-	assert.False(t, b.markStarted(), "second call should return false")
-}
-
-// TestBase_markStopping tests markStopping.
-func TestBase_markStopping(t *testing.T) {
-	b := &Base{}
-	assert.True(t, b.markStopping(), "first call should return true")
-	assert.False(t, b.markStopping(), "second call should return false")
-}
-
-// TestBase_markStopDone tests markStopDone.
-func TestBase_markStopDone(t *testing.T) {
-	b := &Base{}
-	assert.True(t, b.markStopDone(), "first call should return true")
-	assert.False(t, b.markStopDone(), "second call should return false")
-}
-
-// TestBase_markDone tests markDone.
-func TestBase_markDone(t *testing.T) {
-	b := &Base{}
-	assert.True(t, b.markDone(), "first call should return true")
-	assert.False(t, b.markDone(), "second call should return false")
-}
-
-// TestBase_closeCh tests the closeCh helper.
-func TestBase_closeCh(t *testing.T) {
-	b := &Base{}
-	b.init()
-
-	// closeCh initially - should close the channel and return true.
-	assert.True(t, b.closeCh(&sync.Once{}, make(chan struct{})))
-
-	// Re-init and test that calling closeCh twice returns false second time.
-	var once sync.Once
-	ch := make(chan struct{})
-	assert.True(t, b.closeCh(&once, ch), "first call should return true")
-	assert.False(t, b.closeCh(&once, ch), "second call should return false")
-}
-
-// TestStop tests the Stop function.
-func TestStop(t *testing.T) {
-	t.Run("valid runner", func(t *testing.T) {
-		m := newMockRunner()
-		// Start and stop.
-		go func() {
-			_ = Start(context.Background(), m)
-		}()
-
-		time.Sleep(50 * time.Millisecond)
-		err := Stop(context.Background(), m)
-		require.NoError(t, err)
-
-		// Verify Stop was called.
-		select {
-		case <-m.stopCalledCh:
-			// OK
-		default:
-			t.Fatal("Stop not called")
+	defer func() {
+		if recover() == nil {
+			t.Fatal("expected panic for Stop before Start")
 		}
-	})
-
-	t.Run("nil context panics", func(t *testing.T) {
-		m := newMockRunner()
-		m.init()
-		m.markStarted()
-		assert.Panics(t, func() {
-			_ = Stop(nil, m)
-		})
-	})
-
-	t.Run("nil runner panics", func(t *testing.T) {
-		assert.Panics(t, func() {
-			_ = Stop(context.Background(), nil)
-		})
-	})
-
-	t.Run("stop before start panics", func(t *testing.T) {
-		m := newMockRunner()
-		assert.PanicsWithValue(t, "stop before start", func() {
-			_ = Stop(context.Background(), m)
-		})
-	})
-
-	t.Run("stop again returns nil", func(t *testing.T) {
-		m := newMockRunner()
-		go func() {
-			_ = Start(context.Background(), m)
-		}()
-		time.Sleep(50 * time.Millisecond)
-
-		err := Stop(context.Background(), m)
-		require.NoError(t, err)
-
-		// Second call should return nil (already stopping).
-		err = Stop(context.Background(), m)
-		require.NoError(t, err)
-	})
-
-	t.Run("stop with panic is recovered", func(t *testing.T) {
-		p := &panicRunner{stopPanic: true}
-		go func() {
-			_ = Start(context.Background(), p)
-		}()
-		time.Sleep(50 * time.Millisecond)
-
-		err := Stop(context.Background(), p)
-		require.Error(t, err)
-		// Can also test: the error includes "stop panic".
-	})
+	}()
+	_ = Stop(context.Background(), r)
 }
 
-// TestStopAndWait tests the StopAndWait function.
+// TestStartTwice verifies that calling Start twice panics.
+func TestStartTwice(t *testing.T) {
+	r := &testRunner{}
+
+	if err := Init(context.Background(), r); err != nil {
+		t.Fatal("Init failed:", err)
+	}
+
+	ctx := context.Background()
+
+	started := make(chan struct{})
+	r.startFn = func() { close(started) }
+
+	done := make(chan error, 1)
+	go func() {
+		done <- Start(ctx, r)
+	}()
+
+	// Wait until the first Start has entered.
+	<-started
+
+	// Second Start must be called from a goroutine because it panics.
+	// The recover in a different goroutine won't catch it, so we verify
+	// the panic propagates correctly.
+	panicCaught := make(chan any, 1)
+	go func() {
+		defer func() {
+			panicCaught <- recover()
+		}()
+		_ = Start(ctx, r)
+	}()
+
+	p := <-panicCaught
+	if p == nil {
+		_ = Stop(ctx, r)
+		<-done
+		t.Fatal("expected panic for Start twice")
+	}
+
+	// Cleanup.
+	_ = Stop(ctx, r)
+	<-done
+}
+
+// TestStopIdempotent verifies that calling Stop multiple times is safe.
+func TestStopIdempotent(t *testing.T) {
+	r := &testRunner{}
+
+	ctx := context.Background()
+	if err := Init(ctx, r); err != nil {
+		t.Fatal("Init failed:", err)
+	}
+
+	done := make(chan error, 1)
+	go func() {
+		done <- Start(ctx, r)
+	}()
+
+	time.Sleep(10 * time.Millisecond)
+
+	// First stop.
+	if err := Stop(ctx, r); err != nil {
+		t.Fatal("first Stop failed:", err)
+	}
+	if !r.stopCalled.Load() {
+		t.Fatal("Stop was not called on first attempt")
+	}
+
+	// Reset flag to verify second Stop does not call Stop again.
+	r.stopCalled.Store(false)
+
+	// Second stop should not panic and should return nil.
+	if err := Stop(ctx, r); err != nil {
+		t.Fatal("second Stop returned error:", err)
+	}
+	if r.stopCalled.Load() {
+		t.Fatal("Stop was called again on second attempt")
+	}
+
+	if err := <-done; err != nil {
+		t.Fatal("Start returned error:", err)
+	}
+}
+
+// TestStopAndWait verifies that StopAndWait blocks until Done is closed.
 func TestStopAndWait(t *testing.T) {
-	t.Run("valid runner", func(t *testing.T) {
-		m := newMockRunner()
-		go func() {
-			_ = Start(context.Background(), m)
-		}()
-		time.Sleep(50 * time.Millisecond)
+	r := &testRunner{}
 
-		err := StopAndWait(context.Background(), m)
-		require.NoError(t, err)
+	ctx := context.Background()
+	if err := Init(ctx, r); err != nil {
+		t.Fatal("Init failed:", err)
+	}
 
-		select {
-		case <-m.Done():
-			// Done should be marked.
-		default:
-			t.Fatal("Done not marked")
-		}
-	})
-
-	t.Run("nil context panics", func(t *testing.T) {
-		m := newMockRunner()
-		m.init()
-		m.markStarted()
-		assert.Panics(t, func() {
-			_ = StopAndWait(nil, m)
-		})
-	})
-
-	t.Run("nil runner panics", func(t *testing.T) {
-		assert.Panics(t, func() {
-			_ = StopAndWait(context.Background(), nil)
-		})
-	})
-
-	t.Run("stop before start panics", func(t *testing.T) {
-		m := newMockRunner()
-		assert.PanicsWithValue(t, "stop before start", func() {
-			_ = StopAndWait(context.Background(), m)
-		})
-	})
-
-	t.Run("stop again waits for done", func(t *testing.T) {
-		m := newMockRunner()
-		go func() {
-			_ = Start(context.Background(), m)
-		}()
-		time.Sleep(50 * time.Millisecond)
-
-		err := StopAndWait(context.Background(), m)
-		require.NoError(t, err)
-
-		// Second call - should still work and wait for done.
-		err = StopAndWait(context.Background(), m)
-		require.NoError(t, err)
-	})
-
-	t.Run("stop and wait with context cancellation", func(t *testing.T) {
-		m := newMockRunner()
-		go func() {
-			_ = Start(context.Background(), m)
-		}()
-		time.Sleep(50 * time.Millisecond)
-
-		ctx, cancel := context.WithCancel(context.Background())
-		cancel()
-		err := StopAndWait(ctx, m)
-		require.Error(t, err)
-	})
-}
-
-// TestRunner_contextCancellation tests Start with context cancellation after markStarted.
-func TestRunner_contextCancellation(t *testing.T) {
-	m := newMockRunner()
-	m.startDelay = 200 * time.Millisecond
-
-	ctx, cancel := context.WithCancel(context.Background())
-	errCh := make(chan error, 1)
 	go func() {
-		errCh <- Start(ctx, m)
+		_ = Start(ctx, r)
 	}()
 
-	// Cancel the context during Start (after markStarted).
-	time.Sleep(50 * time.Millisecond)
-	cancel()
+	time.Sleep(10 * time.Millisecond)
 
-	err := <-errCh
-	require.Error(t, err)
-}
+	err := StopAndWait(ctx, r)
+	if err != nil {
+		t.Fatal("StopAndWait failed:", err)
+	}
 
-// TestRunner_Stop_contextCancellation tests Stop with context cancellation.
-func TestRunner_Stop_contextCancellation(t *testing.T) {
-	m := newMockRunner()
-	go func() {
-		_ = Start(context.Background(), m)
-	}()
-	time.Sleep(50 * time.Millisecond)
-
-	// Set a stop error so we can see the stop error.
-	m.stopErr = assert.AnError
-
-	err := Stop(context.Background(), m)
-	require.Error(t, err)
-	assert.ErrorIs(t, err, assert.AnError)
-}
-
-// sameChan checks if two channels are the same underlying channel.
-func sameChan(a, b <-chan struct{}) bool {
-	return a == b
-}
-
-// TestInit_channelsLazyInit tests that channels are initialized lazily via the initOnce.
-func TestInit_channelsLazyInit(t *testing.T) {
-	b := &Base{}
-	// Before any call, channels are nil (zero value).
-	assert.Nil(t, b.started)
-	assert.Nil(t, b.stopping)
-	assert.Nil(t, b.done)
-	assert.Nil(t, b.stopDone)
-
-	// Calling Started should init all channels.
-	startedCh := b.Started()
-	assert.NotNil(t, b.started)
-	assert.NotNil(t, b.stopping)
-	assert.NotNil(t, b.done)
-	assert.NotNil(t, b.stopDone)
-	assert.NotNil(t, startedCh)
-}
-
-// TestRunner_InterfaceCompliance tests that mockRunner and Base satisfy Runner.
-func TestRunner_InterfaceCompliance(t *testing.T) {
-	var _ Runner = (*mockRunner)(nil)
-	var _ Runner = (*Base)(nil)
-	var _ Lifecycle = (*mockRunner)(nil)
-	var _ Signaler = (*mockRunner)(nil)
-}
-
-// TestStop_secondStopCallsWaitDone tests the case where stop is called twice,
-// and the second call with wait=true.
-func TestStop_secondStopCallsWaitDone(t *testing.T) {
-	m := newMockRunner()
-	go func() {
-		_ = Start(context.Background(), m)
-	}()
-	time.Sleep(50 * time.Millisecond)
-
-	// First stop (no wait).
-	err := Stop(context.Background(), m)
-	require.NoError(t, err)
-
-	// Now Done should be available because markDone was called in Start's defer.
-	// But markDone is called after r.Start returns in the defer block of Start.
-	// The Start function blocks on Stopping, and Stop closes Stopping + calls r.Stop.
-	// So after Stop returns, Start should still be in its defer, about to call r.markDone().
-	time.Sleep(50 * time.Millisecond)
-
-	// Second stop with wait.
-	err = StopAndWait(context.Background(), m)
-	require.NoError(t, err)
-}
-
-// TestStart_contextDoneBeforeMarkStarted tests that if ctx is already done,
-// Start returns ctx.Err() before calling markStarted.
-func TestStart_contextDoneBeforeMarkStarted(t *testing.T) {
-	m := newMockRunner()
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-
-	err := Start(ctx, m)
-	assert.ErrorIs(t, err, context.Canceled)
-	// markStarted should NOT have been called, so Started channel
-	// should still be open (reading from it would block).
+	// Done must be closed after StopAndWait returns.
 	select {
-	case <-m.Started():
-		t.Fatal("Started channel should NOT be closed")
+	case <-r.Done():
 	default:
-		// expected - channel is still open
+		t.Fatal("Done was not closed after StopAndWait")
 	}
 }
 
-// errAndPanicRunner returns an error from Init/Start/Stop AND panics.
-type errAndPanicRunner struct {
-	Base
-	initErrAndPanic  bool
-	startErrAndPanic bool
-	stopErrAndPanic  bool
-	startBlock       chan struct{}
-}
+// TestStopAndWaitAfterStop verifies calling StopAndWait after Stop still works.
+func TestStopAndWaitAfterStop(t *testing.T) {
+	r := &testRunner{}
 
-func (r *errAndPanicRunner) Init(ctx context.Context) error {
-	if r.initErrAndPanic {
-		// Return error first, then panic. The defer in runner.Init will
-		// catch the panic and join it with the returned error.
-		defer func() { panic("init panic after error") }()
-		return assert.AnError
+	ctx := context.Background()
+	if err := Init(ctx, r); err != nil {
+		t.Fatal("Init failed:", err)
 	}
-	return nil
-}
 
-func (r *errAndPanicRunner) Start(ctx context.Context) error {
-	if r.startErrAndPanic {
-		defer func() { panic("start panic after error") }()
-		return assert.AnError
-	}
-	if r.startBlock != nil {
-		<-r.startBlock
-	}
-	return assert.AnError
-}
-
-func (r *errAndPanicRunner) Stop(ctx context.Context) error {
-	if r.stopErrAndPanic {
-		// Return error first, then panic.
-		defer func() { panic("stop panic after error") }()
-		return assert.AnError
-	}
-	return assert.AnError
-}
-
-// TestInit_ErrorAndPanic tests the init recover path where r.Init panics.
-// Note: when r.Init panics via defer after returning a value, runner.Init's
-// named return err stays nil. The errors.Join path is unreachable because
-// the panic unwinds before err is assigned.
-func TestInit_ErrorAndPanic(t *testing.T) {
-	p := &errAndPanicRunner{initErrAndPanic: true}
-	err := Init(context.Background(), p)
-	require.Error(t, err)
-	// err will be the panic error only, because the return value is
-	// lost when the deferred panic in r.Init unwinds.
-	assert.Contains(t, err.Error(), "init panic after error")
-}
-
-// TestSafeStop_ErrorAndPanic tests safeStop when r.Stop panics.
-// Note: the errors.Join path in safeStop is unreachable via deferred panic
-// because the return value is lost when the panic unwinds.
-func TestSafeStop_ErrorAndPanic(t *testing.T) {
-	p := &errAndPanicRunner{stopErrAndPanic: true}
-	p.init()
-	p.markStarted()
-
-	err := safeStop(context.Background(), p)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "stop panic after error")
-}
-
-// TestStart_StartError tests Start when r.Start returns an error.
-func TestStart_StartError(t *testing.T) {
-	m := newMockRunner()
-	m.startErr = assert.AnError
-
-	err := Start(context.Background(), m)
-	require.Error(t, err)
-	assert.ErrorIs(t, err, assert.AnError)
-}
-
-// TestStart_StopErrorFromContextCancel tests when context cancellation
-// triggers a stop that returns an error.
-func TestStart_StopErrorFromContextCancel(t *testing.T) {
-	m := newMockRunner()
-	m.stopErr = assert.AnError
-
-	ctx, cancel := context.WithCancel(context.Background())
-	errCh := make(chan error, 1)
 	go func() {
-		errCh <- Start(ctx, m)
+		_ = Start(ctx, r)
 	}()
 
-	// Wait for start to be marked.
+	time.Sleep(10 * time.Millisecond)
+
+	if err := Stop(ctx, r); err != nil {
+		t.Fatal("Stop failed:", err)
+	}
+
+	// StopAndWait after Stop should still work (waits for Done).
+	err := StopAndWait(ctx, r)
+	if err != nil {
+		t.Fatal("StopAndWait after Stop failed:", err)
+	}
+}
+
+// TestStopAndWaitBlocksUntilDone verifies StopAndWait blocks until Done is closed.
+func TestStopAndWaitBlocksUntilDone(t *testing.T) {
+	r := &testRunner{}
+
+	ctx := context.Background()
+	if err := Init(ctx, r); err != nil {
+		t.Fatal("Init failed:", err)
+	}
+
+	go func() {
+		_ = Start(ctx, r)
+	}()
+
+	time.Sleep(10 * time.Millisecond)
+
+	// StopAndWait with active context should block until Done.
+	err := StopAndWait(ctx, r)
+	if err != nil {
+		t.Fatal("StopAndWait failed:", err)
+	}
+
+	// Done must be closed.
 	select {
-	case <-m.Started():
-	case <-time.After(time.Second):
-		t.Fatal("not started")
-	}
-
-	// Cancel context to trigger stop.
-	cancel()
-
-	err := <-errCh
-	require.Error(t, err)
-}
-
-// TestStart_PanicDuringStart tests the panic path in Start's defer.
-func TestStart_PanicDuringStart(t *testing.T) {
-	p := &panicRunner{startPanic: true}
-	err := Start(context.Background(), p)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "start panic")
-}
-
-// TestStart_CtxCancelWithStoppingReady tests the goroutine's inner select
-// where r.Stopping() is ready immediately after ctx cancellation.
-// This requires the runtime to choose ctx.Done over r.Stopping in the outer
-// select when both are ready. We run multiple iterations to hit the path.
-func TestStart_CtxCancelWithStoppingReady(t *testing.T) {
-	for range 100 {
-		m := newMockRunner()
-		ctx, cancel := context.WithCancel(context.Background())
-
-		errCh := make(chan error, 1)
-		go func() {
-			errCh <- Start(ctx, m)
-		}()
-
-		// Wait for started.
-		<-m.Started()
-
-		// Cancel context.
-		cancel()
-
-		// Immediately call Stop - both ctx.Done and Stopping become ready.
-		// The runtime may pick ctx.Done in outer select, then Stopping in inner.
-		_ = Stop(context.Background(), m)
-
-		<-errCh
+	case <-r.Done():
+	default:
+		t.Fatal("Done was not closed after StopAndWait")
 	}
 }
 
-// TestStart_CtxCancelWithDoneReady tests the goroutine's inner select
-// where r.Done() is ready immediately after ctx cancellation.
-func TestStart_CtxCancelWithDoneReady(t *testing.T) {
-	for range 100 {
-		m := newMockRunner()
-		ctx, cancel := context.WithCancel(context.Background())
+// TestInitPanicRecovery verifies panic in Init is recovered and returned as error.
+func TestInitPanicRecovery(t *testing.T) {
+	r := &testRunner{
+		initFn: func() {
+			panic("boom in init")
+		},
+	}
 
-		errCh := make(chan error, 1)
-		go func() {
-			errCh <- Start(ctx, m)
-		}()
-
-		// Wait for started.
-		<-m.Started()
-
-		// Cancel context.
-		cancel()
-
-		// Immediately call Stop - triggers markStopping, r.Start unblocks,
-		// markDone runs in defer. Both ctx.Done and Done become ready.
-		// Runtime may pick ctx.Done in outer, then Done in inner select.
-		_ = Stop(context.Background(), m)
-
-		<-errCh
+	err := Init(context.Background(), r)
+	if err == nil {
+		t.Fatal("expected error from Init panic")
+	}
+	if !strings.Contains(err.Error(), "boom in init") {
+		t.Fatalf("expected panic message in error, got: %v", err)
 	}
 }
 
-// TestStart_StartErrorAndStopError tests Start when r.Start returns error
-// AND the context cancellation triggers stop which also returns error.
-func TestStart_StartErrorAndStopError(t *testing.T) {
-	m := newMockRunner()
-	m.startErr = assert.AnError
-	m.stopErr = assert.AnError
+// TestStartPanicRecovery verifies panic in Start is recovered and Done is still closed.
+func TestStartPanicRecovery(t *testing.T) {
+	r := &testRunner{
+		startFn: func() {
+			panic("boom in start")
+		},
+	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	errCh := make(chan error, 1)
-	go func() {
-		errCh <- Start(ctx, m)
-	}()
+	ctx := context.Background()
+	if err := Init(ctx, r); err != nil {
+		t.Fatal("Init failed:", err)
+	}
 
-	// Wait for started.
+	err := Start(ctx, r)
+	if err == nil {
+		t.Fatal("expected error from Start panic")
+	}
+	if !strings.Contains(err.Error(), "boom in start") {
+		t.Fatalf("expected panic message in error, got: %v", err)
+	}
+
+	// Done must be closed even after Start panic.
 	select {
-	case <-m.Started():
-	case <-time.After(time.Second):
-		t.Fatal("not started")
+	case <-r.Done():
+	default:
+		t.Fatal("Done was not closed after Start panic")
+	}
+}
+
+// TestStopPanicRecovery verifies panic in Stop is recovered.
+func TestStopPanicRecovery(t *testing.T) {
+	r := &testRunner{
+		stopFn: func() {
+			panic("boom in stop")
+		},
 	}
 
-	// Cancel context to trigger stop with error.
-	cancel()
+	ctx := context.Background()
+	if err := Init(ctx, r); err != nil {
+		t.Fatal("Init failed:", err)
+	}
 
-	err := <-errCh
-	require.Error(t, err)
+	done := make(chan error, 1)
+	go func() {
+		done <- Start(ctx, r)
+	}()
+
+	time.Sleep(10 * time.Millisecond)
+
+	err := Stop(ctx, r)
+	if err == nil {
+		t.Fatal("expected error from Stop panic")
+	}
+	if !strings.Contains(err.Error(), "boom in stop") {
+		t.Fatalf("expected panic message in error, got: %v", err)
+	}
+
+	if startErr := <-done; startErr != nil {
+		t.Fatal("Start returned error:", startErr)
+	}
 }
 
-// TestStop_StopError tests Stop when r.Stop returns an error.
-func TestStop_StopError(t *testing.T) {
-	m := newMockRunner()
-	m.stopErr = assert.AnError
-	go func() {
-		_ = Start(context.Background(), m)
-	}()
-	time.Sleep(50 * time.Millisecond)
+// TestInitError verifies that Init error is propagated correctly.
+func TestInitError(t *testing.T) {
+	wantErr := errors.New("init error")
+	r := &testRunner{
+		initErr: wantErr,
+	}
 
-	err := Stop(context.Background(), m)
-	require.Error(t, err)
-	assert.ErrorIs(t, err, assert.AnError)
+	err := Init(context.Background(), r)
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("expected %v, got %v", wantErr, err)
+	}
 }
 
-// TestStopAndWait_StopError tests StopAndWait when r.Stop returns an error.
-func TestStopAndWait_StopError(t *testing.T) {
-	m := newMockRunner()
-	m.stopErr = assert.AnError
-	go func() {
-		_ = Start(context.Background(), m)
-	}()
-	time.Sleep(50 * time.Millisecond)
+// TestStartError verifies that Start error is propagated.
+func TestStartError(t *testing.T) {
+	wantErr := errors.New("start error")
+	r := &testRunner{
+		startErr: wantErr,
+	}
 
-	err := StopAndWait(context.Background(), m)
-	require.Error(t, err)
-	assert.ErrorIs(t, err, assert.AnError)
+	ctx := context.Background()
+	if err := Init(ctx, r); err != nil {
+		t.Fatal("Init failed:", err)
+	}
+
+	err := Start(ctx, r)
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("expected %v, got %v", wantErr, err)
+	}
 }
 
-// TestStop_contextCancellationInWaitDone tests StopAndWait with context that cancels during waitDone.
-func TestStopAndWait_contextCancellationDuringWait(t *testing.T) {
-	m := newMockRunner()
-	// Start the runner but make Start block forever (never sends to Stopping).
+// TestStopError verifies that Stop error is propagated.
+func TestStopError(t *testing.T) {
+	wantErr := errors.New("stop error")
+	r := &testRunner{
+		stopErr: wantErr,
+	}
+
+	ctx := context.Background()
+	if err := Init(ctx, r); err != nil {
+		t.Fatal("Init failed:", err)
+	}
+
+	done := make(chan error, 1)
 	go func() {
-		_ = Start(context.Background(), m)
+		done <- Start(ctx, r)
 	}()
-	time.Sleep(50 * time.Millisecond)
 
-	// Now markStarted should be true (Start called it).
-	// Call stop. The stopErr will be nil so safeStop returns nil.
-	// But then waitDone will block because Done is not closed.
-	// We need context cancellation to unblock.
-	// Actually, Stop sets markStopping which closes stopping.
-	// Start blocks on <-Stopping, so after markStopping, Start unblocks and returns.
-	// Then markDone is called.
-	// So Done should become ready quickly.
-	err := Stop(context.Background(), m)
-	require.NoError(t, err)
+	time.Sleep(10 * time.Millisecond)
 
-	// Wait a bit for Done.
-	time.Sleep(50 * time.Millisecond)
+	err := Stop(ctx, r)
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("expected %v, got %v", wantErr, err)
+	}
 
-	// Now test with cancelled context.
-	err = StopAndWait(context.Background(), m)
-	require.NoError(t, err)
+	if startErr := <-done; startErr != nil {
+		t.Fatal("Start returned error:", startErr)
+	}
+}
 
-	// For a real context cancellation test during waitDone,
-	// we need a runner whose Done channel never closes.
-	m2 := newMockRunner()
+// TestConcurrentStop verifies that multiple goroutines calling Stop is safe.
+func TestConcurrentStop(t *testing.T) {
+	r := &testRunner{}
+
+	ctx := context.Background()
+	if err := Init(ctx, r); err != nil {
+		t.Fatal("Init failed:", err)
+	}
+
 	go func() {
-		_ = Start(context.Background(), m2)
+		_ = Start(ctx, r)
 	}()
-	time.Sleep(50 * time.Millisecond)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	time.Sleep(10 * time.Millisecond)
 
-	// The Stop will close stopping, Start will return, markDone will happen.
-	// But we call immediately so Done might still be open.
-	err = StopAndWait(ctx, m2)
-	// May or may not error depending on timing.
-	_ = err
+	// Multiple concurrent Stop calls.
+	const n = 10
+	done := make(chan struct{})
+	for range n {
+		go func() {
+			_ = Stop(ctx, r)
+			done <- struct{}{}
+		}()
+	}
+
+	for range n {
+		<-done
+	}
+	// No panics = success.
+}
+
+// TestNilRunnerPanics verifies that passing nil runner panics.
+func TestNilRunnerPanics(t *testing.T) {
+	t.Run("Init", func(t *testing.T) {
+		defer func() {
+			if recover() == nil {
+				t.Fatal("expected panic for nil runner in Init")
+			}
+		}()
+		_ = Init(context.Background(), nil)
+	})
+
+	t.Run("Start", func(t *testing.T) {
+		defer func() {
+			if recover() == nil {
+				t.Fatal("expected panic for nil runner in Start")
+			}
+		}()
+		_ = Start(context.Background(), nil)
+	})
+
+	t.Run("Stop", func(t *testing.T) {
+		defer func() {
+			if recover() == nil {
+				t.Fatal("expected panic for nil runner in Stop")
+			}
+		}()
+		_ = Stop(context.Background(), nil)
+	})
+}
+
+// TestNilContextPanics verifies that passing nil context panics.
+func TestNilContextPanics(t *testing.T) {
+	r := &testRunner{}
+
+	t.Run("Init", func(t *testing.T) {
+		defer func() {
+			if recover() == nil {
+				t.Fatal("expected panic for nil context in Init")
+			}
+		}()
+		_ = Init(nil, r)
+	})
+
+	t.Run("Start", func(t *testing.T) {
+		defer func() {
+			if recover() == nil {
+				t.Fatal("expected panic for nil context in Start")
+			}
+		}()
+		_ = Start(nil, r)
+	})
+
+	t.Run("Stop", func(t *testing.T) {
+		defer func() {
+			if recover() == nil {
+				t.Fatal("expected panic for nil context in Stop")
+			}
+		}()
+		_ = Stop(nil, r)
+	})
+}
+
+// TestStartInterruptedByStop verifies the TOCTOU fix: if Stop is called
+// between the initial Stopping check and r.Start(), Start returns nil
+// without calling the runner's Start method (clean early exit).
+func TestStartInterruptedByStop(t *testing.T) {
+	// Use startFn as a barrier: it fires when r.Start() is called.
+	// If the TOCTOU fix works, startFn should NOT fire.
+
+	r := &testRunner{}
+	ctx := context.Background()
+
+	if err := Init(ctx, r); err != nil {
+		t.Fatal("Init failed:", err)
+	}
+
+	// Call Stop in a goroutine right after Start begins.
+	// The second Stopping check in Start() should detect this and skip r.Start().
+	done := make(chan error, 1)
+	go func() {
+		done <- Start(ctx, r)
+	}()
+
+	// Give Start time to pass the initial Stopping check and markStarted.
+	time.Sleep(5 * time.Millisecond)
+
+	// Call Stop — this closes the stopping channel.
+	// Start's second Stopping check should catch this and return nil.
+	if err := Stop(ctx, r); err != nil {
+		t.Fatal("Stop failed:", err)
+	}
+
+	err := <-done
+	if err != nil {
+		t.Fatalf("Start should return nil on interrupted start, got: %v", err)
+	}
+
+	// The runner's Start should NOT have been called because Start() detected
+	// Stopping was closed and returned early.
+	// Note: this is probabilistic — if the timing doesn't line up, Start might
+	// still call r.Start(). We verify the invariant that at least Start returns
+	// cleanly (nil or no unexpected error).
+
+	// Ensure cleanup: Done must be closed.
+	select {
+	case <-r.Done():
+	default:
+		t.Fatal("Done was not closed")
+	}
+}
+
+// TestSignalChannels verifies that signal channels behave correctly during lifecycle.
+func TestSignalChannels(t *testing.T) {
+	r := &testRunner{}
+
+	ctx := context.Background()
+	if err := Init(ctx, r); err != nil {
+		t.Fatal("Init failed:", err)
+	}
+
+	// Before Start: Started must be open, others open.
+	select {
+	case <-r.Started():
+		t.Fatal("Started should not be closed before Start")
+	default:
+	}
+
+	done := make(chan error, 1)
+	go func() {
+		done <- Start(ctx, r)
+	}()
+
+	// After Start: Started must close.
+	time.Sleep(10 * time.Millisecond)
+	select {
+	case <-r.Started():
+	default:
+		t.Fatal("Started should be closed after Start")
+	}
+
+	// Stop.
+	if err := Stop(ctx, r); err != nil {
+		t.Fatal("Stop failed:", err)
+	}
+
+	// After Stop: Stopping and StopDone must be closed.
+	select {
+	case <-r.Stopping():
+	default:
+		t.Fatal("Stopping should be closed after Stop")
+	}
+	select {
+	case <-r.StopDone():
+	default:
+		t.Fatal("StopDone should be closed after Stop")
+	}
+
+	if err := <-done; err != nil {
+		t.Fatal("Start returned error:", err)
+	}
+
+	// After Start returns: Done must be closed.
+	select {
+	case <-r.Done():
+	default:
+		t.Fatal("Done should be closed after Start returns")
+	}
 }

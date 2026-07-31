@@ -83,6 +83,7 @@ func Start(ctx context.Context, r Runner) (err error) {
 		panic("start again")
 	}
 
+	canceled := false
 	stopErrCh := make(chan error, 1)
 	defer func() {
 		r.markDone()
@@ -100,6 +101,9 @@ func Start(ctx context.Context, r Runner) (err error) {
 		if stopErr != nil {
 			allErr = append(allErr, errs.Wrap(stopErr, "stop runner failed"))
 		}
+		if canceled {
+			allErr = append(allErr, ctx.Err())
+		}
 		err = errors.Join(allErr...)
 	}()
 
@@ -112,6 +116,7 @@ func Start(ctx context.Context, r Runner) (err error) {
 		case <-r.Done(): // Start returned
 			return
 		case <-ctx.Done():
+			canceled = true
 			select {
 			case <-r.Stopping(): // Stop called immediately after ctx done
 				return
@@ -125,6 +130,12 @@ func Start(ctx context.Context, r Runner) (err error) {
 			}
 		}
 	}()
+
+	select {
+	case <-r.Stopping():
+		return nil
+	default:
+	}
 
 	return r.Start(ctx)
 }
@@ -163,7 +174,7 @@ func stop(ctx context.Context, r Runner, wait bool) (err error) {
 	if wait {
 		waitErr := waitDone(ctx, r)
 		if waitErr != nil {
-			err = errors.Join(err, errs.Wrapf(waitErr, "wait runner done failed"))
+			err = errors.Join(err, errs.Wrap(waitErr, "wait runner done failed"))
 		}
 	}
 	return
