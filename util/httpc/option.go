@@ -44,6 +44,9 @@ func (f RespOptionFunc) HandleResp(r *http.Response) error {
 }
 
 func WithHeaders(headerKvs ...string) Option {
+	if len(headerKvs)%2 == 1 {
+		panic("odd header kvs")
+	}
 	return ReqOptionFunc(func(r *http.Request) error {
 		for i := 1; i < len(headerKvs); i += 2 {
 			r.Header.Add(headerKvs[i-1], headerKvs[i])
@@ -106,11 +109,6 @@ func guessContentLength(r any) (int64, error) {
 		l = int64(rt.Size())
 	case hasSize2:
 		l = rt.Size()
-	case io.Seeker:
-		l, err = rt.Seek(0, io.SeekEnd)
-		if err == nil {
-			_, err = rt.Seek(0, io.SeekStart)
-		}
 	default:
 	}
 

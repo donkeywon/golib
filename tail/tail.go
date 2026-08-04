@@ -4,6 +4,7 @@ import (
 	"errors"
 	"io"
 	"os"
+	"path/filepath"
 	"sync"
 	"sync/atomic"
 
@@ -19,25 +20,36 @@ var (
 )
 
 type Reader struct {
-	fi       os.FileInfo
-	file     *os.File
-	watcher  *fsnotify.Watcher
-	closed   chan struct{}
-	filepath string
-	offset   int64
-	once     sync.Once
+	file          *os.File
+	watcher       *fsnotify.Watcher
+	closed        chan struct{}
+	filepath      string
+	offset        int64
+	closeOnceFunc func() error
 }
 
-func NewReader(filepath string, offset int64) (*Reader, error) {
+func NewReader(path string, offset int64) (*Reader, error) {
 	var err error
 
 	r := &Reader{
-		filepath: filepath,
+		filepath: path,
 		offset:   offset,
 		closed:   make(chan struct{}),
 	}
 
-	r.file, err = os.Open(filepath)
+	r.closeOnceFunc = sync.OnceValue(func() error {
+		allErr := make([]error, 0, 2)
+		close(r.closed)
+		if r.file != nil {
+			allErr = append(allErr, r.file.Close())
+		}
+		if r.watcher != nil {
+			allErr = append(allErr, r.watcher.Close())
+		}
+		return errors.Join(allErr...)
+	})
+
+	r.file, err = os.Open(path)
 	if err != nil {
 		return nil, err
 	}
@@ -45,46 +57,71 @@ func NewReader(filepath string, offset int64) (*Reader, error) {
 	if r.offset > 0 {
 		_, err = r.file.Seek(r.offset, io.SeekStart)
 		if err != nil {
-			return nil, r.close(errs.Wrap(err, "file seek failed"))
+			return nil, r.closeWithErr(errs.Wrap(err, "file seek failed"))
 		}
-	}
-
-	r.fi, err = r.file.Stat()
-	if err != nil {
-		return nil, r.close(errs.Wrap(err, "get file stat failed"))
 	}
 
 	r.watcher, err = fsnotify.NewWatcher()
 	if err != nil {
-		return nil, r.close(errs.Wrap(err, "create notify watcher failed"))
+		return nil, r.closeWithErr(errs.Wrap(err, "create notify watcher failed"))
 	}
-	err = r.watcher.Add(filepath)
+	err = r.watcher.Add(path)
 	if err != nil {
-		return nil, r.close(errs.Wrapf(err, "watch failed: %s", filepath))
+		return nil, r.closeWithErr(errs.Wrapf(err, "watch failed: %s", path))
+	}
+	// Watch the parent directory as well: on some kernels deleting a file
+	// that is still open only emits IN_ATTRIB on the file's own watch, so
+	// remove/rename detection must come from directory events.
+	err = r.watcher.Add(filepath.Dir(path))
+	if err != nil {
+		return nil, r.closeWithErr(errs.Wrapf(err, "watch dir failed: %s", filepath.Dir(path)))
 	}
 
 	return r, nil
 }
 
 func (r *Reader) Read(p []byte) (nr int, err error) {
-	nr, err = r.read(p)
-	if err != nil {
-		return
-	}
+	for {
+		nr, err = r.read(p)
+		if err != nil {
+			if errors.Is(err, errTailClosed) {
+				return 0, io.EOF
+			}
+			return
+		}
+		if nr > 0 {
+			return nr, nil
+		}
 
-	if nr > 0 {
-		return nr, nil
-	}
-
-	err = r.wait()
-	switch {
-	case errors.Is(err, errTailClosed):
-		return 0, io.EOF
-	case err == nil:
-		return r.read(p)
-	default:
+		err = r.wait()
+		if err == nil {
+			err = r.resetOffsetIfTruncated()
+			if err != nil {
+				return 0, err
+			}
+			continue
+		}
+		if errors.Is(err, errTailClosed) {
+			return 0, io.EOF
+		}
 		return 0, err
 	}
+}
+
+func (r *Reader) resetOffsetIfTruncated() error {
+	fi, err := r.file.Stat()
+	if err != nil {
+		return err
+	}
+	if fi.Size() >= atomic.LoadInt64(&r.offset) {
+		return nil
+	}
+	_, err = r.file.Seek(0, io.SeekStart)
+	if err != nil {
+		return err
+	}
+	atomic.StoreInt64(&r.offset, 0)
+	return nil
 }
 
 func (r *Reader) read(p []byte) (int, error) {
@@ -93,12 +130,19 @@ func (r *Reader) read(p []byte) (int, error) {
 	if err == nil || err == io.EOF {
 		return nr, nil
 	}
+	if errors.Is(err, os.ErrClosed) {
+		return 0, errTailClosed
+	}
 
 	return nr, err
 }
 
 func (r *Reader) Close() error {
-	return r.close(nil)
+	return r.closeOnceFunc()
+}
+
+func (r *Reader) closeWithErr(err error) error {
+	return errors.Join(r.Close(), err)
 }
 
 func (r *Reader) Offset() int64 {
@@ -114,37 +158,34 @@ func (r *Reader) File() *os.File {
 	return r.file
 }
 
-func (r *Reader) FileInfo() os.FileInfo {
-	return r.fi
-}
-
-func (r *Reader) close(err error) error {
-	r.once.Do(func() {
-		close(r.closed)
-		if r.file != nil {
-			err = errors.Join(err, r.file.Close())
-		}
-		if r.watcher != nil {
-			err = errors.Join(err, r.watcher.Close())
-		}
-	})
-	return err
-}
-
 func (r *Reader) wait() error {
-	select {
-	case <-r.closed:
-		return errTailClosed
-	case e := <-r.watcher.Events:
-		switch e.Op {
-		case fsnotify.Remove:
-			return ErrFileRemoved
-		case fsnotify.Rename:
-			return ErrFileRenamed
-		default:
-			return nil
+	for {
+		select {
+		case <-r.closed:
+			return errTailClosed
+		case e, ok := <-r.watcher.Events:
+			if !ok {
+				return errTailClosed
+			}
+			// The directory watch reports events for every file in the
+			// directory; only the watched file matters.
+			if e.Name != r.filepath {
+				continue
+			}
+			if e.Has(fsnotify.Remove) {
+				return ErrFileRemoved
+			}
+			if e.Has(fsnotify.Rename) {
+				return ErrFileRenamed
+			}
+			if e.Has(fsnotify.Write) {
+				return nil
+			}
+		case err, ok := <-r.watcher.Errors:
+			if !ok {
+				return errTailClosed
+			}
+			return errs.Wrap(err, "watcher error occurred")
 		}
-	case err := <-r.watcher.Errors:
-		return errs.Wrap(err, "watcher error occurred")
 	}
 }
