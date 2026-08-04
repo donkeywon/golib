@@ -213,15 +213,13 @@ func (b *booter) Start(ctx context.Context) error {
 	ctx, cancel = context.WithCancelCause(ctx)
 	defer cancel(errCanceled)
 
-	var errg *errgroup.Group
-	errg, ctx = errgroup.WithContext(ctx)
-
+	errg, gctx := errgroup.WithContext(ctx)
 	for _, daemonType := range _daemonTypes {
 		daemon := b.daemonsMap[daemonType]
 		errg.Go(func() error {
-			dctx := b.l.With().Str("daemon", string(daemonType)).Logger().WithContext(ctx)
+			dctx := b.l.With().Str("daemon", string(daemonType)).Logger().WithContext(gctx)
 			e := runner.Start(dctx, daemon)
-			if errors.Is(e, context.Canceled) && errors.Is(context.Cause(ctx), errCanceled) {
+			if errors.Is(e, context.Canceled) && errors.Is(context.Cause(gctx), errCanceled) {
 				b.l.Info().Str("daemon", string(daemonType)).Err(e).Msg("daemon canceled")
 				return nil
 			}
@@ -271,6 +269,7 @@ func (b *booter) Start(ctx context.Context) error {
 		cancel(errCanceled)
 	case <-b.Stopping():
 		b.l.Info().Msg("stopping")
+	case <-gctx.Done():
 	}
 
 	return errg.Wait()
