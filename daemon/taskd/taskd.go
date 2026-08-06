@@ -83,7 +83,7 @@ var _ Taskd = (*taskd)(nil)
 type taskd struct {
 	runner.Base
 
-	cfg    *Cfg
+	cfg    Cfg
 	l      *zerolog.Logger
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -139,7 +139,7 @@ func (td *taskd) Stop(ctx context.Context) error {
 }
 
 func (td *taskd) SetCfg(cfg any) {
-	td.cfg = cfg.(*Cfg)
+	td.cfg = cfg.(Cfg)
 }
 
 func (td *taskd) SubmitTask(ctx context.Context, pool string, taskCfg task.Cfg) (*task.Task, error) {

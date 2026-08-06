@@ -46,7 +46,8 @@ var (
 	errCanceled = errors.New("canceled")
 )
 
-func Boot(ctx context.Context, opt ...Option) {
+func Boot(opt ...Option) {
+	ctx := context.Background()
 	_b = create(opt...)
 	err := runner.Init(ctx, _b)
 	if err != nil {
@@ -56,10 +57,6 @@ func Boot(ctx context.Context, opt ...Option) {
 	if err != nil {
 		panic(errs.Wrap(err, "error occurred"))
 	}
-}
-
-func Stop(ctx context.Context) error {
-	return runner.Stop(ctx, _b)
 }
 
 // Reg register a Daemon creator and its config creator.
