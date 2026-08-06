@@ -15,9 +15,9 @@ type option struct {
 	deadlineFlushMinSize int
 }
 
-func newOption() *option {
-	return &option{
-		bufSize: 1024 * 1024,
+func newOption() option {
+	return option{
+		bufSize: 32 * 1024,
 	}
 }
 

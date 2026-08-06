@@ -29,12 +29,6 @@ func AsyncWrite(opts ...aio.Option) WriterWrapFunc {
 	}
 }
 
-func AsyncRead(opts ...aio.Option) ReaderWrapFunc {
-	return func(r io.Reader) io.Reader {
-		return aio.NewAsyncReader(r, opts...)
-	}
-}
-
 func Tee(w ...io.Writer) ReaderWrapFunc {
 	return func(r io.Reader) io.Reader {
 		return io.TeeReader(r, io.MultiWriter(w...))
