@@ -12,7 +12,7 @@ const (
 	DefaultEnableWebPrettyTrace   = false
 	DefaultEnableStatsViz         = false
 	DefaultSkipStartupErr         = false
-	DefaultPrefix                 = ""
+	DefaultHTTPURLPrefix          = ""
 )
 
 type Cfg struct {
@@ -20,20 +20,19 @@ type Cfg struct {
 	StartupProfilingSec    int    `yaml:"startupProfilingSec"      env:"STARTUP_PROFILING_SEC"      long:"startup-profiling-sec"    description:"startup profiling duration in seconds, only works when prof-enable-startup-profiling is enabled"`
 	StartupProfilingMode   string `yaml:"startupProfilingMode"     env:"STARTUP_PROFILING_MODE"     long:"startup-profiling-mode"   description:"startup profiling mode, only works when prof-enable-startup-profiling is enabled"`
 	ProfOutputDir          string `yaml:"profOutputDir"            env:"OUTPUT_DIR"                 long:"output-dir"               description:"dir path of pprof file save to"`
+	SkipStartupErr         bool   `yaml:"skipStartupErr"           env:"SKIP_STARTUP_ERR"           long:"skip-startup-err"         description:"skip startup err, boot will failed if false"`
 
-	EnableHTTPProf       bool   `yaml:"enableHTTPProf" env:"ENABLE_HTTP_PROF" long:"enable-http-prof" description:"enable prof over http, depends on httpd"`
-	EnableWebProf        bool   `yaml:"enableWebProf"  env:"ENABLE_WEB_PROF"  long:"enable-web-prof"  description:"enable prof over web, depends on httpd"`
+	EnableHTTPProf       bool   `yaml:"enableHTTPProf"       env:"ENABLE_HTTP_PROF"        long:"enable-http-prof"        description:"enable prof over http, depends on httpd"`
+	EnableWebProf        bool   `yaml:"enableWebProf"        env:"ENABLE_WEB_PROF"         long:"enable-web-prof"         description:"enable prof over web, depends on httpd"`
 	EnableWebPrettyTrace bool   `yaml:"enableWebPrettyTrace" env:"ENABLE_WEB_PRETTY_TRACE" long:"enable-web-pretty-trace" description:"enable pretty trace over web, depends on httpd"`
-	WebAuthUser          string `yaml:"webAuthUser" env:"WEB_AUTH_USER"`
-	WebAuthPwd           string `yaml:"webAuthPwd" env:"WEB_AUTH_PWD"`
+	WebAuthUser          string `yaml:"webAuthUser"          env:"WEB_AUTH_USER"`
+	WebAuthPwd           string `yaml:"webAuthPwd"           env:"WEB_AUTH_PWD"`
+	HTTPURLPrefix        string `yaml:"httpUrlPrefix"        env:"HTTP_URL_PREFIX"         long:"http-url-prefix"         description:"http url prefix"`
 
 	EnableGoPs bool   `yaml:"enableGoPs" env:"ENABLE_GOPS" long:"enable-gops" description:"enable gops agent"`
 	GoPsAddr   string `yaml:"goPsAddr"   env:"GOPS_ADDR"   long:"gops-addr"   description:"gops agent listen addr"`
 
 	EnableStatsViz bool `yaml:"enableStatsViz" env:"ENABLE_STATS_VIZ" long:"enable-stats-viz" description:"enable statsviz, need httpd"`
-
-	Prefix         string `yaml:"prefix"         env:"PREFIX"           long:"prefix"           description:"url prefix"`
-	SkipStartupErr bool   `yaml:"skipStartupErr" env:"SKIP_STARTUP_ERR" long:"skip-startup-err" description:"skip startup err, boot will failed if false"`
 }
 
 func NewCfg() Cfg {
@@ -49,6 +48,6 @@ func NewCfg() Cfg {
 		EnableWebPrettyTrace:   DefaultEnableWebPrettyTrace,
 		EnableStatsViz:         DefaultEnableStatsViz,
 		SkipStartupErr:         DefaultSkipStartupErr,
-		Prefix:                 DefaultPrefix,
+		HTTPURLPrefix:          DefaultHTTPURLPrefix,
 	}
 }

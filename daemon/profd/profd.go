@@ -83,34 +83,34 @@ func (p *profd) Init(ctx context.Context) error {
 			}
 			p.Error().Err(err).Msg("init statsviz failed")
 		} else {
-			p.httpd.Handle(p.cfg.Prefix+"/debug/statsviz/", p.midSecure(p.statsvizServer.Index()))
-			p.httpd.Handle(p.cfg.Prefix+"/debug/statsviz/ws", p.midSecure(p.statsvizServer.Ws()))
+			p.httpd.Handle(p.cfg.HTTPURLPrefix+"/debug/statsviz/", p.midSecure(p.statsvizServer.Index()))
+			p.httpd.Handle(p.cfg.HTTPURLPrefix+"/debug/statsviz/ws", p.midSecure(p.statsvizServer.Ws()))
 		}
 	}
 
 	if p.cfg.EnableHTTPProf {
-		p.httpd.Handle(p.cfg.Prefix+"/debug/prof/start/{mode}", http.HandlerFunc(p.startProf))
-		p.httpd.Handle(p.cfg.Prefix+"/debug/prof/stop", http.HandlerFunc(p.stopProf))
+		p.httpd.Handle(p.cfg.HTTPURLPrefix+"/debug/prof/start/{mode}", http.HandlerFunc(p.startProf))
+		p.httpd.Handle(p.cfg.HTTPURLPrefix+"/debug/prof/stop", http.HandlerFunc(p.stopProf))
 	}
 
 	if p.cfg.EnableWebProf {
-		p.httpd.Handle(p.cfg.Prefix+"/debug/pprof/", p.midSecure(pprof.Index))
-		p.httpd.Handle(p.cfg.Prefix+"/debug/pprof/cmdline", p.midSecure(pprof.Cmdline))
-		p.httpd.Handle(p.cfg.Prefix+"/debug/pprof/profile", p.midSecure(pprof.Profile))
-		p.httpd.Handle(p.cfg.Prefix+"/debug/pprof/symbol", p.midSecure(pprof.Symbol))
-		p.httpd.Handle(p.cfg.Prefix+"/debug/pprof/trace", p.midSecure(pprof.Trace))
-		p.httpd.Handle(p.cfg.Prefix+"/debug/pprof/allocs", p.midSecure(pprof.Handler("allocs").ServeHTTP))
-		p.httpd.Handle(p.cfg.Prefix+"/debug/pprof/block", p.midSecure(pprof.Handler("block").ServeHTTP))
-		p.httpd.Handle(p.cfg.Prefix+"/debug/pprof/goroutine", p.midSecure(pprof.Handler("goroutine").ServeHTTP))
-		p.httpd.Handle(p.cfg.Prefix+"/debug/pprof/heap", p.midSecure(pprof.Handler("heap").ServeHTTP))
-		p.httpd.Handle(p.cfg.Prefix+"/debug/pprof/mutex", p.midSecure(pprof.Handler("mutex").ServeHTTP))
-		p.httpd.Handle(p.cfg.Prefix+"/debug/pprof/threadcreate", p.midSecure(pprof.Handler("threadcreate").ServeHTTP))
+		p.httpd.Handle(p.cfg.HTTPURLPrefix+"/debug/pprof/", p.midSecure(pprof.Index))
+		p.httpd.Handle(p.cfg.HTTPURLPrefix+"/debug/pprof/cmdline", p.midSecure(pprof.Cmdline))
+		p.httpd.Handle(p.cfg.HTTPURLPrefix+"/debug/pprof/profile", p.midSecure(pprof.Profile))
+		p.httpd.Handle(p.cfg.HTTPURLPrefix+"/debug/pprof/symbol", p.midSecure(pprof.Symbol))
+		p.httpd.Handle(p.cfg.HTTPURLPrefix+"/debug/pprof/trace", p.midSecure(pprof.Trace))
+		p.httpd.Handle(p.cfg.HTTPURLPrefix+"/debug/pprof/allocs", p.midSecure(pprof.Handler("allocs").ServeHTTP))
+		p.httpd.Handle(p.cfg.HTTPURLPrefix+"/debug/pprof/block", p.midSecure(pprof.Handler("block").ServeHTTP))
+		p.httpd.Handle(p.cfg.HTTPURLPrefix+"/debug/pprof/goroutine", p.midSecure(pprof.Handler("goroutine").ServeHTTP))
+		p.httpd.Handle(p.cfg.HTTPURLPrefix+"/debug/pprof/heap", p.midSecure(pprof.Handler("heap").ServeHTTP))
+		p.httpd.Handle(p.cfg.HTTPURLPrefix+"/debug/pprof/mutex", p.midSecure(pprof.Handler("mutex").ServeHTTP))
+		p.httpd.Handle(p.cfg.HTTPURLPrefix+"/debug/pprof/threadcreate", p.midSecure(pprof.Handler("threadcreate").ServeHTTP))
 
-		p.httpd.Handle(p.cfg.Prefix+"/debug/fgprof", fgprof.Handler())
+		p.httpd.Handle(p.cfg.HTTPURLPrefix+"/debug/fgprof", fgprof.Handler())
 	}
 
 	if p.cfg.EnableWebPrettyTrace {
-		p.httpd.Handle(p.cfg.Prefix+"/debug/prettytrace", p.midSecure(p.prettytrace))
+		p.httpd.Handle(p.cfg.HTTPURLPrefix+"/debug/prettytrace", p.midSecure(p.prettytrace))
 	}
 
 	if p.cfg.EnableGoPs {
