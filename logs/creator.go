@@ -36,11 +36,7 @@ func init() {
 	}
 }
 
-type Creator interface {
-	Create() (zerolog.Logger, error)
-}
-
-var NopLoggerCreator Creator = nop{}
+var NopLoggerCreator = nop{}
 
 type nop struct{}
 
@@ -90,7 +86,7 @@ func (r RotateLoggerCreator) Create() (zerolog.Logger, error) {
 	}
 
 	l := zerolog.New(zerolog.MultiLevelWriter(outputs...)).
-		With().Stack().Caller().Timestamp().Logger().
+		With().Stack().Caller().Timestamp().Logger().Level(r.Level).
 		Hook(zerolog.HookFunc(func(e *zerolog.Event, level zerolog.Level, message string) {
 			e.Int64("goid", goid.Get())
 		}))

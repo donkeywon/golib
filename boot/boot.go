@@ -10,6 +10,8 @@ import (
 	"runtime"
 	"slices"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -24,7 +26,6 @@ import (
 	"github.com/goccy/go-yaml/parser"
 	"github.com/jessevdk/go-flags"
 	"github.com/rs/zerolog"
-	"golang.org/x/sync/errgroup"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
 )
@@ -50,6 +51,22 @@ type signalError struct {
 	signal os.Signal
 }
 
+type daemonFailedError struct {
+	daemon DaemonType
+}
+
+func (e daemonFailedError) Error() string {
+	return "daemon failed: " + string(e.daemon)
+}
+
+type daemonDoneError struct {
+	daemon DaemonType
+}
+
+func (e daemonDoneError) Error() string {
+	return "daemon done: " + string(e.daemon)
+}
+
 func (s signalError) Error() string {
 	return s.signal.String()
 }
@@ -60,7 +77,7 @@ var (
 	_additionalCfgMap  = make(map[string]any)
 	_daemonsMap        map[DaemonType]*daemonInfo
 
-	errCanceled = errors.New("canceled")
+	_stopping atomic.Bool
 )
 
 // Reg register a Daemon creator and its config creator.
@@ -101,7 +118,7 @@ func Get[D Daemon](typ DaemonType) D {
 func Boot(opts ...Option) {
 	options, cfgMap := parseFlagsAndLoadCfg(opts...)
 	l := buildLogger(&options)
-	necessaryLog(&l, cfgMap)
+	l.Info().Str("version", buildinfo.Version).Str("build_time", buildinfo.BuildTime).Str("revision", buildinfo.Revision).Time("commit_time", buildinfo.CommitTime).Msg("init")
 
 	ctx, cancel := context.WithCancelCause(context.Background())
 	sigCh := make(chan os.Signal, 1)
@@ -130,11 +147,7 @@ func Boot(opts ...Option) {
 		l.Error().Err(err).Msg("init daemons failed")
 		os.Exit(1)
 	}
-	err = runDaemons(ctx, _daemonsMap, &l)
-	if err != nil {
-		l.Error().Err(err).Msg("run daemons failed")
-		os.Exit(1)
-	}
+	runDaemons(ctx, _daemonsMap, &options, &l)
 }
 
 func isSignaled(ctx context.Context) (bool, os.Signal) {
@@ -209,13 +222,6 @@ func buildLogger(options *options) zerolog.Logger {
 	return l
 }
 
-func necessaryLog(l *zerolog.Logger, cfgMap map[string]any) {
-	l.Info().Str("version", buildinfo.Version).Str("build_time", buildinfo.BuildTime).Str("revision", buildinfo.Revision).Time("commit_time", buildinfo.CommitTime).Msg("init")
-	for name, cfg := range cfgMap {
-		l.Debug().Str("name", name).Any("cfg", cfg).Msg("load config")
-	}
-}
-
 func createDaemons(ctx context.Context, cfgMap map[string]any, options *options, l *zerolog.Logger) (map[DaemonType]*daemonInfo, error) {
 	daemonsMap := make(map[DaemonType]*daemonInfo, len(_daemonTypes))
 	for _, daemonType := range _daemonTypes {
@@ -262,44 +268,74 @@ func initDaemons(ctx context.Context, daemonsMap map[DaemonType]*daemonInfo, l *
 	return nil
 }
 
-func runDaemons(ctx context.Context, daemonsMap map[DaemonType]*daemonInfo, l *zerolog.Logger) error {
-	errg, gctx := errgroup.WithContext(context.Background())
+func runDaemons(ctx context.Context, daemonsMap map[DaemonType]*daemonInfo, options *options, l *zerolog.Logger) {
+	var hasErr atomic.Bool
+
+	wg := &sync.WaitGroup{}
 	for _, daemonType := range _daemonTypes {
 		di := daemonsMap[daemonType]
-		di.ctx, di.cancel = context.WithCancelCause(gctx)
+		di.ctx, di.cancel = context.WithCancelCause(context.Background()) // no direct with ctx for stop in order
 		di.ctx = l.With().Str("daemon", string(daemonType)).Logger().WithContext(di.ctx)
 
-		errg.Go(func() error {
+		wg.Go(func() {
 			defer close(di.done)
-			defer di.cancel(errCanceled)
+			defer di.cancel(nil)
 
 			e := di.d.Run(di.ctx)
-			if errors.Is(context.Cause(di.ctx), errCanceled) {
-				l.Info().Str("daemon", string(daemonType)).Err(e).Msg("daemon canceled")
-				return nil
+			cause := context.Cause(di.ctx)
+			dl := zerolog.Ctx(di.ctx)
+			if se, ok := errors.AsType[signalError](cause); ok {
+				dl.Info().Str("signal", se.signal.String()).AnErr("error", e).Msg("daemon signaled")
+				return
 			}
-			if e != nil {
-				return errs.Wrapf(e, "daemon failed: %s", daemonType)
+			if de, ok := errors.AsType[daemonDoneError](cause); ok {
+				dl.Info().Str("done_daemon", string(de.daemon)).AnErr("error", e).Msg("daemon canceled caused by other daemon done")
+				return
+			}
+			if de, ok := errors.AsType[daemonFailedError](cause); ok {
+				dl.Info().Str("failed_daemon", string(de.daemon)).AnErr("error", e).Msg("daemon canceled caused by other daemon failed")
+				return
 			}
 
-			l.Error().Str("daemon", string(daemonType)).Msg("daemon done, should not happen")
-			return errs.Errorf("daemon done, should not happen: %s", daemonType)
+			hasErr.Store(true)
+			if e == nil {
+				dl.Error().Msg("daemon done, should not happen")
+				go stopDaemons(daemonDoneError{daemonType}, options.daemonStopTimeout)
+				return
+			}
+			if cause != nil {
+				dl.Error().Err(cause).Msg("daemon failed")
+			} else {
+				dl.Error().Err(e).Msg("daemon failed")
+			}
+			go stopDaemons(daemonFailedError{daemonType}, options.daemonStopTimeout)
 		})
 	}
 
 	go func() {
 		<-ctx.Done()
-		stopDaemons()
+		stopDaemons(context.Cause(ctx), options.daemonStopTimeout)
 	}()
 
-	return errg.Wait()
+	wg.Wait()
+
+	if hasErr.Load() {
+		os.Exit(1)
+	}
+	os.Exit(0)
 }
 
-func stopDaemons() {
+func stopDaemons(cause error, daemonStopTimeout time.Duration) {
+	if !_stopping.CompareAndSwap(false, true) {
+		return
+	}
 	for _, daemonType := range slices.Backward(_daemonTypes) {
 		di := _daemonsMap[daemonType]
-		di.cancel(errCanceled)
-		<-di.done
+		di.cancel(cause)
+		select {
+		case <-di.done:
+		case <-time.After(daemonStopTimeout):
+		}
 	}
 }
 
