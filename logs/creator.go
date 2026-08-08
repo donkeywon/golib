@@ -31,7 +31,7 @@ func init() {
 		}
 		return file + ":" + strconv.Itoa(line)
 	}
-	zerolog.ErrorStackMarshaler = func(err error) any {
+	zerolog.ErrorMarshalFunc = func(err error) any {
 		return errs.ErrToStackString(err)
 	}
 }
@@ -86,7 +86,7 @@ func (r RotateLoggerCreator) Create() (zerolog.Logger, error) {
 	}
 
 	l := zerolog.New(zerolog.MultiLevelWriter(outputs...)).
-		With().Stack().Caller().Timestamp().Logger().Level(r.Level).
+		With().Caller().Timestamp().Logger().Level(r.Level).
 		Hook(zerolog.HookFunc(func(e *zerolog.Event, level zerolog.Level, message string) {
 			e.Int64("goid", goid.Get())
 		}))
