@@ -60,7 +60,3 @@ func (c *copyWorker) Run(ctx context.Context) (err error) {
 
 	return nil
 }
-
-func (c *copyWorker) watchCtx(ctx context.Context) error {
-	return c.Close(true)
-}
