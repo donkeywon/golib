@@ -3,6 +3,7 @@ package ratelimit
 import (
 	"context"
 	"fmt"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -52,8 +53,9 @@ type Host struct {
 	lastNicRxBytes uint64
 	lastNicTxBytes uint64
 
-	l      *zerolog.Logger
-	closed chan struct{}
+	l         *zerolog.Logger
+	closed    chan struct{}
+	closeOnce sync.Once
 }
 
 func NewHost() *Host {
@@ -98,7 +100,7 @@ func (h *Host) Init(ctx context.Context) error {
 }
 
 func (h *Host) Close() error {
-	close(h.closed)
+	h.closeOnce.Do(func() { close(h.closed) })
 	return nil
 }
 

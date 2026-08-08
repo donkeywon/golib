@@ -75,7 +75,7 @@ func NewAsyncWriter(w io.Writer, opts ...Option) *AsyncWriter {
 		asyncWriteDone: make(chan struct{}),
 	}
 	for _, o := range opts {
-		o.apply(&aw.opt)
+		o(&aw.opt)
 	}
 	aw.queue = make(chan []byte, aw.opt.queueSize)
 	return aw

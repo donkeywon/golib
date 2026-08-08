@@ -4,10 +4,6 @@ import "time"
 
 type Option func(*option)
 
-func (o Option) apply(r *option) {
-	o(r)
-}
-
 type option struct {
 	bufSize              int
 	queueSize            int

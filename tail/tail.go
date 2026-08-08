@@ -4,11 +4,11 @@ import (
 	"errors"
 	"io"
 	"os"
-	"path/filepath"
 	"sync"
 	"sync/atomic"
 
 	"github.com/donkeywon/golib/errs"
+	"github.com/donkeywon/golib/util/paths"
 	"github.com/fsnotify/fsnotify"
 )
 
@@ -17,10 +17,31 @@ var (
 
 	ErrFileRemoved = errors.New("file removed")
 	ErrFileRenamed = errors.New("file renamed")
+	ErrTailDir     = errors.New("tail dir")
 )
+
+type Option func(*Reader)
+
+func Offset(n int64) Option {
+	return func(r *Reader) {
+		if n >= 0 {
+			r.offset = n
+		}
+	}
+}
+
+func WithWatcher(w *fsnotify.Watcher) Option {
+	return func(r *Reader) {
+		if w != nil {
+			r.withWatcher = true
+			r.watcher = w
+		}
+	}
+}
 
 type Reader struct {
 	file          *os.File
+	withWatcher   bool
 	watcher       *fsnotify.Watcher
 	closed        chan struct{}
 	filepath      string
@@ -28,13 +49,19 @@ type Reader struct {
 	closeOnceFunc func() error
 }
 
-func NewReader(path string, offset int64) (*Reader, error) {
+func NewReader(path string, opts ...Option) (*Reader, error) {
 	var err error
+
+	if paths.DirExist(path) {
+		return nil, ErrTailDir
+	}
 
 	r := &Reader{
 		filepath: path,
-		offset:   offset,
 		closed:   make(chan struct{}),
+	}
+	for _, opt := range opts {
+		opt(r)
 	}
 
 	r.closeOnceFunc = sync.OnceValue(func() error {
@@ -43,7 +70,7 @@ func NewReader(path string, offset int64) (*Reader, error) {
 		if r.file != nil {
 			allErr = append(allErr, r.file.Close())
 		}
-		if r.watcher != nil {
+		if !r.withWatcher && r.watcher != nil {
 			allErr = append(allErr, r.watcher.Close())
 		}
 		return errors.Join(allErr...)
@@ -61,20 +88,16 @@ func NewReader(path string, offset int64) (*Reader, error) {
 		}
 	}
 
-	r.watcher, err = fsnotify.NewWatcher()
-	if err != nil {
-		return nil, r.closeWithErr(errs.Wrap(err, "create notify watcher failed"))
+	if r.watcher == nil {
+		r.watcher, err = fsnotify.NewWatcher()
+		if err != nil {
+			return nil, r.closeWithErr(errs.Wrap(err, "create notify watcher failed"))
+		}
 	}
+
 	err = r.watcher.Add(path)
 	if err != nil {
 		return nil, r.closeWithErr(errs.Wrapf(err, "watch failed: %s", path))
-	}
-	// Watch the parent directory as well: on some kernels deleting a file
-	// that is still open only emits IN_ATTRIB on the file's own watch, so
-	// remove/rename detection must come from directory events.
-	err = r.watcher.Add(filepath.Dir(path))
-	if err != nil {
-		return nil, r.closeWithErr(errs.Wrapf(err, "watch dir failed: %s", filepath.Dir(path)))
 	}
 
 	return r, nil
@@ -149,11 +172,6 @@ func (r *Reader) Offset() int64 {
 	return atomic.LoadInt64(&r.offset)
 }
 
-func (r *Reader) Len() int64 {
-	// file size is growing
-	return -1
-}
-
 func (r *Reader) File() *os.File {
 	return r.file
 }
@@ -166,11 +184,6 @@ func (r *Reader) wait() error {
 		case e, ok := <-r.watcher.Events:
 			if !ok {
 				return errTailClosed
-			}
-			// The directory watch reports events for every file in the
-			// directory; only the watched file matters.
-			if e.Name != r.filepath {
-				continue
 			}
 			if e.Has(fsnotify.Remove) {
 				return ErrFileRemoved

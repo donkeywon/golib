@@ -69,7 +69,7 @@ func NewReader(ctx context.Context, url string, opts ...Option) *Reader {
 	}
 
 	for _, o := range opts {
-		o.apply(r.opt)
+		o(r.opt)
 	}
 
 	r.ctx, r.cancel = context.WithCancel(ctx)

@@ -24,10 +24,6 @@ func newOption() *option {
 
 type Option func(*option)
 
-func (o Option) apply(r *option) {
-	o(r)
-}
-
 func Offset(offset int64) Option {
 	return func(o *option) {
 		o.offset = offset
