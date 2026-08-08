@@ -10,7 +10,6 @@ import (
 	"github.com/donkeywon/golib/boot"
 	"github.com/donkeywon/golib/errs"
 	"github.com/donkeywon/golib/plugin"
-	"github.com/donkeywon/golib/runner"
 )
 
 const DaemonTypeSvcd boot.DaemonType = "svcd"
@@ -30,7 +29,6 @@ var (
 )
 
 type svcd struct {
-	runner.Base
 	Cfg
 	*slog.Logger
 }
@@ -56,6 +54,11 @@ func (s *svcd) Init(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+func (s *svcd) Run(ctx context.Context) error {
+	<-ctx.Done()
+	return ctx.Err()
 }
 
 func buildFQN(ns Namespace, m Module, n Name) string {

@@ -13,7 +13,6 @@ import (
 	"github.com/donkeywon/golib/boot"
 	"github.com/donkeywon/golib/daemon/httpd"
 	"github.com/donkeywon/golib/errs"
-	"github.com/donkeywon/golib/runner"
 	"github.com/donkeywon/golib/util/httpu"
 	"github.com/donkeywon/golib/util/prof"
 	"github.com/felixge/fgprof"
@@ -32,10 +31,10 @@ type Profd interface {
 }
 
 type profd struct {
-	runner.Base
 	*zerolog.Logger
 
 	cfg Cfg
+	ctx context.Context
 
 	allowedIPsGetter func() map[string]struct{}
 
@@ -69,7 +68,7 @@ func (p *profd) Init(ctx context.Context) error {
 				select {
 				case <-done:
 					p.Info().Str("mode", p.cfg.StartupProfilingMode).Str("duration", fmt.Sprintf("%ds", p.cfg.StartupProfilingSec)).Str("filepath", filepath).Msg("startup profiling done")
-				case <-p.Stopping():
+				case <-ctx.Done():
 					return
 				}
 			}()
@@ -127,14 +126,15 @@ func (p *profd) Init(ctx context.Context) error {
 	return nil
 }
 
-func (p *profd) Stop(ctx context.Context) error {
+func (p *profd) Run(ctx context.Context) error {
+	<-ctx.Done()
 	if p.cfg.EnableStartupProfiling && prof.IsRunning() {
 		err := prof.Stop()
 		if err != nil {
 			p.Warn().Err(err).Msg("prof stop failed when stopping")
 		}
 	}
-	return nil
+	return ctx.Err()
 }
 
 func (p *profd) SetCfg(cfg any) {
@@ -168,7 +168,7 @@ func (p *profd) startProf(w http.ResponseWriter, r *http.Request) {
 			select {
 			case <-done:
 				p.Info().Str("mode", mode).Str("dir", paramDir).Int("timeout_sec", timeout).Str("filepath", filepath).Msg("profiling done")
-			case <-p.Stopping():
+			case <-p.ctx.Done():
 			}
 		}()
 	}

@@ -161,15 +161,14 @@ func TestAsyncWriter_ConcurrentWrite(t *testing.T) {
 	w := NewAsyncWriter(&buf, BufSize(64), QueueSize(4))
 
 	var wg sync.WaitGroup
-	for i := 0; i < 4; i++ {
+	for range 4 {
 		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			data := strings.Repeat("abcd", 100)
 			n, err := w.Write([]byte(data))
 			assert.NoError(t, err)
 			assert.Equal(t, len(data), n)
-		}()
+		})
 	}
 	wg.Wait()
 	require.NoError(t, w.Close())
@@ -190,7 +189,7 @@ func TestAsyncWriter_ConcurrentCloseWrite(t *testing.T) {
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		for i := 0; i < 1000; i++ {
+		for range 1000 {
 			_, _ = w.Write([]byte("concurrent"))
 		}
 	}()

@@ -6,7 +6,6 @@ import (
 	"io"
 
 	"github.com/donkeywon/golib/errs"
-	"github.com/rs/zerolog"
 )
 
 type copyWorker struct {
@@ -21,28 +20,40 @@ func NewCopyWorker(bufSize int) Worker {
 	}
 }
 
-func (c *copyWorker) Start(ctx context.Context) (err error) {
+func (c *copyWorker) Run(ctx context.Context) (err error) {
 	if c.bufSize <= 0 {
 		c.bufSize = 32 * 1024
 	}
 	bs := make([]byte, c.bufSize)
 
+	done := make(chan struct{})
+	errCh := make(chan error, 1)
+	go func() {
+		defer close(errCh)
+
+		select {
+		case <-ctx.Done():
+			closeErr := c.Close(true)
+			if closeErr != nil {
+				errCh <- closeErr
+			}
+		case <-done:
+		}
+	}()
+
 	defer func() {
-		closeErr := c.Close(false)
+		close(done)
+
+		closeErr, ok := <-errCh
+		if !ok {
+			closeErr = c.Close(false)
+		}
 		if closeErr != nil {
 			err = errors.Join(err, errs.Wrap(closeErr, "close failed"))
 		}
 	}()
 
 	_, err = io.CopyBuffer(c.Writer(), c.Reader(), bs)
-	select {
-	case <-c.Stopping():
-		if err != nil {
-			zerolog.Ctx(ctx).Warn().Err(err).Msg("copy stopped manually")
-			err = nil
-		}
-	default:
-	}
 	if err != nil {
 		return errs.Wrap(err, "copy failed")
 	}
@@ -50,6 +61,6 @@ func (c *copyWorker) Start(ctx context.Context) (err error) {
 	return nil
 }
 
-func (c *copyWorker) Stop(ctx context.Context) error {
+func (c *copyWorker) watchCtx(ctx context.Context) error {
 	return c.Close(true)
 }

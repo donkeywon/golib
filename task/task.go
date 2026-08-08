@@ -4,14 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 
 	"github.com/donkeywon/golib/errs"
 	"github.com/donkeywon/golib/kvs"
 	"github.com/donkeywon/golib/plugin"
-	"github.com/donkeywon/golib/runner"
 	"github.com/donkeywon/golib/task/step"
 	"github.com/donkeywon/golib/util/reflects"
-	"github.com/donkeywon/golib/util/v"
 	"github.com/rs/zerolog"
 )
 
@@ -29,6 +28,10 @@ type Type string
 
 type StepHook func(context.Context, *Task, int, step.Step, error) error
 
+type initializer interface {
+	Init(context.Context) error
+}
+
 type Cfg struct {
 	ID         string     `json:"id"          validate:"required" yaml:"id"`
 	Steps      []step.Cfg `json:"steps"       validate:"required" yaml:"steps"`
@@ -39,24 +42,23 @@ func NewCfg() Cfg {
 	return Cfg{}
 }
 
-func (c *Cfg) SetID(id string) *Cfg {
+func (c Cfg) SetID(id string) Cfg {
 	c.ID = id
 	return c
 }
 
-func (c *Cfg) Add(typ step.Type, cfg any) *Cfg {
+func (c Cfg) Add(typ step.Type, cfg any) Cfg {
 	c.Steps = append(c.Steps, step.Cfg{Type: typ, Cfg: cfg})
 	return c
 }
 
-func (c *Cfg) Defer(typ step.Type, cfg any) *Cfg {
+func (c Cfg) Defer(typ step.Type, cfg any) Cfg {
 	c.DeferSteps = append(c.DeferSteps, step.Cfg{Type: typ, Cfg: cfg})
 	return c
 }
 
 type Task struct {
 	kvs.Map[string, any]
-	runner.Base
 
 	cfg Cfg
 
@@ -68,8 +70,7 @@ type Task struct {
 	steps      []step.Step
 	deferSteps []step.Step
 
-	l      *zerolog.Logger
-	cancel context.CancelFunc
+	l *zerolog.Logger
 }
 
 func New() *Task {
@@ -84,11 +85,8 @@ func (t *Task) Cfg() Cfg {
 	return t.cfg
 }
 
-func (t *Task) Init(ctx context.Context) error {
-	err := v.Struct(t)
-	if err != nil {
-		return err
-	}
+func (t *Task) Run(ctx context.Context) (err error) {
+	t.l = zerolog.Ctx(ctx)
 
 	for _, cfg := range t.cfg.Steps {
 		step := plugin.CreateWithCfg[step.Step](cfg.Type, cfg.Cfg)
@@ -100,13 +98,6 @@ func (t *Task) Init(ctx context.Context) error {
 		t.deferSteps = append(t.deferSteps, step)
 	}
 
-	return nil
-}
-
-func (t *Task) Start(ctx context.Context) (err error) {
-	t.l = zerolog.Ctx(ctx)
-	ctx, t.cancel = context.WithCancel(ctx)
-
 	defer func() {
 		derr := t.runDeferSteps(ctx)
 		if derr != nil {
@@ -114,11 +105,6 @@ func (t *Task) Start(ctx context.Context) (err error) {
 		}
 	}()
 	return t.runSteps(ctx)
-}
-
-func (t *Task) Stop(ctx context.Context) error {
-	t.cancel()
-	return nil
 }
 
 func (t *Task) BeforeStepRun(hook ...StepHook) {
@@ -138,24 +124,23 @@ func (t *Task) AfterDeferStepDone(hook ...StepHook) {
 }
 
 func (t *Task) Steps() []step.Step {
-	return t.steps
+	return slices.Clone(t.steps)
 }
 
 func (t *Task) DeferSteps() []step.Step {
-	return t.deferSteps
+	return slices.Clone(t.deferSteps)
 }
 
 func (t *Task) runSteps(ctx context.Context) error {
 	var err error
-	for i := 0; i < len(t.steps); i++ {
+	for i, st := range t.steps {
 		select {
-		case <-t.Stopping():
-			return nil
+		case <-ctx.Done():
+			return ctx.Err()
 		default:
 		}
 
 		typ := t.cfg.Steps[i].Type
-		st := t.steps[i]
 
 		err = hookStep(ctx, t.beforeStepRunHooks, i, typ, st, nil, t, false)
 		if err != nil {
@@ -168,7 +153,7 @@ func (t *Task) runSteps(ctx context.Context) error {
 
 		err = t.runStep(ctx, i, typ, st, false)
 		if err != nil {
-			err = errs.Wrapf(err, "run step faild: %s(%d)", typ, i)
+			err = errs.Wrapf(err, "run step failed: %s(%d)", typ, i)
 		}
 
 		herr := hookStep(ctx, t.afterStepDoneHooks, i, typ, st, err, t, false)
@@ -181,7 +166,7 @@ func (t *Task) runSteps(ctx context.Context) error {
 
 		if errors.Is(herr, ErrSkip) {
 			if err != nil {
-				t.l.Info().AnErr("hook_err", err).AnErr("step_err", err).Int("step_idx", i).Str("step_type", string(typ)).Msg("skip step err")
+				t.l.Info().AnErr("hook_err", herr).AnErr("step_err", err).Int("step_idx", i).Str("step_type", string(typ)).Msg("skip step err")
 			}
 			continue
 		}
@@ -197,17 +182,15 @@ func (t *Task) runSteps(ctx context.Context) error {
 }
 
 func (t *Task) runDeferSteps(ctx context.Context) error {
-	allErr := make([]error, 0, len(t.cfg.DeferSteps))
-	for i := len(t.cfg.DeferSteps) - 1; i >= 0; i-- {
+	allErr := make([]error, 0, len(t.deferSteps))
+	for i, st := range slices.Backward(t.deferSteps) {
 		select {
-		case <-t.Stopping():
-			return nil
+		case <-ctx.Done():
+			return ctx.Err()
 		default:
 		}
 
 		typ := t.cfg.DeferSteps[i].Type
-		st := t.deferSteps[i]
-
 		err := hookStep(ctx, t.beforeDeferStepRunHooks, i, typ, st, nil, t, true)
 		if err != nil {
 			if errors.Is(err, ErrSkip) {
@@ -260,12 +243,14 @@ func (t *Task) runStep(ctx context.Context, i int, typ step.Type, st step.Step, 
 		}
 	}()
 
-	err = runner.Init(ctx, st)
-	if err != nil {
-		return errs.Wrapf(err, "init %s failed: %s(%d)", stepMsgName, typ, i)
+	if initer, ok := st.(initializer); ok {
+		err = initer.Init(ctx)
+		if err != nil {
+			return errs.Wrapf(err, "init %s failed: %s(%d)", stepMsgName, typ, i)
+		}
 	}
 
-	err = runner.Start(ctx, st)
+	err = st.Run(ctx)
 	if err != nil {
 		return errs.Wrapf(err, "start %s failed: %s(%d)", stepMsgName, typ, i)
 	}
@@ -296,11 +281,7 @@ func hook(ctx context.Context, hookIdx int, h StepHook, stepIdx int, typ step.Ty
 		}
 
 		pe := errs.PanicToErrWithMsg(p, fmt.Sprintf("panic on hook %s: %s(%d) %s(%d)", stepMsgName, typ, stepIdx, reflects.GetFuncName(h), hookIdx))
-		if err == nil {
-			err = pe
-		} else {
-			err = errors.Join(err, pe)
-		}
+		err = errors.Join(err, pe)
 	}()
 	return h(ctx, t, stepIdx, st, stepErr)
 }

@@ -9,12 +9,9 @@ import (
 	"sync"
 
 	"github.com/donkeywon/golib/errs"
-	"github.com/donkeywon/golib/runner"
 )
 
 type Pipeline struct {
-	runner.Base
-
 	ws []Worker
 }
 
@@ -59,11 +56,17 @@ func (p *Pipeline) Init(ctx context.Context) error {
 	return nil
 }
 
-func (p *Pipeline) Start(ctx context.Context) error {
+type initializer interface {
+	Init(context.Context) error
+}
+
+func (p *Pipeline) Run(ctx context.Context) error {
 	for i, w := range p.ws {
-		err := runner.Init(ctx, w)
-		if err != nil {
-			return errs.Wrapf(err, "init worker failed: %T(%d)", w, i)
+		if initer, ok := w.(initializer); ok {
+			err := initer.Init(ctx)
+			if err != nil {
+				return errs.Wrapf(err, "init worker failed: %T(%d)", w, i)
+			}
 		}
 	}
 
@@ -72,7 +75,7 @@ func (p *Pipeline) Start(ctx context.Context) error {
 	wg := &sync.WaitGroup{}
 	for i, w := range p.ws {
 		wg.Go(func() {
-			err := runner.Start(ctx, w)
+			err := w.Run(ctx)
 			if err != nil {
 				allErr[i] = errs.Wrapf(err, "worker failed: %T(%d)", w, i)
 			}
@@ -81,8 +84,4 @@ func (p *Pipeline) Start(ctx context.Context) error {
 
 	wg.Wait()
 	return errors.Join(allErr...)
-}
-
-func (p *Pipeline) Stop(ctx context.Context) error {
-	return runner.Stop(ctx, p.ws[0])
 }

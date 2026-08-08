@@ -10,16 +10,14 @@ import (
 	"runtime"
 	"slices"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/donkeywon/golib/buildinfo"
 	"github.com/donkeywon/golib/errs"
-	"github.com/donkeywon/golib/logs"
 	"github.com/donkeywon/golib/plugin"
-	"github.com/donkeywon/golib/runner"
 	"github.com/donkeywon/golib/util/paths"
 	"github.com/donkeywon/golib/util/reflects"
-	"github.com/donkeywon/golib/util/signals"
 	"github.com/donkeywon/golib/util/v"
 	"github.com/goccy/go-yaml"
 	"github.com/goccy/go-yaml/ast"
@@ -34,30 +32,36 @@ import (
 type DaemonType string
 
 type Daemon interface {
-	runner.Runner
+	Run(context.Context) error
+}
+
+type initializer interface {
+	Init(context.Context) error
+}
+
+type daemonInfo struct {
+	d      Daemon
+	ctx    context.Context
+	cancel context.CancelCauseFunc
+	done   chan struct{}
+}
+
+type signalError struct {
+	signal os.Signal
+}
+
+func (s signalError) Error() string {
+	return s.signal.String()
 }
 
 var (
 	_daemonTypes       []DaemonType // dependencies in order
 	_additionalCfgKeys []string
 	_additionalCfgMap  = make(map[string]any)
-	_b                 *booter
+	_daemonsMap        map[DaemonType]*daemonInfo
 
 	errCanceled = errors.New("canceled")
 )
-
-func Boot(opt ...Option) {
-	ctx := context.Background()
-	_b = create(opt...)
-	err := runner.Init(ctx, _b)
-	if err != nil {
-		panic(errs.Wrap(err, "boot init failed"))
-	}
-	err = runner.Start(ctx, _b)
-	if err != nil {
-		panic(errs.Wrap(err, "error occurred"))
-	}
-}
 
 // Reg register a Daemon creator and its config creator.
 func Reg(typ DaemonType, creator plugin.Creator[Daemon], cfgCreator plugin.CfgCreator[any]) {
@@ -83,77 +87,80 @@ func RegCfg(name string, cfg any) {
 }
 
 func Get[D Daemon](typ DaemonType) D {
-	d, exists := _b.daemonsMap[typ]
+	d, exists := _daemonsMap[typ]
 	if !exists {
 		panic(fmt.Errorf("daemon %s not exists, register first or get after created", typ))
 	}
-	dd, ok := d.(D)
+	dd, ok := d.d.(D)
 	if !ok {
 		panic(fmt.Errorf("daemon %s is not type of %s", typ, reflect.TypeFor[D]()))
 	}
 	return dd
 }
 
-type options struct {
-	CfgPath      string `env:"CFG_PATH" description:"config file path"   long:"config"  short:"c"`
-	PrintVersion bool   `               description:"print version info" long:"version" short:"v"`
+func Boot(opts ...Option) {
+	options, cfgMap := parseFlagsAndLoadCfg(opts...)
+	l := buildLogger(&options)
+	necessaryLog(&l, cfgMap)
 
-	loggerCfgKey  string
-	loggerCreator logs.Creator
-	envPrefix     string
-	onCreated     map[DaemonType]OnCreatedFunc
-}
+	ctx, cancel := context.WithCancelCause(context.Background())
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGTERM, syscall.SIGINT)
+	go func() {
+		s := <-sigCh
+		cancel(signalError{s})
+	}()
 
-func createOptions(opt ...Option) *options {
-	options := &options{
-		onCreated:     make(map[DaemonType]OnCreatedFunc),
-		loggerCfgKey:  "log",
-		loggerCreator: &logs.RotateLoggerCreator{Filepath: "stderr"},
-	}
-
-	for _, o := range opt {
-		o(options)
-	}
-
-	return options
-}
-
-type booter struct {
-	runner.Base
-	*options
-
-	cfgMap     map[string]any
-	flagParser *flags.Parser
-
-	daemonsMap map[DaemonType]Daemon
-	l          zerolog.Logger
-}
-
-func create(opt ...Option) *booter {
-	return &booter{
-		options:    createOptions(opt...),
-		daemonsMap: make(map[DaemonType]Daemon, len(_daemonTypes)),
-	}
-}
-
-func (b *booter) Init(ctx context.Context) error {
 	var err error
-
-	if b.options.loggerCfgKey == "" {
-		return errs.New("empty logger cfg key")
-	}
-	if b.options.loggerCreator == nil {
-		return errs.New("nil logger creator")
-	}
-
-	var cfgKeys []string
-	b.cfgMap, cfgKeys = b.buildCfgMap()
-	b.flagParser, err = buildFlagParser(b.options, b.cfgMap, cfgKeys)
+	_daemonsMap, err = createDaemons(ctx, cfgMap, &options, &l)
 	if err != nil {
-		return errs.Wrap(err, "build flag parser failed")
+		if signaled, signal := isSignaled(ctx); signaled {
+			l.Info().Str("signal", signal.String()).Err(err).Msg("signaled")
+			os.Exit(0)
+		}
+		l.Error().Err(err).Msg("create daemons failed")
+		os.Exit(1)
+	}
+	err = initDaemons(ctx, _daemonsMap, &l)
+	if err != nil {
+		if signaled, signal := isSignaled(ctx); signaled {
+			l.Info().Str("signal", signal.String()).Err(err).Msg("signaled")
+			os.Exit(0)
+		}
+		l.Error().Err(err).Msg("init daemons failed")
+		os.Exit(1)
+	}
+	err = runDaemons(ctx, _daemonsMap, &l)
+	if err != nil {
+		l.Error().Err(err).Msg("run daemons failed")
+		os.Exit(1)
+	}
+}
+
+func isSignaled(ctx context.Context) (bool, os.Signal) {
+	if serr, ok := errors.AsType[signalError](context.Cause(ctx)); ok {
+		return true, serr.signal
+	}
+	return false, nil
+}
+
+func parseFlagsAndLoadCfg(opts ...Option) (options, map[string]any) {
+	options := createOptions(opts...)
+
+	if options.loggerCfgKey == "" {
+		panic("empty logger cfg key")
+	}
+	if options.loggerCreator == nil {
+		panic("nil logger creator")
 	}
 
-	err = b.loadCfgFromFlags()
+	cfgMap, cfgKeys := buildCfgMap(&options)
+	flagParser, err := buildFlagParser(&options, cfgMap, cfgKeys)
+	if err != nil {
+		panic(errs.Wrap(err, "build flag parser failed"))
+	}
+
+	_, err = flagParser.Parse()
 	if err != nil {
 		if e, ok := err.(*flags.Error); ok && e.Type == flags.ErrHelp {
 			os.Exit(0)
@@ -162,7 +169,8 @@ func (b *booter) Init(ctx context.Context) error {
 		// flag parser output content
 		os.Exit(1)
 	}
-	if b.options.PrintVersion {
+
+	if options.PrintVersion {
 		fmt.Fprint(os.Stdout,
 			"version:"+buildinfo.Version+"\n"+
 				"build_time:"+buildinfo.BuildTime+"\n"+
@@ -173,156 +181,135 @@ func (b *booter) Init(ctx context.Context) error {
 		os.Exit(0)
 	}
 
-	err = b.loadCfg()
+	err = loadCfgFromFile(&options, cfgMap)
 	if err != nil {
-		return errs.Wrap(err, "load cfg failed")
+		panic(errs.Wrap(err, "load cfg from file failed"))
 	}
 
-	err = b.validateCfg()
+	err = loadCfgFromFlagsAndEnv(flagParser)
 	if err != nil {
-		return errs.Wrap(err, "validate cfg failed")
+		panic(errs.Wrap(err, "load cfg from flags and env failed"))
 	}
 
-	b.l, err = b.options.loggerCreator.Create()
+	err = validateCfg(cfgMap)
 	if err != nil {
-		return errs.Wrap(err, "create logger failed")
+		panic(errs.Wrap(err, "validate cfg failed"))
 	}
-	defaultContextLogger := b.l.With().Bool("logger_not_in_ctx", true).Logger()
+
+	return options, cfgMap
+}
+
+func buildLogger(options *options) zerolog.Logger {
+	l, err := options.loggerCreator.Create()
+	if err != nil {
+		panic(errs.Wrap(err, "create logger failed"))
+	}
+	defaultContextLogger := l.With().Bool("logger_not_in_ctx", true).Logger()
 	zerolog.DefaultContextLogger = &defaultContextLogger
+	return l
+}
 
-	b.l.Info().Str("version", buildinfo.Version).Str("build_time", buildinfo.BuildTime).Str("revision", buildinfo.Revision).Time("commit_time", buildinfo.CommitTime).Msg("init")
-
-	for name, cfg := range b.cfgMap {
-		b.l.Debug().Str("name", name).Any("cfg", cfg).Msg("load config")
+func necessaryLog(l *zerolog.Logger, cfgMap map[string]any) {
+	l.Info().Str("version", buildinfo.Version).Str("build_time", buildinfo.BuildTime).Str("revision", buildinfo.Revision).Time("commit_time", buildinfo.CommitTime).Msg("init")
+	for name, cfg := range cfgMap {
+		l.Debug().Str("name", name).Any("cfg", cfg).Msg("load config")
 	}
+}
 
-	b.createDaemons(ctx)
-	err = b.initDaemons(ctx)
-	if err != nil {
-		return errs.Wrap(err, "init daemons failed")
+func createDaemons(ctx context.Context, cfgMap map[string]any, options *options, l *zerolog.Logger) (map[DaemonType]*daemonInfo, error) {
+	daemonsMap := make(map[DaemonType]*daemonInfo, len(_daemonTypes))
+	for _, daemonType := range _daemonTypes {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		default:
+		}
+
+		cfg := cfgMap[string(daemonType)]
+		d := plugin.CreateWithCfg[Daemon](daemonType, reflect.ValueOf(cfg).Elem().Interface())
+		daemonsMap[daemonType] = &daemonInfo{
+			d:    d,
+			done: make(chan struct{}),
+		}
+
+		dctx := l.With().Str("daemon", string(daemonType)).Logger().WithContext(ctx)
+		onCreated := options.onCreated[daemonType]
+		if onCreated != nil {
+			onCreated(dctx)
+		}
 	}
+	return daemonsMap, nil
+}
 
+func initDaemons(ctx context.Context, daemonsMap map[DaemonType]*daemonInfo, l *zerolog.Logger) error {
+	var err error
+	for _, daemonType := range _daemonTypes {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
+
+		dctx := l.With().Str("daemon", string(daemonType)).Logger().WithContext(ctx)
+		di := daemonsMap[daemonType]
+		if initer, ok := di.d.(initializer); ok {
+			err = initer.Init(dctx)
+			if err != nil {
+				return errs.Wrapf(err, "init daemon failed: %s", daemonType)
+			}
+		}
+	}
 	return nil
 }
 
-func (b *booter) Start(ctx context.Context) error {
-	var cancel context.CancelCauseFunc
-	ctx, cancel = context.WithCancelCause(ctx)
-	defer cancel(errCanceled)
-
-	errg, gctx := errgroup.WithContext(ctx)
+func runDaemons(ctx context.Context, daemonsMap map[DaemonType]*daemonInfo, l *zerolog.Logger) error {
+	errg, gctx := errgroup.WithContext(context.Background())
 	for _, daemonType := range _daemonTypes {
-		daemon := b.daemonsMap[daemonType]
+		di := daemonsMap[daemonType]
+		di.ctx, di.cancel = context.WithCancelCause(gctx)
+		di.ctx = l.With().Str("daemon", string(daemonType)).Logger().WithContext(di.ctx)
+
 		errg.Go(func() error {
-			dctx := b.l.With().Str("daemon", string(daemonType)).Logger().WithContext(gctx)
-			e := runner.Start(dctx, daemon)
-			if errors.Is(e, context.Canceled) && errors.Is(context.Cause(gctx), errCanceled) {
-				b.l.Info().Str("daemon", string(daemonType)).Err(e).Msg("daemon canceled")
+			defer close(di.done)
+			defer di.cancel(errCanceled)
+
+			e := di.d.Run(di.ctx)
+			if errors.Is(context.Cause(di.ctx), errCanceled) {
+				l.Info().Str("daemon", string(daemonType)).Err(e).Msg("daemon canceled")
 				return nil
 			}
 			if e != nil {
 				return errs.Wrapf(e, "daemon failed: %s", daemonType)
 			}
 
-			select {
-			case <-b.Stopping():
-				return nil
-			default:
-			}
-			b.l.Error().Str("daemon", string(daemonType)).Msg("daemon done, should not happen")
-			e = errs.Errorf("daemon done, should not happen: %s", daemonType)
-			return e
+			l.Error().Str("daemon", string(daemonType)).Msg("daemon done, should not happen")
+			return errs.Errorf("daemon done, should not happen: %s", daemonType)
 		})
 	}
 
-	termSigCh := make(chan os.Signal, 1)
-	signal.Notify(termSigCh, signals.TermSignals...)
-	defer signal.Stop(termSigCh)
-
-	intSigCh := make(chan os.Signal, 1)
-	signal.Notify(intSigCh, signals.IntSignals...)
-	defer signal.Stop(intSigCh)
-
-	select {
-	case sig := <-termSigCh:
-		b.l.Info().Str("signal", sig.String()).Msg("received signal")
-		go func() {
-			e := runner.Stop(context.WithoutCancel(ctx), b)
-			if e != nil {
-				b.l.Error().Err(e).Msg("stop booter failed")
-			}
-		}()
-		select {
-		case sig := <-termSigCh:
-			b.l.Info().Str("signal", sig.String()).Msg("received signal twice, canceling")
-			cancel(errCanceled)
-		case sig := <-intSigCh:
-			b.l.Info().Str("signal", sig.String()).Msg("received signal twice, canceling")
-			cancel(errCanceled)
-		case <-b.StopDone():
-		}
-	case sig := <-intSigCh:
-		b.l.Info().Str("signal", sig.String()).Msg("received signal, canceling")
-		cancel(errCanceled)
-	case <-b.Stopping():
-		b.l.Info().Msg("stopping")
-	case <-gctx.Done():
-	}
+	go func() {
+		<-ctx.Done()
+		stopDaemons()
+	}()
 
 	return errg.Wait()
 }
 
-func (b *booter) Stop(ctx context.Context) error {
-	allErr := make([]error, 0, len(_daemonTypes))
-	for _, typ := range slices.Backward(_daemonTypes) {
-		select {
-		case <-ctx.Done():
-			return errors.Join(append(allErr, ctx.Err())...)
-		default:
-			dctx := b.l.With().Str("daemon", string(typ)).Logger().WithContext(ctx)
-			err := runner.StopAndWait(dctx, b.daemonsMap[typ])
-			if err != nil {
-				allErr = append(allErr, errs.Wrapf(err, "stop daemon failed: %s", typ))
-			}
-		}
-	}
-	return errors.Join(allErr...)
-}
-
-func (b *booter) createDaemons(ctx context.Context) {
-	for _, daemonType := range _daemonTypes {
-		cfg := b.cfgMap[string(daemonType)]
-		daemon := plugin.CreateWithCfg[Daemon](daemonType, reflect.ValueOf(cfg).Elem().Interface())
-		b.daemonsMap[daemonType] = daemon
-
-		dctx := b.l.With().Str("daemon", string(daemonType)).Logger().WithContext(ctx)
-		onCreated := b.options.onCreated[daemonType]
-		if onCreated != nil {
-			onCreated(dctx)
-		}
+func stopDaemons() {
+	for _, daemonType := range slices.Backward(_daemonTypes) {
+		di := _daemonsMap[daemonType]
+		di.cancel(errCanceled)
+		<-di.done
 	}
 }
 
-func (b *booter) initDaemons(ctx context.Context) error {
-	var err error
-	for _, daemonType := range _daemonTypes {
-		dctx := b.l.With().Str("daemon", string(daemonType)).Logger().WithContext(ctx)
-		daemon := b.daemonsMap[daemonType]
-		err = runner.Init(dctx, daemon)
-		if err != nil {
-			return errs.Wrapf(err, "init daemon failed: %s", daemonType)
-		}
-	}
-	return nil
-}
-
-func (b *booter) loadCfgFromFlags() error {
-	_, err := b.flagParser.Parse()
+func loadCfgFromFlagsAndEnv(flagParser *flags.Parser) error {
+	_, err := flagParser.Parse()
 	return err
 }
 
-func (b *booter) loadCfgFromFile() error {
-	cfgPath := b.options.CfgPath
+func loadCfgFromFile(options *options, cfgMap map[string]any) error {
+	cfgPath := options.CfgPath
 	if cfgPath == "" {
 		return nil
 	}
@@ -345,7 +332,7 @@ func (b *booter) loadCfgFromFile() error {
 		node ast.Node
 		yp   *yaml.Path
 	)
-	for name, cfg := range b.cfgMap {
+	for name, cfg := range cfgMap {
 		yp, err = yaml.PathString("$." + name)
 		if err != nil {
 			return errs.Wrapf(err, "invalid cfg name: %s", name)
@@ -364,12 +351,8 @@ func (b *booter) loadCfgFromFile() error {
 	return nil
 }
 
-func (b *booter) loadCfg() error {
-	return errors.Join(b.loadCfgFromFile(), b.loadCfgFromFlags())
-}
-
-func (b *booter) validateCfg() error {
-	for name, cfg := range b.cfgMap {
+func validateCfg(cfgMap map[string]any) error {
+	for name, cfg := range cfgMap {
 		if !reflects.IsStructPointer(cfg) {
 			continue
 		}
@@ -381,15 +364,17 @@ func (b *booter) validateCfg() error {
 	return nil
 }
 
-func (b *booter) buildCfgMap() (map[string]any, []string) {
+func buildCfgMap(options *options) (map[string]any, []string) {
 	cfgKeys := make([]string, 0, len(_daemonTypes)+len(_additionalCfgKeys)+1)
-	cfgKeys = append(cfgKeys, b.options.loggerCfgKey)
+	cfgKeys = append(cfgKeys, options.loggerCfgKey)
 
 	cfgMap := make(map[string]any)
 	for _, daemonType := range _daemonTypes {
 		cfg := plugin.CreateCfg[any](daemonType)
 		if !reflects.IsPointer(cfg) {
-			cfgMap[string(daemonType)] = &cfg
+			pv := reflect.New(reflect.TypeOf(cfg))
+			pv.Elem().Set(reflect.ValueOf(cfg))
+			cfgMap[string(daemonType)] = pv.Interface()
 		} else {
 			cfgMap[string(daemonType)] = cfg
 		}
@@ -399,22 +384,22 @@ func (b *booter) buildCfgMap() (map[string]any, []string) {
 		cfgMap[name] = cfg
 		cfgKeys = append(cfgKeys, name)
 	}
-	cfgMap[b.options.loggerCfgKey] = b.options.loggerCreator
+	cfgMap[options.loggerCfgKey] = options.loggerCreator
 	return cfgMap, cfgKeys
 }
 
-func buildFlagParser(base *options, cfgMap map[string]any, cfgKeys []string) (*flags.Parser, error) {
+func buildFlagParser(options *options, cfgMap map[string]any, cfgKeys []string) (*flags.Parser, error) {
 	var err error
 	parser := flags.NewParser(nil, flags.Default)
 	parser.NamespaceDelimiter = "-"
 	parser.EnvNamespaceDelimiter = "_"
 
 	var g *flags.Group
-	g, err = parser.AddGroup("Application Options", "", base)
+	g, err = parser.AddGroup("Application Options", "", options)
 	if err != nil {
 		return nil, errs.Wrapf(err, "add base flags failed")
 	}
-	g.EnvNamespace = strings.ToUpper(base.envPrefix)
+	g.EnvNamespace = strings.ToUpper(options.envPrefix)
 
 	for _, name := range cfgKeys {
 		if !reflects.IsStructPointer(cfgMap[name]) {
@@ -427,8 +412,8 @@ func buildFlagParser(base *options, cfgMap map[string]any, cfgKeys []string) (*f
 			return nil, errs.Wrapf(err, "add flags failed: %s", namespace)
 		}
 		g.Namespace = namespace
-		if base.envPrefix != "" {
-			g.EnvNamespace = strings.ToUpper(base.envPrefix + parser.EnvNamespaceDelimiter + namespace)
+		if options.envPrefix != "" {
+			g.EnvNamespace = strings.ToUpper(options.envPrefix + parser.EnvNamespaceDelimiter + namespace)
 		} else {
 			g.EnvNamespace = strings.ToUpper(namespace)
 		}

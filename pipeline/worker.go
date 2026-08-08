@@ -9,11 +9,10 @@ import (
 	"sync"
 
 	"github.com/donkeywon/golib/errs"
-	"github.com/donkeywon/golib/runner"
 )
 
 type Worker interface {
-	runner.Runner
+	Run(context.Context) error
 
 	Writer() io.Writer
 	Reader() io.Reader
@@ -27,8 +26,6 @@ type Worker interface {
 }
 
 type BaseWorker struct {
-	runner.Base
-
 	r io.Reader
 	w io.Writer
 
@@ -58,11 +55,7 @@ func (wk *BaseWorker) Init(ctx context.Context) error {
 	return nil
 }
 
-func (wk *BaseWorker) Start(ctx context.Context) error {
-	panic("not implemented")
-}
-
-func (wk *BaseWorker) Stop(ctx context.Context) error {
+func (wk *BaseWorker) Run(ctx context.Context) error {
 	panic("not implemented")
 }
 

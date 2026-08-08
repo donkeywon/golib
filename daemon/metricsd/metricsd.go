@@ -7,7 +7,6 @@ import (
 	"github.com/VictoriaMetrics/metrics"
 	"github.com/donkeywon/golib/boot"
 	"github.com/donkeywon/golib/daemon/httpd"
-	"github.com/donkeywon/golib/runner"
 	"github.com/rs/zerolog"
 )
 
@@ -27,8 +26,6 @@ type Metricsd interface {
 }
 
 type metricsd struct {
-	runner.Base
-
 	cfg Cfg
 
 	httpd httpd.HTTPd
@@ -46,6 +43,11 @@ func (p *metricsd) Init(ctx context.Context) error {
 	p.httpd.Handle(p.cfg.HTTPEndpointPath, http.HandlerFunc(p.httpHandler))
 
 	return nil
+}
+
+func (p *metricsd) Run(ctx context.Context) error {
+	<-ctx.Done()
+	return ctx.Err()
 }
 
 func (p *metricsd) SetCfg(cfg any) {

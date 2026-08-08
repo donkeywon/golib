@@ -1,29 +1,23 @@
 package taskd
 
+import "time"
+
 const (
-	DefaultPool      = "default"
-	DefaultPoolSize  = 64
-	DefaultQueueSize = 1024
+	DefaultPoolSize        = 64
+	DefaultQueueSize       = 1024
+	DefaultShutdownTimeout = time.Second * 30
 )
 
-type PoolCfg struct {
-	Name      string `json:"name"      yaml:"name"      validate:"required"`
-	Size      int    `json:"size"      yaml:"size"      validate:"required"`
-	QueueSize int    `json:"queueSize" yaml:"queueSize" validate:"required"`
-}
-
 type Cfg struct {
-	Pools []PoolCfg `json:"pools" yaml:"pools" env:"POOLS"`
+	Size            int           `json:"size"             yaml:"size"            validate:"required"`
+	QueueSize       int           `json:"queue_size"       yaml:"queueSize"       validate:"required"`
+	ShutdownTimeout time.Duration `json:"shutdown_timeout" yaml:"shutdownTimeout" validate:"required"`
 }
 
 func NewCfg() Cfg {
 	return Cfg{
-		Pools: []PoolCfg{
-			{
-				Name:      DefaultPool,
-				Size:      DefaultPoolSize,
-				QueueSize: DefaultQueueSize,
-			},
-		},
+		Size:            DefaultPoolSize,
+		QueueSize:       DefaultQueueSize,
+		ShutdownTimeout: DefaultShutdownTimeout,
 	}
 }

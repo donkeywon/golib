@@ -11,7 +11,6 @@ import (
 	"github.com/donkeywon/golib/boot"
 	"github.com/donkeywon/golib/daemon/metricsd"
 	"github.com/donkeywon/golib/errs"
-	"github.com/donkeywon/golib/runner"
 	"github.com/rs/zerolog"
 )
 
@@ -25,8 +24,6 @@ type DBP interface {
 }
 
 type dbp struct {
-	runner.Base
-
 	cfg      Cfg
 	dbs      map[string]*sql.DB
 	metricsd metricsd.Metricsd
@@ -65,6 +62,11 @@ func (d *dbp) Init(ctx context.Context) error {
 		d.metricsd.Metrics().RegisterMetricsWriter(d.writeMetrics)
 	}
 	return nil
+}
+
+func (d *dbp) Run(ctx context.Context) error {
+	<-ctx.Done()
+	return ctx.Err()
 }
 
 func (d *dbp) SetCfg(cfg any) {

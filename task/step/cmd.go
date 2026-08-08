@@ -11,13 +11,12 @@ import (
 
 	"github.com/donkeywon/golib/consts"
 	"github.com/donkeywon/golib/errs"
+	"github.com/donkeywon/golib/kvs"
 	"github.com/donkeywon/golib/plugin"
 	"github.com/donkeywon/golib/util/cmds"
 	"github.com/donkeywon/golib/util/v"
 	"github.com/rs/zerolog"
 )
-
-var errCanceled = errors.New("canceled")
 
 func init() {
 	plugin.Reg(TypeCmd, func() Step { return NewCmdStep() }, func() any { return NewCmdStepCfg() })
@@ -43,11 +42,9 @@ func NewCmdStepCfg() CmdStepCfg {
 }
 
 type CmdStep struct {
-	Base
+	kvs.Map[string, any]
 
 	cfg     CmdStepCfg
-	ctx     context.Context
-	cancel  context.CancelCauseFunc
 	options []cmds.Option
 }
 
@@ -59,11 +56,8 @@ func (c *CmdStep) Init(ctx context.Context) error {
 	return v.StructCtx(ctx, c.cfg)
 }
 
-func (c *CmdStep) Start(ctx context.Context) error {
+func (c *CmdStep) Run(ctx context.Context) error {
 	l := zerolog.Ctx(ctx).With().Str("cmd", c.cfg.Name).Logger()
-
-	c.ctx, c.cancel = context.WithCancelCause(ctx)
-	defer c.cancel(errCanceled)
 
 	var (
 		err  error
@@ -104,7 +98,7 @@ func (c *CmdStep) Start(ctx context.Context) error {
 	}
 
 	opts = append(opts, c.options...)
-	cmd := exec.CommandContext(c.ctx, c.cfg.Name, c.cfg.Args...)
+	cmd := exec.CommandContext(ctx, c.cfg.Name, c.cfg.Args...)
 	cmds.WithOptions(cmd, opts...)
 	err = cmd.Run()
 	if err == nil {
@@ -117,7 +111,7 @@ func (c *CmdStep) Start(ctx context.Context) error {
 		c.Store(consts.FieldCmdSignal, int(sig))
 		c.Store(consts.FieldCmdIsCoredump, isCoreDump)
 
-		if errors.Is(err, errCanceled) {
+		if errors.Is(err, context.Canceled) {
 			l.Warn().Int("exit_code", exitCode).Bool("is_signaled", isSignaled).Bool("is_coredump", isCoreDump).Str("signal", sig.String()).Msg("cmd canceled")
 		} else if isSignaled {
 			l.Warn().Int("exit_code", exitCode).Bool("is_signaled", isSignaled).Bool("is_coredump", isCoreDump).Str("signal", sig.String()).Msg("cmd signaled")
@@ -133,19 +127,10 @@ func (c *CmdStep) Start(ctx context.Context) error {
 		c.Store(consts.FieldCmdStderr, stderrBuf.Bytes())
 	}
 
-	if errors.Is(err, errCanceled) {
-		err = nil
-	}
-
 	if err != nil {
 		return errs.Wrap(err, "exec cmd failed")
 	}
 
-	return nil
-}
-
-func (c *CmdStep) Stop(ctx context.Context) error {
-	c.cancel(errCanceled)
 	return nil
 }
 

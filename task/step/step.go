@@ -2,11 +2,11 @@ package step
 
 import (
 	"bytes"
+	"context"
 
 	"github.com/donkeywon/golib/errs"
 	"github.com/donkeywon/golib/kvs"
 	"github.com/donkeywon/golib/plugin"
-	"github.com/donkeywon/golib/runner"
 	"github.com/donkeywon/golib/util/jsons"
 	"github.com/donkeywon/golib/util/yamls"
 	"github.com/goccy/go-yaml"
@@ -68,10 +68,5 @@ func (c *Cfg) customUnmarshal(data []byte, unmarshaler func([]byte, any) error) 
 
 type Step interface {
 	kvs.KVS[string, any]
-	runner.Runner
-}
-
-type Base struct {
-	kvs.Map[string, any]
-	runner.Base
+	Run(context.Context) error
 }

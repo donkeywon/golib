@@ -6,7 +6,6 @@ import (
 	"net/http"
 
 	"github.com/donkeywon/golib/boot"
-	"github.com/donkeywon/golib/runner"
 	"github.com/rs/zerolog"
 )
 
@@ -31,8 +30,6 @@ type Router interface {
 }
 
 type httpd struct {
-	runner.Base
-
 	cfg Cfg
 	s   *http.Server
 
@@ -61,16 +58,28 @@ func (h *httpd) Init(ctx context.Context) error {
 	return nil
 }
 
-func (h *httpd) Start(_ context.Context) error {
-	err := h.s.ListenAndServe()
-	if errors.Is(err, http.ErrServerClosed) {
-		return nil
-	}
-	return err
-}
+func (h *httpd) Run(ctx context.Context) error {
+	errCh := make(chan error, 1)
 
-func (h *httpd) Stop(ctx context.Context) error {
-	return h.s.Shutdown(ctx)
+	go func() {
+		err := h.s.ListenAndServe()
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
+			errCh <- err
+		}
+		close(errCh)
+	}()
+
+	select {
+	case err, ok := <-errCh:
+		if !ok {
+			return nil
+		}
+		return err
+	case <-ctx.Done():
+		shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), h.cfg.ShutdownTimeout)
+		defer cancel()
+		return errors.Join(ctx.Err(), h.s.Shutdown(shutdownCtx))
+	}
 }
 
 func (h *httpd) Use(mf ...func(http.Handler) http.Handler) {
