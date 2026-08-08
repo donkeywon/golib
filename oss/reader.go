@@ -11,13 +11,10 @@ import (
 
 type Reader struct {
 	*httpio.Reader
-	cfg Cfg
 }
 
 func NewReader(ctx context.Context, cfg Cfg, opts ...httpc.Option) *Reader {
-	r := &Reader{
-		cfg: cfg,
-	}
+	r := &Reader{}
 	cfg.setDefaults()
 	allHttpcOptions := make([]httpc.Option, 0, 1+len(opts))
 	allHttpcOptions = append(allHttpcOptions, httpc.ReqOptionFunc(func(r *http.Request) error {

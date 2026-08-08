@@ -527,8 +527,8 @@ func (w *MultiPartWriter) complete() error {
 		retry.Attempts(uint(w.cfg.Retry)),
 	)
 
+	bodyBS, e := xml.Marshal(body)
 	for _, h := range w.completeHooks {
-		bodyBS, e := xml.Marshal(body)
 		if e != nil {
 			h(w.uploadID, conv.Bytes2String(bodyBS), errors.Join(err, e))
 		} else {
@@ -587,14 +587,6 @@ func (w *MultiPartWriter) retryUploadPart(partNo int, b []byte) *uploadPartResul
 			return r.err
 		},
 		retry.Attempts(uint(w.cfg.Retry)),
-		retry.RetryIf(func(err error) bool {
-			select {
-			case <-w.ctx.Done():
-				return false
-			default:
-				return err != nil
-			}
-		}),
 		retry.LastErrorOnly(true),
 		retry.Context(w.ctx),
 	)

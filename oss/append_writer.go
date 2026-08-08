@@ -108,9 +108,12 @@ func (w *AppendWriter) ReadFrom(r io.Reader) (int64, error) {
 	rr := &readerWrapper{Reader: r}
 	for {
 		lr := io.LimitReader(rr, w.cfg.PartSize)
-		err = w.appendPart(httpc.WithBodyReader(lr))
+		err = w.appendPart(httpc.WithBodyReader(lr)) // no retry
 		if err != nil {
 			break
+		}
+		if w.isBlob {
+			w.offset += (w.cfg.PartSize - lr.(*io.LimitedReader).N)
 		}
 		if rr.eof {
 			break
@@ -129,14 +132,6 @@ func (w *AppendWriter) sealBlob() error {
 			return ossu.SealAppendBlob(w.ctx, w.cfg.URL, w.cfg.Ak, w.cfg.Sk)
 		},
 		retry.Attempts(uint(w.cfg.Retry)),
-		retry.RetryIf(func(err error) bool {
-			select {
-			case <-w.ctx.Done():
-				return false
-			default:
-				return err != nil
-			}
-		}),
 		retry.LastErrorOnly(true),
 		retry.Context(w.ctx),
 	)
@@ -149,14 +144,6 @@ func (w *AppendWriter) init() error {
 	err := retry.Do(
 		func() error { return ossu.CreateAppendBlob(w.ctx, w.cfg.URL, w.cfg.Ak, w.cfg.Sk) },
 		retry.Attempts(uint(w.cfg.Retry)),
-		retry.RetryIf(func(err error) bool {
-			select {
-			case <-w.ctx.Done():
-				return false
-			default:
-				return err != nil
-			}
-		}),
 		retry.LastErrorOnly(true),
 		retry.Context(w.ctx),
 	)
@@ -177,14 +164,6 @@ func (w *AppendWriter) retryAppendPart(p []byte) error {
 			return w.appendPart(httpc.WithBody(p))
 		},
 		retry.Attempts(uint(w.cfg.Retry)),
-		retry.RetryIf(func(err error) bool {
-			select {
-			case <-w.ctx.Done():
-				return false
-			default:
-				return err != nil
-			}
-		}),
 		retry.LastErrorOnly(true),
 		retry.Context(w.ctx),
 	)
