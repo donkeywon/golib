@@ -170,7 +170,7 @@ func parseFlagsAndLoadCfg(opts ...Option) (options, map[string]any) {
 	cfgMap, cfgKeys := buildCfgMap(&options)
 	flagParser, err := buildFlagParser(&options, cfgMap, cfgKeys)
 	if err != nil {
-		panic(errs.Wrap(err, "build flag parser failed"))
+		panic(errs.ErrToStackString(errs.Wrap(err, "build flag parser failed")))
 	}
 
 	_, err = flagParser.Parse()
@@ -196,17 +196,17 @@ func parseFlagsAndLoadCfg(opts ...Option) (options, map[string]any) {
 
 	err = loadCfgFromFile(&options, cfgMap)
 	if err != nil {
-		panic(errs.Wrap(err, "load cfg from file failed"))
+		panic(errs.ErrToStackString(errs.Wrap(err, "load cfg from file failed")))
 	}
 
 	err = loadCfgFromFlagsAndEnv(flagParser)
 	if err != nil {
-		panic(errs.Wrap(err, "load cfg from flags and env failed"))
+		panic(errs.ErrToStackString(errs.Wrap(err, "load cfg from flags and env failed")))
 	}
 
 	err = validateCfg(cfgMap)
 	if err != nil {
-		panic(errs.Wrap(err, "validate cfg failed"))
+		panic(errs.ErrToStackString(errs.Wrap(err, "validate cfg failed")))
 	}
 
 	return options, cfgMap
@@ -401,27 +401,36 @@ func validateCfg(cfgMap map[string]any) error {
 }
 
 func buildCfgMap(options *options) (map[string]any, []string) {
+	cfgMap := make(map[string]any, len(_daemonTypes)+len(_additionalCfgKeys)+1)
 	cfgKeys := make([]string, 0, len(_daemonTypes)+len(_additionalCfgKeys)+1)
-	cfgKeys = append(cfgKeys, options.loggerCfgKey)
 
-	cfgMap := make(map[string]any)
+	cfgKeys = append(cfgKeys, options.loggerCfgKey)
+	options.loggerCreator = toPointerIfNot(options.loggerCreator).(LoggerCreator)
+	cfgMap[options.loggerCfgKey] = options.loggerCreator
+
 	for _, daemonType := range _daemonTypes {
 		cfg := plugin.CreateCfg[any](daemonType)
-		if !reflects.IsPointer(cfg) {
-			pv := reflect.New(reflect.TypeOf(cfg))
-			pv.Elem().Set(reflect.ValueOf(cfg))
-			cfgMap[string(daemonType)] = pv.Interface()
-		} else {
-			cfgMap[string(daemonType)] = cfg
-		}
+		cfgMap[string(daemonType)] = toPointerIfNot(cfg)
 		cfgKeys = append(cfgKeys, string(daemonType))
 	}
-	for name, cfg := range _additionalCfgMap {
-		cfgMap[name] = cfg
-		cfgKeys = append(cfgKeys, name)
+	for key, cfg := range _additionalCfgMap {
+		cfgMap[key] = toPointerIfNot(cfg)
+		cfgKeys = append(cfgKeys, key)
 	}
-	cfgMap[options.loggerCfgKey] = options.loggerCreator
 	return cfgMap, cfgKeys
+}
+
+func toPointerIfNot(cfg any) any {
+	if cfg == nil {
+		return &cfg
+	}
+	if reflects.IsPointer(cfg) {
+		return cfg
+	}
+
+	pv := reflect.New(reflect.TypeOf(cfg))
+	pv.Elem().Set(reflect.ValueOf(cfg))
+	return pv.Interface()
 }
 
 func buildFlagParser(options *options, cfgMap map[string]any, cfgKeys []string) (*flags.Parser, error) {

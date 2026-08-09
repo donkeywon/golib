@@ -49,6 +49,19 @@ func writeTestCfg(t *testing.T, content string) string {
 	return path
 }
 
+func TestBuildCfgMap_NoCfgCreator(t *testing.T) {
+	typ := DaemonType("nocfgdaemon")
+	Reg(typ, func() Daemon { return &testDaemon{} }, nil)
+	t.Cleanup(func() {
+		_daemonTypes = slices.DeleteFunc(_daemonTypes, func(t DaemonType) bool { return t == typ })
+	})
+
+	opts := createOptions()
+	require.NotPanics(t, func() {
+		buildCfgMap(&opts)
+	}, "未注册 cfg creator 的 daemon 不应 panic(CreateCfg 返回 nil)")
+}
+
 // 验证 1:buildCfgMap 对值类型 cfg creator,cfgMap 里存的是 *testDaemonCfg 还是 *any
 func TestBuildCfgMap_ValueCfg(t *testing.T) {
 	regTestDaemon(t)

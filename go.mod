@@ -16,7 +16,6 @@ require (
 	github.com/jessevdk/go-flags v1.6.1
 	github.com/maruel/panicparse/v2 v2.5.0
 	github.com/petermattis/goid v0.0.0-20260816044145-ed329add6b1b
-	github.com/pkg/profile v1.7.0
 	github.com/rs/zerolog v1.35.1
 	github.com/shirou/gopsutil/v4 v4.26.7
 	github.com/stretchr/testify v1.12.0
