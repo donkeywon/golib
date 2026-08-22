@@ -81,7 +81,7 @@ var (
 )
 
 // Reg register a Daemon creator and its config creator.
-func Reg(typ DaemonType, creator plugin.Creator[Daemon], cfgCreator plugin.CfgCreator[any]) {
+func Reg[C any](typ DaemonType, creator plugin.Creator[Daemon], cfgCreator plugin.CfgCreator[C]) {
 	if !slices.Contains(_daemonTypes, typ) {
 		_daemonTypes = append(_daemonTypes, typ)
 	}
@@ -89,7 +89,7 @@ func Reg(typ DaemonType, creator plugin.Creator[Daemon], cfgCreator plugin.CfgCr
 }
 
 // RegCfg register additional config, cfg type must be pointer.
-func RegCfg(name string, cfg any) {
+func RegCfg[C any](name string, cfg C) {
 	if _, exists := _additionalCfgMap[name]; exists {
 		panic("duplicate register cfg: " + name)
 	}

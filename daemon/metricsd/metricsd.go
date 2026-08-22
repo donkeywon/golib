@@ -50,8 +50,8 @@ func (p *metricsd) Run(ctx context.Context) error {
 	return ctx.Err()
 }
 
-func (p *metricsd) SetCfg(cfg any) {
-	p.cfg = cfg.(Cfg)
+func (p *metricsd) SetCfg(cfg Cfg) {
+	p.cfg = cfg
 }
 
 func (p *metricsd) SetGauge(name string, v float64) {

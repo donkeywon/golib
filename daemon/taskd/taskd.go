@@ -141,8 +141,8 @@ func (td *taskd) Run(ctx context.Context) error {
 	return ctx.Err()
 }
 
-func (td *taskd) SetCfg(cfg any) {
-	td.cfg = cfg.(Cfg)
+func (td *taskd) SetCfg(cfg Cfg) {
+	td.cfg = cfg
 }
 
 func (td *taskd) SubmitTask(ctx context.Context, taskCfg task.Cfg) (*task.Task, error) {

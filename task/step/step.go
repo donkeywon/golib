@@ -3,12 +3,11 @@ package step
 import (
 	"bytes"
 	"context"
+	"encoding/json/v2"
 
 	"github.com/donkeywon/golib/errs"
 	"github.com/donkeywon/golib/kvs"
 	"github.com/donkeywon/golib/plugin"
-	"github.com/donkeywon/golib/util/jsons"
-	"github.com/donkeywon/golib/util/yamls"
 	"github.com/goccy/go-yaml"
 	"github.com/goccy/go-yaml/ast"
 	"github.com/tidwall/gjson"
@@ -35,7 +34,7 @@ func (c *Cfg) UnmarshalJSON(data []byte) error {
 	}
 	c.Type = Type(typ.Str)
 
-	return c.customUnmarshal(data, jsons.Unmarshal)
+	return c.customUnmarshal(data, func(b []byte, a any) error { return json.Unmarshal(b, a) })
 }
 
 func (c *Cfg) UnmarshalYAML(data []byte) error {
@@ -49,7 +48,7 @@ func (c *Cfg) UnmarshalYAML(data []byte) error {
 	}
 	c.Type = Type(node.String())
 
-	return c.customUnmarshal(data, yamls.Unmarshal)
+	return c.customUnmarshal(data, yaml.Unmarshal)
 }
 
 func (c *Cfg) customUnmarshal(data []byte, unmarshaler func([]byte, any) error) error {

@@ -96,8 +96,8 @@ func (h *httpd) HandleFunc(pattern string, handler func(http.ResponseWriter, *ht
 	h.handlers = append(h.handlers, http.HandlerFunc(handler))
 }
 
-func (h *httpd) SetCfg(cfg any) {
-	h.cfg = cfg.(Cfg)
+func (h *httpd) SetCfg(cfg Cfg) {
+	h.cfg = cfg
 	h.s = h.cfg.buildHTTPServer()
 }
 

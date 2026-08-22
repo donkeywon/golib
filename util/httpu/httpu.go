@@ -1,6 +1,7 @@
 package httpu
 
 import (
+	"encoding/json/v2"
 	"encoding/xml"
 	"io"
 	"net"
@@ -9,8 +10,7 @@ import (
 
 	"github.com/donkeywon/golib/errs"
 	"github.com/donkeywon/golib/util/conv"
-	"github.com/donkeywon/golib/util/jsons"
-	"github.com/donkeywon/golib/util/yamls"
+	"github.com/goccy/go-yaml"
 )
 
 const (
@@ -52,18 +52,6 @@ const (
 	MIMETOML              = "application/toml"
 )
 
-type Encoder interface {
-	Encode(v any) error
-}
-
-type EncoderCreator func(w io.Writer) Encoder
-
-type Decoder interface {
-	Decode(v any) error
-}
-
-type DecoderCreator func(r io.Reader) Decoder
-
 func RespBytes(w http.ResponseWriter, statusCode int, bs []byte, headersKV ...string) {
 	setHeaders(w, headersKV...)
 	w.WriteHeader(statusCode)
@@ -87,14 +75,14 @@ func RespReader(w http.ResponseWriter, statusCode int, r io.Reader, headersKV ..
 }
 
 func RespJSON(w http.ResponseWriter, statusCode int, data any, headersKV ...string) {
-	RespEncoder(w, statusCode, data, MIMEJSON, func(w io.Writer) Encoder { return jsons.NewEncoder(w) }, headersKV...)
+	RespEncoder(w, statusCode, data, MIMEJSON, func(w io.Writer, a any) error { return json.MarshalWrite(w, a) }, headersKV...)
 }
 
 func RespYAML(w http.ResponseWriter, statusCode int, data any, headersKV ...string) {
-	RespEncoder(w, statusCode, data, MIMEYAML, func(w io.Writer) Encoder { return yamls.NewEncoder(w) }, headersKV...)
+	RespEncoder(w, statusCode, data, MIMEYAML, func(w io.Writer, a any) error { return yaml.NewEncoder(w).Encode(data) }, headersKV...)
 }
 
-func RespEncoder(w http.ResponseWriter, statusCode int, data any, mime string, newEncoder EncoderCreator, headersKV ...string) {
+func RespEncoder(w http.ResponseWriter, statusCode int, data any, mime string, encode func(io.Writer, any) error, headersKV ...string) {
 	setContentTypeHeader(w, mime)
 	if data == nil {
 		RespBytes(w, statusCode, nil, headersKV...)
@@ -103,8 +91,7 @@ func RespEncoder(w http.ResponseWriter, statusCode int, data any, mime string, n
 
 	setHeaders(w, headersKV...)
 	w.WriteHeader(statusCode)
-	enc := newEncoder(w)
-	err := enc.Encode(data)
+	err := encode(w, data)
 	if err != nil {
 		panic(errs.Wrap(err, "encode http response data failed"))
 	}
@@ -124,7 +111,7 @@ func setContentTypeHeader(w http.ResponseWriter, t string) {
 }
 
 func ReqToJSON(r *http.Request, obj any) error {
-	err := jsons.NewDecoder(r.Body).Decode(obj)
+	err := json.UnmarshalRead(r.Body, obj)
 	if err == io.EOF {
 		return nil
 	}
@@ -140,7 +127,7 @@ func ReqToXML(r *http.Request, obj any) error {
 }
 
 func ReqToYAML(r *http.Request, obj any) error {
-	err := yamls.NewDecoder(r.Body).Decode(obj)
+	err := yaml.NewDecoder(r.Body).Decode(obj)
 	if err == io.EOF {
 		return nil
 	}

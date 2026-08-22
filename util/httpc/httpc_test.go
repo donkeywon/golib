@@ -3,7 +3,7 @@ package httpc
 import (
 	"bytes"
 	"context"
-	"encoding/json"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"io"
@@ -14,7 +14,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/donkeywon/golib/util/httpu"
 	"github.com/donkeywon/golib/util/iou"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -499,7 +498,7 @@ func TestWithBodyJSON(t *testing.T) {
 	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
 		var got payload
-		json.NewDecoder(r.Body).Decode(&got)
+		json.UnmarshalRead(r.Body, &got)
 		assert.Equal(t, "test", got.Name)
 		w.WriteHeader(http.StatusOK)
 	}))
@@ -829,9 +828,7 @@ func TestToAnyDecode(t *testing.T) {
 	defer svr.Close()
 
 	var d data
-	r, err := Get(context.Background(), svr.URL, ToAnyDecode(&d, func(r io.Reader) httpu.Decoder {
-		return json.NewDecoder(r)
-	}))
+	r, err := Get(context.Background(), svr.URL, ToAnyDecode(&d, func(r io.Reader, a any) error { return json.UnmarshalRead(r, a) }))
 	require.NoError(t, err)
 	r.Body.Close()
 	assert.Equal(t, "hi", d.Val)
@@ -1233,7 +1230,7 @@ func TestToBytes_ReadErrorDirect(t *testing.T) {
 func TestToAnyDecode_EOFIgnored(t *testing.T) {
 	t.Parallel()
 	var v any
-	opt := ToAnyDecode(&v, func(r io.Reader) httpu.Decoder { return json.NewDecoder(r) })
+	opt := ToAnyDecode(&v, func(r io.Reader, a any) error { return json.UnmarshalRead(r, a) })
 	err := opt.HandleResp(&http.Response{Body: io.NopCloser(strings.NewReader(""))})
 	require.NoError(t, err)
 }
@@ -1310,7 +1307,7 @@ func TestToAnyDecode_Success(t *testing.T) {
 		Val string `json:"val"`
 	}
 	var d data
-	opt := ToAnyDecode(&d, func(r io.Reader) httpu.Decoder { return json.NewDecoder(r) })
+	opt := ToAnyDecode(&d, func(r io.Reader, a any) error { return json.UnmarshalRead(r, a) })
 	err := opt.HandleResp(&http.Response{Body: io.NopCloser(strings.NewReader(`{"val":"hi"}`))})
 	require.NoError(t, err)
 	assert.Equal(t, "hi", d.Val)

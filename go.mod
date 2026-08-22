@@ -1,9 +1,9 @@
 module github.com/donkeywon/golib
 
-go 1.26.0
+go 1.27.0
 
 require (
-	github.com/DeRuina/timberjack v1.4.6
+	github.com/DeRuina/timberjack v1.4.7
 	github.com/VictoriaMetrics/metrics v1.44.0
 	github.com/alitto/pond/v2 v2.7.1
 	github.com/arl/statsviz v0.8.1
@@ -13,12 +13,14 @@ require (
 	github.com/go-playground/validator/v10 v10.30.3
 	github.com/goccy/go-yaml v1.19.2
 	github.com/google/gops v0.3.29
+	github.com/hashicorp/raft v1.7.3
+	github.com/hashicorp/raft-boltdb v0.0.0-20260625132022-4f4a8eaa21e3
 	github.com/jessevdk/go-flags v1.6.1
 	github.com/maruel/panicparse/v2 v2.5.0
-	github.com/petermattis/goid v0.0.0-20260816044145-ed329add6b1b
+	github.com/petermattis/goid v0.0.0-20260820044319-269ab09b5261
 	github.com/rs/zerolog v1.35.1
 	github.com/shirou/gopsutil/v4 v4.26.7
-	github.com/stretchr/testify v1.12.0
+	github.com/stretchr/testify v1.12.1
 	github.com/tidwall/gjson v1.19.0
 	golang.org/x/sync v0.22.0
 	golang.org/x/sys v0.47.0
@@ -27,13 +29,22 @@ require (
 )
 
 require (
+	github.com/armon/go-metrics v0.4.1 // indirect
+	github.com/boltdb/bolt v1.3.1 // indirect
 	github.com/ebitengine/purego v0.10.2 // indirect
+	github.com/fatih/color v1.19.0 // indirect
 	github.com/gabriel-vasile/mimetype v1.4.15 // indirect
 	github.com/go-ole/go-ole v1.3.0 // indirect
 	github.com/go-playground/locales v0.14.1 // indirect
 	github.com/go-playground/universal-translator v0.18.1 // indirect
-	github.com/google/pprof v0.0.0-20260802141513-ef3492d7dac3 // indirect
+	github.com/google/pprof v0.0.0-20260825171938-4d453200e7d9 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
+	github.com/hashicorp/go-hclog v1.6.3 // indirect
+	github.com/hashicorp/go-immutable-radix v1.3.1 // indirect
+	github.com/hashicorp/go-metrics v0.6.1 // indirect
+	github.com/hashicorp/go-msgpack v0.5.5 // indirect
+	github.com/hashicorp/go-msgpack/v2 v2.1.5 // indirect
+	github.com/hashicorp/golang-lru v1.0.2 // indirect
 	github.com/klauspost/compress v1.19.2 // indirect
 	github.com/leodido/go-urn v1.5.0 // indirect
 	github.com/lufia/plan9stats v0.0.0-20260802145828-341c2f0c90b5 // indirect
@@ -47,6 +58,6 @@ require (
 	github.com/valyala/fastrand v1.1.0 // indirect
 	github.com/valyala/histogram v1.2.0 // indirect
 	github.com/yusufpapurcu/wmi v1.2.4 // indirect
+	go.yaml.in/yaml/v3 v3.0.5 // indirect
 	golang.org/x/crypto v0.55.0 // indirect
-	gopkg.in/yaml.v3 v3.0.1 // indirect
 )

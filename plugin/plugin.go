@@ -1,14 +1,8 @@
 package plugin
 
 import (
-	"errors"
 	"fmt"
 	"reflect"
-)
-
-var (
-	ErrInvalidPluginCreator    = errors.New("invalid plugin creator")
-	ErrInvalidPluginCfgCreator = errors.New("invalid plugin cfg creator")
 )
 
 type Creator[P Plugin] func() P
@@ -25,6 +19,7 @@ type Plugin any
 var (
 	_pluginCreators    = make(map[any]func() any)
 	_pluginCfgCreators = make(map[any]func() any)
+	_pluginCfgSetters  = make(map[any]func(p any, cfg any))
 )
 
 func Reg[P Plugin, C any](typ any, creator Creator[P], cfgCreator CfgCreator[C]) {
@@ -33,6 +28,20 @@ func Reg[P Plugin, C any](typ any, creator Creator[P], cfgCreator CfgCreator[C])
 	_pluginCreators[typ] = func() any { return creator() }
 	if cfgCreator != nil {
 		_pluginCfgCreators[typ] = func() any { return cfgCreator() }
+
+		_pluginCfgSetters[typ] = func(p any, cfgAny any) {
+			var realCfg C
+			if cfgAny != nil {
+				realCfg = cfgAny.(C)
+			}
+
+			if sp, ok := p.(CfgSetter[C]); ok {
+				sp.SetCfg(realCfg)
+				return
+			}
+
+			setCfgReflect(p, realCfg)
+		}
 	}
 }
 
@@ -50,13 +59,6 @@ func validate[P Plugin, C any](typ any, creator Creator[P], cfgCreator CfgCreato
 	// }
 }
 
-// 创建一个注册的Plugin
-// 这里不返回错误而是直接panic的原因是：
-// Create函数只是把plugin创建出来，并把cfg设置到plugin中对应的一个字段里。
-// 这里的panic分为两种情况
-// 1. plugin不存在，说明没有注册，大部分情况是没有调用Reg
-// 2. cfg设置失败，说明plugin本身定义的有问题
-// 这两种情况下说明代码本身有问题，所以直接panic.
 func CreateWithCfg[P Plugin, C any](typ any, cfg C) P {
 	f, exists := _pluginCreators[typ]
 	if !exists {
@@ -69,7 +71,11 @@ func CreateWithCfg[P Plugin, C any](typ any, cfg C) P {
 		panic(fmt.Sprintf("plugin type mismatch: want %v, got %v (type: %+v)", reflect.TypeFor[P](), reflect.TypeOf(p), typ))
 	}
 
-	SetCfg(pp, cfg)
+	if cfgSetter, ok := _pluginCfgSetters[typ]; ok {
+		cfgSetter(pp, cfg)
+	} else {
+		SetCfg(pp, cfg)
+	}
 
 	return pp
 }
@@ -96,23 +102,7 @@ func Create[P Plugin, C any](typ any) P {
 	return CreateWithCfg[P](typ, CreateCfg[C](typ))
 }
 
-func SetCfg[C any](p any, cfg C) {
-	if p == nil {
-		panic("nil plugin")
-	}
-	if sp, ok := p.(CfgSetter[C]); ok {
-		sp.SetCfg(cfg)
-		return
-	}
-	if sp, ok := p.(CfgSetter[*C]); ok {
-		sp.SetCfg(&cfg)
-		return
-	}
-	if sp, ok := p.(CfgSetter[any]); ok {
-		sp.SetCfg(cfg)
-		return
-	}
-
+func setCfgReflect(p any, cfg any) {
 	pValue := reflect.ValueOf(p)
 	if pValue.Kind() != reflect.Pointer {
 		panic(fmt.Sprintf("plugin is not CfgSetter[%T] or pointer: %T", cfg, p))
@@ -130,6 +120,26 @@ func SetCfg[C any](p any, cfg C) {
 		}
 	}
 	panic(fmt.Sprintf("plugin has no exported cfg field: %T %T", p, cfg))
+}
+
+func SetCfg[C any](p any, cfg C) {
+	if p == nil {
+		panic("nil plugin")
+	}
+	if sp, ok := p.(CfgSetter[C]); ok {
+		sp.SetCfg(cfg)
+		return
+	}
+	if sp, ok := p.(CfgSetter[*C]); ok {
+		sp.SetCfg(&cfg)
+		return
+	}
+	if sp, ok := p.(CfgSetter[any]); ok {
+		sp.SetCfg(cfg)
+		return
+	}
+
+	setCfgReflect(p, cfg)
 }
 
 func isNil(v any, rv reflect.Value) bool {

@@ -1,9 +1,8 @@
 package dbp
 
 import (
+	"encoding/json/v2"
 	"time"
-
-	"github.com/donkeywon/golib/util/jsons"
 )
 
 const (
@@ -23,11 +22,15 @@ type PoolCfg struct {
 }
 
 func (pc *PoolCfg) UnmarshalFlag(value string) error {
-	return jsons.UnmarshalString(value, pc)
+	return json.Unmarshal([]byte(value), pc)
 }
 
-func (pc PoolCfg) MarshalFlag() (string, error) {
-	return jsons.MarshalString(pc)
+func (pc *PoolCfg) MarshalFlag() (string, error) {
+	bs, err := json.Marshal(pc)
+	if err != nil {
+		return "", err
+	}
+	return string(bs), nil
 }
 
 type Cfg struct {

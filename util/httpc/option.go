@@ -2,7 +2,7 @@ package httpc
 
 import (
 	"bytes"
-	"encoding/json"
+	"encoding/json/v2"
 	"errors"
 	"io"
 	"net/http"
@@ -15,7 +15,6 @@ import (
 	"github.com/donkeywon/golib/util/conv"
 	"github.com/donkeywon/golib/util/httpu"
 	"github.com/donkeywon/golib/util/iou"
-	"github.com/donkeywon/golib/util/jsons"
 )
 
 type Option interface {
@@ -138,7 +137,7 @@ func WithBodyReader(reader io.Reader) Option {
 }
 
 func WithBodyJSON(v any) Option {
-	return WithBodyMarshal(v, httpu.MIMEJSON, jsons.Marshal)
+	return WithBodyMarshal(v, httpu.MIMEJSON, func(v any) ([]byte, error) { return json.Marshal(v) })
 }
 
 func WithBodyMarshal(v any, contentType string, marshal func(v any) ([]byte, error)) Option {
@@ -251,12 +250,12 @@ func ToBytes(n *int, b []byte) Option {
 }
 
 func ToJSON(v any) Option {
-	return ToAnyDecode(v, func(r io.Reader) httpu.Decoder { return json.NewDecoder(r) })
+	return ToAnyDecode(v, func(r io.Reader, a any) error { return json.UnmarshalRead(r, a) })
 }
 
-func ToAnyDecode(v any, newDecoder httpu.DecoderCreator) Option {
+func ToAnyDecode(v any, decode func(io.Reader, any) error) Option {
 	return RespOptionFunc(func(r *http.Response) error {
-		err := newDecoder(r.Body).Decode(v)
+		err := decode(r.Body, v)
 		if err != nil && !errors.Is(err, io.EOF) {
 			return errs.Wrap(err, "decode response body failed")
 		}

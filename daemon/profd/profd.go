@@ -100,8 +100,8 @@ func (p *profd) Run(ctx context.Context) error {
 	return ctx.Err()
 }
 
-func (p *profd) SetCfg(cfg any) {
-	p.cfg = cfg.(Cfg)
+func (p *profd) SetCfg(cfg Cfg) {
+	p.cfg = cfg
 }
 
 func (p *profd) Cfg() Cfg {
