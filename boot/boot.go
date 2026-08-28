@@ -157,18 +157,18 @@ func isSignaled(ctx context.Context) (bool, os.Signal) {
 	return false, nil
 }
 
-func parseFlagsAndLoadCfg(opts ...Option) (options, map[string]any) {
-	options := createOptions(opts...)
+func parseFlagsAndLoadCfg(opt ...Option) (options, map[string]any) {
+	opts := createOptions(opt...)
 
-	if options.loggerCfgKey == "" {
+	if opts.loggerCfgKey == "" {
 		panic("empty logger cfg key")
 	}
-	if options.loggerCreator == nil {
+	if opts.loggerCreator == nil {
 		panic("nil logger creator")
 	}
 
-	cfgMap, cfgKeys := buildCfgMap(&options)
-	flagParser, err := buildFlagParser(&options, cfgMap, cfgKeys)
+	cfgMap, cfgKeys := buildCfgMap(&opts)
+	flagParser, err := buildFlagParser(&opts, cfgMap, cfgKeys)
 	if err != nil {
 		panic(errs.ErrToStackString(errs.Wrap(err, "build flag parser failed")))
 	}
@@ -183,7 +183,7 @@ func parseFlagsAndLoadCfg(opts ...Option) (options, map[string]any) {
 		os.Exit(1)
 	}
 
-	if options.PrintVersion {
+	if opts.PrintVersion {
 		fmt.Fprint(os.Stdout,
 			"version:"+buildinfo.Version+"\n"+
 				"build_time:"+buildinfo.BuildTime+"\n"+
@@ -194,7 +194,7 @@ func parseFlagsAndLoadCfg(opts ...Option) (options, map[string]any) {
 		os.Exit(0)
 	}
 
-	err = loadCfgFromFile(&options, cfgMap)
+	err = loadCfgFromFile(&opts, cfgMap)
 	if err != nil {
 		panic(errs.ErrToStackString(errs.Wrap(err, "load cfg from file failed")))
 	}
@@ -209,7 +209,7 @@ func parseFlagsAndLoadCfg(opts ...Option) (options, map[string]any) {
 		panic(errs.ErrToStackString(errs.Wrap(err, "validate cfg failed")))
 	}
 
-	return options, cfgMap
+	return opts, cfgMap
 }
 
 func buildLogger(options *options) zerolog.Logger {

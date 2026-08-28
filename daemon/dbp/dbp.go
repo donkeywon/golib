@@ -69,8 +69,8 @@ func (d *dbp) Run(ctx context.Context) error {
 	return ctx.Err()
 }
 
-func (d *dbp) SetCfg(cfg any) {
-	d.cfg = cfg.(Cfg)
+func (d *dbp) SetCfg(cfg Cfg) {
+	d.cfg = cfg
 }
 
 func (d *dbp) waitDBReady(ctx context.Context, db *sql.DB, name string, typ string, maxWait time.Duration, readyQuery string) error {

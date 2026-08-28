@@ -30,17 +30,11 @@ func Reg[P Plugin, C any](typ any, creator Creator[P], cfgCreator CfgCreator[C])
 		_pluginCfgCreators[typ] = func() any { return cfgCreator() }
 
 		_pluginCfgSetters[typ] = func(p any, cfgAny any) {
-			var realCfg C
-			if cfgAny != nil {
-				realCfg = cfgAny.(C)
-			}
-
-			if sp, ok := p.(CfgSetter[C]); ok {
-				sp.SetCfg(realCfg)
+			if cfgAny == nil {
 				return
 			}
 
-			setCfgReflect(p, realCfg)
+			SetCfg(p, cfgAny.(C))
 		}
 	}
 }
