@@ -59,8 +59,8 @@ func (b *blockStep) Run(ctx context.Context) error {
 }
 
 func TestMain(m *testing.M) {
-	plugin.Reg(quickStepType, func() step.Step { return &quickStep{} }, func() any { return quickStepCfg{} })
-	plugin.Reg(blockStepType, func() step.Step { return &blockStep{} }, func() any { return blockStepCfg{} })
+	plugin.Reg(quickStepType, func() step.Step { return &quickStep{} }, func() quickStepCfg { return quickStepCfg{} })
+	plugin.Reg(blockStepType, func() step.Step { return &blockStep{} }, func() blockStepCfg { return blockStepCfg{} })
 	os.Exit(m.Run())
 }
 
@@ -311,8 +311,8 @@ func TestSubmit_TaskRunFailedBeforeStart(t *testing.T) {
 }
 
 func TestSubmitTask_CreateTaskPanic(t *testing.T) {
-	plugin.Reg(task.PluginTypeTask, func() *task.Task { panic("creator boom") }, func() any { return task.NewCfg() })
-	defer plugin.Reg(task.PluginTypeTask, task.New, func() any { return task.NewCfg() })
+	plugin.Reg(task.PluginTypeTask, func() *task.Task { panic("creator boom") }, task.NewCfg)
+	defer plugin.Reg(task.PluginTypeTask, task.New, task.NewCfg)
 
 	td := newTestTaskd(t)
 	// 不能调 newQuickTask(内部用 plugin 创建,会直接 panic),直接构造 cfg
@@ -477,8 +477,8 @@ func TestHookTask_Panic(t *testing.T) {
 // ---- createTask ----
 
 func TestCreateTask_Panic(t *testing.T) {
-	plugin.Reg(task.PluginTypeTask, func() *task.Task { panic("creator boom") }, func() any { return task.NewCfg() })
-	defer plugin.Reg(task.PluginTypeTask, task.New, func() any { return task.NewCfg() })
+	plugin.Reg(task.PluginTypeTask, func() *task.Task { panic("creator boom") }, task.NewCfg)
+	defer plugin.Reg(task.PluginTypeTask, task.New, task.NewCfg)
 
 	td := newTestTaskd(t)
 	_, err := td.createTask(task.NewCfg().SetID("x"))

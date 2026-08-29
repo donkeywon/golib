@@ -50,7 +50,7 @@ func (s *noInitStep) Run(ctx context.Context) error {
 }
 
 func TestMain(m *testing.M) {
-	plugin.Reg(mockStepType, func() step.Step { return &mockStep{} }, func() any { return mockStepCfg{} })
+	plugin.Reg(mockStepType, func() step.Step { return &mockStep{} }, func() mockStepCfg { return mockStepCfg{} })
 	m.Run()
 }
 

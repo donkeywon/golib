@@ -19,13 +19,13 @@ import (
 )
 
 func init() {
-	plugin.Reg(TypeCmd, func() Step { return NewCmdStep() }, func() any { return NewCmdStepCfg() })
+	plugin.Reg(TypeCmd, func() Step { return NewCmdStep() }, NewCmdStepCfg)
 }
 
 const TypeCmd Type = "cmd"
 
 type CmdStepCfg struct {
-	Name                                   string            `json:"name"                                        yaml:"name" validate:"required"`
+	Name                                   string            `json:"name"                                        yaml:"name"                                   validate:"required"`
 	Args                                   []string          `json:"args"                                        yaml:"args"`
 	Env                                    map[string]string `json:"env"                                         yaml:"env"`
 	RunAsUser                              string            `json:"run_as_user"                                 yaml:"runAsUser"`

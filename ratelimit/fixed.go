@@ -10,7 +10,7 @@ import (
 )
 
 func init() {
-	plugin.Reg(TypeFixed, func() RxTxRateLimiter { return NewFixed() }, func() any { return NewFixedCfg() })
+	plugin.Reg(TypeFixed, func() RxTxRateLimiter { return NewFixed() }, NewFixedCfg)
 }
 
 const TypeFixed Type = "fixed"

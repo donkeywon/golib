@@ -19,7 +19,7 @@ var (
 )
 
 func init() {
-	plugin.Reg(PluginTypeTask, New, func() any { return NewCfg() })
+	plugin.Reg(PluginTypeTask, New, NewCfg)
 }
 
 const PluginTypeTask plugin.Type = "task"
