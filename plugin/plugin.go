@@ -41,10 +41,13 @@ func Reg[P Plugin, C any](typ any, creator Creator[P], cfgCreator CfgCreator[C])
 
 func validate[P Plugin, C any](typ any, creator Creator[P], cfgCreator CfgCreator[C]) {
 	if creator == nil {
-		panic("nil plugin creator")
+		panic(fmt.Sprintf("nil plugin creator: %v", typ))
 	}
 	if typ == nil {
 		panic("nil plugin type")
+	}
+	if reflect.TypeFor[C]().Kind() != reflect.Struct {
+		panic(fmt.Sprintf("plugin cfg creator return non-struct type: %v", typ))
 	}
 	// allow duplicate reg for replacing or testing
 	// _, exists := _pluginCreators[typ]
@@ -113,7 +116,7 @@ func setCfgReflect(p any, cfg any) {
 			return
 		}
 	}
-	panic(fmt.Sprintf("plugin has no exported cfg field: %T %T", p, cfg))
+	panic(fmt.Sprintf("plugin has no exported cfg field: %T has no %T field", p, cfg))
 }
 
 func SetCfg[C any](p any, cfg C) {

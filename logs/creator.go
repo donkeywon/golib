@@ -45,34 +45,31 @@ func (n nop) Create() (zerolog.Logger, error) {
 }
 
 const (
-	FilepathSplitter      = ","
-	DefaultFilepath       = "stderr"
-	DefaultMaxFileSize    = 100
-	DefaultMaxBackups     = 30
-	DefaultMaxAge         = 30
-	DefaultEnableCompress = false
-	DefaultCompression    = "zstd"
+	FilepathSplitter   = ","
+	DefaultFilepath    = "stderr"
+	DefaultMaxFileSize = 100
+	DefaultMaxBackups  = 30
+	DefaultMaxAge      = 30
+	DefaultCompression = "zstd"
 )
 
 type RotateLoggerCreator struct {
-	Level          zerolog.Level `env:"LEVEL"           long:"level"           yaml:"level"          description:"minimum enabled logging level"`
-	Filepath       string        `env:"FILEPATH"        long:"filepath"        yaml:"filepath"       description:"log file path"`
-	MaxFileSize    int           `env:"MAX_FILE_SIZE"   long:"max-file-size"   yaml:"maxFileSize"    description:"maximum size in megabytes of the log file before it gets rotated"`
-	MaxBackups     int           `env:"MAX_BACKUPS"     long:"max-backups"     yaml:"maxBackups"     description:"maximum number of old log files to retain"`
-	MaxAge         int           `env:"MAX_AGE"         long:"max-age"         yaml:"maxAge"         description:"maximum number of days to retain old log files based on the timestamp encoded in their filename"`
-	EnableCompress bool          `env:"ENABLE_COMPRESS" long:"enable-compress" yaml:"enableCompress" description:"enable compress using gzip after log rotate"`
-	Compression    string        `env:"COMPRESSION"     long:"compression"     yaml:"compression"    description:"gzip or zstd"`
+	Level       zerolog.Level `env:"LEVEL"         long:"level"         yaml:"level"       description:"minimum enabled logging level"`
+	Filepath    string        `env:"FILEPATH"      long:"filepath"      yaml:"filepath"    description:"log file path"`
+	MaxFileSize int           `env:"MAX_FILE_SIZE" long:"max-file-size" yaml:"maxFileSize" description:"maximum size in megabytes of the log file before it gets rotated"`
+	MaxBackups  int           `env:"MAX_BACKUPS"   long:"max-backups"   yaml:"maxBackups"  description:"maximum number of old log files to retain"`
+	MaxAge      int           `env:"MAX_AGE"       long:"max-age"       yaml:"maxAge"      description:"maximum number of days to retain old log files based on the timestamp encoded in their filename"`
+	Compression string        `env:"COMPRESSION"   long:"compression"   yaml:"compression" description:"none,gzip,zstd"`
 }
 
 func NewRotateLoggerCreator() RotateLoggerCreator {
 	return RotateLoggerCreator{
-		Level:          zerolog.InfoLevel,
-		Filepath:       DefaultFilepath,
-		MaxFileSize:    DefaultMaxFileSize,
-		MaxBackups:     DefaultMaxBackups,
-		MaxAge:         DefaultMaxAge,
-		EnableCompress: DefaultEnableCompress,
-		Compression:    DefaultCompression,
+		Level:       zerolog.InfoLevel,
+		Filepath:    DefaultFilepath,
+		MaxFileSize: DefaultMaxFileSize,
+		MaxBackups:  DefaultMaxBackups,
+		MaxAge:      DefaultMaxAge,
+		Compression: DefaultCompression,
 	}
 }
 
@@ -119,7 +116,6 @@ func buildOutputs(c *RotateLoggerCreator) ([]io.Writer, error) {
 				MaxSize:     c.MaxFileSize,
 				MaxBackups:  c.MaxBackups,
 				MaxAge:      c.MaxAge,
-				Compress:    c.EnableCompress,
 				Compression: c.Compression,
 				LocalTime:   true,
 			}

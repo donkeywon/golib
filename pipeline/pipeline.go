@@ -77,7 +77,7 @@ func (p *Pipeline) Run(ctx context.Context) error {
 		wg.Go(func() {
 			err := w.Run(ctx)
 			if err != nil {
-				allErr[i] = errs.Wrapf(err, "worker failed: %T(%d)", w, i)
+				allErr[i] = errs.Wrapf(err, "pipeline worker failed: %T(%d)", w, i)
 			}
 		})
 	}

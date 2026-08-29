@@ -129,7 +129,7 @@ func Boot(opts ...Option) {
 	}()
 
 	var err error
-	_daemonsMap, err = createDaemons(ctx, cfgMap, &options, &l)
+	err = createDaemons(ctx, cfgMap, &options, &l)
 	if err != nil {
 		if signaled, signal := isSignaled(ctx); signaled {
 			l.Info().Str("signal", signal.String()).Err(err).Msg("signaled")
@@ -138,7 +138,7 @@ func Boot(opts ...Option) {
 		l.Error().Err(err).Msg("create daemons failed")
 		os.Exit(1)
 	}
-	err = initDaemons(ctx, _daemonsMap, &l)
+	err = initDaemons(ctx, &l)
 	if err != nil {
 		if signaled, signal := isSignaled(ctx); signaled {
 			l.Info().Str("signal", signal.String()).Err(err).Msg("signaled")
@@ -147,7 +147,7 @@ func Boot(opts ...Option) {
 		l.Error().Err(err).Msg("init daemons failed")
 		os.Exit(1)
 	}
-	runDaemons(ctx, _daemonsMap, &options, &l)
+	runDaemons(ctx, &options, &l)
 }
 
 func isSignaled(ctx context.Context) (bool, os.Signal) {
@@ -222,18 +222,18 @@ func buildLogger(options *options) zerolog.Logger {
 	return l
 }
 
-func createDaemons(ctx context.Context, cfgMap map[string]any, options *options, l *zerolog.Logger) (map[DaemonType]*daemonInfo, error) {
-	daemonsMap := make(map[DaemonType]*daemonInfo, len(_daemonTypes))
+func createDaemons(ctx context.Context, cfgMap map[string]any, options *options, l *zerolog.Logger) error {
+	_daemonsMap = make(map[DaemonType]*daemonInfo, len(_daemonTypes))
 	for _, daemonType := range _daemonTypes {
 		select {
 		case <-ctx.Done():
-			return nil, ctx.Err()
+			return ctx.Err()
 		default:
 		}
 
 		cfg := cfgMap[string(daemonType)]
 		d := plugin.CreateWithCfg[Daemon](daemonType, reflect.ValueOf(cfg).Elem().Interface())
-		daemonsMap[daemonType] = &daemonInfo{
+		_daemonsMap[daemonType] = &daemonInfo{
 			d:    d,
 			done: make(chan struct{}),
 		}
@@ -244,10 +244,10 @@ func createDaemons(ctx context.Context, cfgMap map[string]any, options *options,
 			onCreated(dctx)
 		}
 	}
-	return daemonsMap, nil
+	return nil
 }
 
-func initDaemons(ctx context.Context, daemonsMap map[DaemonType]*daemonInfo, l *zerolog.Logger) error {
+func initDaemons(ctx context.Context, l *zerolog.Logger) error {
 	var err error
 	for _, daemonType := range _daemonTypes {
 		select {
@@ -257,7 +257,7 @@ func initDaemons(ctx context.Context, daemonsMap map[DaemonType]*daemonInfo, l *
 		}
 
 		dctx := l.With().Str("daemon", string(daemonType)).Logger().WithContext(ctx)
-		di := daemonsMap[daemonType]
+		di := _daemonsMap[daemonType]
 		if initer, ok := di.d.(initializer); ok {
 			err = initer.Init(dctx)
 			if err != nil {
@@ -268,12 +268,12 @@ func initDaemons(ctx context.Context, daemonsMap map[DaemonType]*daemonInfo, l *
 	return nil
 }
 
-func runDaemons(ctx context.Context, daemonsMap map[DaemonType]*daemonInfo, options *options, l *zerolog.Logger) {
+func runDaemons(ctx context.Context, options *options, l *zerolog.Logger) {
 	var hasErr atomic.Bool
 
 	wg := &sync.WaitGroup{}
 	for _, daemonType := range _daemonTypes {
-		di := daemonsMap[daemonType]
+		di := _daemonsMap[daemonType]
 		di.ctx, di.cancel = context.WithCancelCause(context.Background()) // no direct with ctx for stop in order
 		di.ctx = l.With().Str("daemon", string(daemonType)).Logger().WithContext(di.ctx)
 

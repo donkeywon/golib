@@ -14,29 +14,34 @@ type RecordResponseWriter struct {
 }
 
 func NewRecordResponseWriter(w http.ResponseWriter) *RecordResponseWriter {
-	return &RecordResponseWriter{ResponseWriter: w, statusCode: http.StatusOK, nw: -1}
+	return &RecordResponseWriter{
+		ResponseWriter: w,
+		statusCode:     http.StatusOK,
+		nw:             -1,
+	}
 }
 
 func (rp *RecordResponseWriter) WriteHeader(statusCode int) {
-	if statusCode <= 0 {
-		panic("negative http response status code")
-	}
-	rp.statusCode = statusCode
-}
-
-func (rp *RecordResponseWriter) Write(data []byte) (int, error) {
-	rp.writeHeader()
-	nw, err := rp.ResponseWriter.Write(data)
-	rp.nw += nw
-	return nw, err
-}
-
-func (rp *RecordResponseWriter) writeHeader() {
 	if rp.Written() {
 		return
 	}
+	if statusCode <= 0 {
+		panic("negative http response status code")
+	}
+
+	rp.statusCode = statusCode
 	rp.nw = 0
-	rp.ResponseWriter.WriteHeader(rp.statusCode)
+	rp.ResponseWriter.WriteHeader(statusCode)
+}
+
+func (rp *RecordResponseWriter) Write(data []byte) (int, error) {
+	if !rp.Written() {
+		rp.WriteHeader(http.StatusOK)
+	}
+
+	nw, err := rp.ResponseWriter.Write(data)
+	rp.nw += nw
+	return nw, err
 }
 
 func (rp *RecordResponseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
@@ -51,7 +56,9 @@ func (rp *RecordResponseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 }
 
 func (rp *RecordResponseWriter) Flush() {
-	rp.writeHeader()
+	if !rp.Written() {
+		rp.WriteHeader(http.StatusOK)
+	}
 	if f, ok := rp.ResponseWriter.(http.Flusher); ok {
 		f.Flush()
 	}
@@ -70,4 +77,8 @@ func (rp *RecordResponseWriter) Size() int {
 
 func (rp *RecordResponseWriter) Status() int {
 	return rp.statusCode
+}
+
+func (rp *RecordResponseWriter) Unwrap() http.ResponseWriter {
+	return rp.ResponseWriter
 }
