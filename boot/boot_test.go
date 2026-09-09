@@ -36,7 +36,7 @@ func (d *testDaemon) Run(ctx context.Context) error {
 
 func regTestDaemon(t *testing.T) {
 	t.Helper()
-	Reg(testDaemonType, func() Daemon { return &testDaemon{} }, func() any { return testDaemonCfg{} })
+	Reg(testDaemonType, func() Daemon { return &testDaemon{} }, func() testDaemonCfg { return testDaemonCfg{} })
 	t.Cleanup(func() {
 		_daemonTypes = slices.DeleteFunc(_daemonTypes, func(t DaemonType) bool { return t == testDaemonType })
 	})
@@ -51,7 +51,7 @@ func writeTestCfg(t *testing.T, content string) string {
 
 func TestBuildCfgMap_NoCfgCreator(t *testing.T) {
 	typ := DaemonType("nocfgdaemon")
-	Reg(typ, func() Daemon { return &testDaemon{} }, nil)
+	Reg[any](typ, func() Daemon { return &testDaemon{} }, nil)
 	t.Cleanup(func() {
 		_daemonTypes = slices.DeleteFunc(_daemonTypes, func(t DaemonType) bool { return t == typ })
 	})

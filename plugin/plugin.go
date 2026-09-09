@@ -46,8 +46,10 @@ func validate[P Plugin, C any](typ any, creator Creator[P], cfgCreator CfgCreato
 	if typ == nil {
 		panic("nil plugin type")
 	}
-	if reflect.TypeFor[C]().Kind() != reflect.Struct {
-		panic(fmt.Sprintf("plugin cfg creator return non-struct type: %v", typ))
+	if cfgCreator != nil {
+		if reflect.TypeFor[C]().Kind() != reflect.Struct {
+			panic(fmt.Sprintf("plugin cfg creator return non-struct type: %v", typ))
+		}
 	}
 	// allow duplicate reg for replacing or testing
 	// _, exists := _pluginCreators[typ]
