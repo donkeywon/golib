@@ -14,7 +14,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/donkeywon/golib/util/httpc"
+	"codeberg.org/donkeywon/golib/util/httpc"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

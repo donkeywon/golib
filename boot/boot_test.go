@@ -8,7 +8,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/donkeywon/golib/plugin"
+	"codeberg.org/donkeywon/golib/plugin"
 	"github.com/stretchr/testify/require"
 )
 
@@ -17,7 +17,7 @@ const testDaemonType DaemonType = "testdaemon"
 // testDaemonCfg 值类型,与真实 daemon 的 NewCfg() Cfg 模式一致
 type testDaemonCfg struct {
 	Field string `yaml:"field" json:"field"`
-	Num   int    `yaml:"num" json:"num"`
+	Num   int    `yaml:"num"   json:"num"`
 }
 
 type testDaemon struct {

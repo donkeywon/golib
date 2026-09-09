@@ -13,13 +13,13 @@ import (
 	"slices"
 	"sync"
 
+	"codeberg.org/donkeywon/golib/errs"
+	"codeberg.org/donkeywon/golib/util/conv"
+	"codeberg.org/donkeywon/golib/util/httpc"
+	"codeberg.org/donkeywon/golib/util/httpu"
+	"codeberg.org/donkeywon/golib/util/iou"
+	"codeberg.org/donkeywon/golib/util/ossu"
 	"github.com/avast/retry-go/v4"
-	"github.com/donkeywon/golib/errs"
-	"github.com/donkeywon/golib/util/conv"
-	"github.com/donkeywon/golib/util/httpc"
-	"github.com/donkeywon/golib/util/httpu"
-	"github.com/donkeywon/golib/util/iou"
-	"github.com/donkeywon/golib/util/ossu"
 )
 
 type UploadHook func(uploadWorker int, partNo int, partSize int, etag string, err error)

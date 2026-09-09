@@ -8,7 +8,7 @@ import (
 	"os"
 	"sync"
 
-	"github.com/donkeywon/golib/errs"
+	"codeberg.org/donkeywon/golib/errs"
 )
 
 type Pipeline struct {

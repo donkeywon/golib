@@ -5,9 +5,9 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/donkeywon/golib/kvs"
-	"github.com/donkeywon/golib/plugin"
-	"github.com/donkeywon/golib/task/step"
+	"codeberg.org/donkeywon/golib/kvs"
+	"codeberg.org/donkeywon/golib/plugin"
+	"codeberg.org/donkeywon/golib/task/step"
 	"github.com/stretchr/testify/require"
 )
 

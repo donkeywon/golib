@@ -5,8 +5,8 @@ import (
 	"errors"
 	"os/exec"
 
-	"github.com/donkeywon/golib/errs"
-	"github.com/donkeywon/golib/util/cmds"
+	"codeberg.org/donkeywon/golib/errs"
+	"codeberg.org/donkeywon/golib/util/cmds"
 	"github.com/rs/zerolog"
 )
 

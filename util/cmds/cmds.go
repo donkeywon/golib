@@ -10,7 +10,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/donkeywon/golib/util/proc"
+	"codeberg.org/donkeywon/golib/util/proc"
 )
 
 const (

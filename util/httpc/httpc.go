@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/donkeywon/golib/errs"
+	"codeberg.org/donkeywon/golib/errs"
 )
 
 func Get(ctx context.Context, url string, opts ...Option) (*http.Response, error) {

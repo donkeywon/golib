@@ -8,10 +8,10 @@ import (
 	"strings"
 	"time"
 
+	"codeberg.org/donkeywon/golib/errs"
+	"codeberg.org/donkeywon/golib/util"
+	"codeberg.org/donkeywon/golib/util/paths"
 	"github.com/DeRuina/timberjack"
-	"github.com/donkeywon/golib/errs"
-	"github.com/donkeywon/golib/util"
-	"github.com/donkeywon/golib/util/paths"
 	"github.com/petermattis/goid"
 	"github.com/rs/zerolog"
 )

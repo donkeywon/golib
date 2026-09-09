@@ -9,9 +9,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/donkeywon/golib/errs"
-	"github.com/donkeywon/golib/util/httpc"
-	"github.com/donkeywon/golib/util/httpu"
+	"codeberg.org/donkeywon/golib/errs"
+	"codeberg.org/donkeywon/golib/util/httpc"
+	"codeberg.org/donkeywon/golib/util/httpu"
 )
 
 var commonTimeout = 10 * time.Second

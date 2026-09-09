@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/donkeywon/golib/errs"
+	"codeberg.org/donkeywon/golib/errs"
 )
 
 // GetNicSpeed

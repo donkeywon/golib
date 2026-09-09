@@ -6,9 +6,9 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/donkeywon/golib/boot"
-	"github.com/donkeywon/golib/errs"
-	"github.com/donkeywon/golib/plugin"
+	"codeberg.org/donkeywon/golib/boot"
+	"codeberg.org/donkeywon/golib/errs"
+	"codeberg.org/donkeywon/golib/plugin"
 )
 
 const DaemonTypeSvcd boot.DaemonType = "svcd"

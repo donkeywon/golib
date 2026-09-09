@@ -4,7 +4,7 @@ import (
 	"bufio"
 	"io"
 
-	"github.com/donkeywon/golib/aio"
+	"codeberg.org/donkeywon/golib/aio"
 )
 
 type ReaderWrapFunc func(io.Reader) io.Reader

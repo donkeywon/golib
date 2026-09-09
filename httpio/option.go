@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/donkeywon/golib/util/httpc"
+	"codeberg.org/donkeywon/golib/util/httpc"
 )
 
 type option struct {

@@ -6,11 +6,11 @@ import (
 	"fmt"
 	"slices"
 
-	"github.com/donkeywon/golib/errs"
-	"github.com/donkeywon/golib/kvs"
-	"github.com/donkeywon/golib/plugin"
-	"github.com/donkeywon/golib/task/step"
-	"github.com/donkeywon/golib/util/reflects"
+	"codeberg.org/donkeywon/golib/errs"
+	"codeberg.org/donkeywon/golib/kvs"
+	"codeberg.org/donkeywon/golib/plugin"
+	"codeberg.org/donkeywon/golib/task/step"
+	"codeberg.org/donkeywon/golib/util/reflects"
 	"github.com/rs/zerolog"
 )
 

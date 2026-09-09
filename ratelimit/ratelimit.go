@@ -6,8 +6,8 @@ import (
 	"encoding/json/v2"
 	"time"
 
-	"github.com/donkeywon/golib/errs"
-	"github.com/donkeywon/golib/plugin"
+	"codeberg.org/donkeywon/golib/errs"
+	"codeberg.org/donkeywon/golib/plugin"
 	"github.com/goccy/go-yaml"
 	"github.com/goccy/go-yaml/ast"
 	"github.com/tidwall/gjson"

@@ -4,9 +4,9 @@ import (
 	"context"
 	"net/http"
 
-	"github.com/donkeywon/golib/httpio"
-	"github.com/donkeywon/golib/util/httpc"
-	"github.com/donkeywon/golib/util/ossu"
+	"codeberg.org/donkeywon/golib/httpio"
+	"codeberg.org/donkeywon/golib/util/httpc"
+	"codeberg.org/donkeywon/golib/util/ossu"
 )
 
 type Reader struct {

@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/donkeywon/golib/util/httpu"
+	"codeberg.org/donkeywon/golib/util/httpu"
 )
 
 const (

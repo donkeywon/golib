@@ -8,7 +8,7 @@ import (
 	"slices"
 	"sync"
 
-	"github.com/donkeywon/golib/errs"
+	"codeberg.org/donkeywon/golib/errs"
 )
 
 type Worker interface {
