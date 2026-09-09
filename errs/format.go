@@ -53,7 +53,7 @@ func writeIndent(w io.Writer, indent []byte, indentCount int, skipFirst bool, s 
 		if first && skipFirst {
 			first = false
 		} else {
-			for i := 0; i < indentCount; i++ {
+			for range indentCount {
 				w.Write(indent)
 			}
 		}

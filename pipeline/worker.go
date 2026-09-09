@@ -1,336 +1,107 @@
 package pipeline
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
-	"reflect"
+	"slices"
+	"sync"
 
 	"github.com/donkeywon/golib/errs"
-	"github.com/donkeywon/golib/plugin"
-	"github.com/donkeywon/golib/runner"
-	"github.com/donkeywon/golib/util/jsons"
-	"github.com/donkeywon/golib/util/yamls"
 )
 
-var CreateWorker = newBaseWorker
-
-type WorkerResult struct {
-	Data        map[string]any   `json:"data" yaml:"data"`
-	ReadersData []map[string]any `json:"readersData" yaml:"readersData"`
-	WritersData []map[string]any `json:"writersData" yaml:"writersData"`
-}
-
-type WorkerCfg struct {
-	*CommonCfgWithOption
-	Readers []*ReaderCfg `json:"readers" yaml:"readers"`
-	Writers []*WriterCfg `json:"writers" yaml:"writers"`
-}
-
-func (wc *WorkerCfg) WriteTo(typ Type, cfg any, opt *CommonOption) *WorkerCfg {
-	wc.Writers = append(wc.Writers, &WriterCfg{
-		CommonCfgWithOption: &CommonCfgWithOption{
-			CommonCfg: &CommonCfg{
-				Type: typ,
-				Cfg:  cfg,
-			},
-			CommonOption: opt,
-		},
-	})
-
-	return wc
-}
-
-func (wc *WorkerCfg) ReadFrom(typ Type, cfg any, opt *CommonOption) *WorkerCfg {
-	wc.Readers = append(wc.Readers, &ReaderCfg{
-		CommonCfgWithOption: &CommonCfgWithOption{
-			CommonCfg: &CommonCfg{
-				Type: typ,
-				Cfg:  cfg,
-			},
-			CommonOption: opt,
-		},
-	})
-
-	return wc
-}
-
-func (wc *WorkerCfg) WriteToWriter(c *CommonCfgWithOption) *WorkerCfg {
-	wc.Writers = append(wc.Writers, &WriterCfg{c})
-	return wc
-}
-
-func (wc *WorkerCfg) ReadFromReader(c *CommonCfgWithOption) *WorkerCfg {
-	wc.Readers = append(wc.Readers, &ReaderCfg{CommonCfgWithOption: c})
-	return wc
-}
-
-type workerCfgWithoutCommonCfg struct {
-	Readers []*ReaderCfg `json:"readers" yaml:"readers"`
-	Writers []*WriterCfg `json:"writers" yaml:"writers"`
-}
-
-func (wc *WorkerCfg) UnmarshalJSON(data []byte) error {
-	if wc.CommonCfgWithOption == nil {
-		wc.CommonCfgWithOption = &CommonCfgWithOption{}
-	}
-	err := wc.CommonCfgWithOption.UnmarshalJSON(data)
-	if err != nil {
-		return err
-	}
-	return wc.customUnmarshal(data, jsons.Unmarshal)
-}
-
-func (wc *WorkerCfg) UnmarshalYAML(data []byte) error {
-	if wc.CommonCfgWithOption == nil {
-		wc.CommonCfgWithOption = &CommonCfgWithOption{}
-	}
-	err := wc.CommonCfgWithOption.UnmarshalYAML(data)
-	if err != nil {
-		return err
-	}
-	return wc.customUnmarshal(data, yamls.Unmarshal)
-}
-
-func (wc *WorkerCfg) customUnmarshal(data []byte, unmarshal func([]byte, any) error) error {
-	wcc := workerCfgWithoutCommonCfg{}
-	err := unmarshal(data, &wcc)
-	if err != nil {
-		return err
-	}
-	wc.Readers = wcc.Readers
-	wc.Writers = wcc.Writers
-	return nil
-}
-
-func (wc *WorkerCfg) build() Worker {
-	worker := plugin.CreateWithCfg[Worker](wc.Type, wc.Cfg)
-
-	for _, readerCfg := range wc.Readers {
-		worker.ReadFrom(readerCfg.build())
-	}
-	for _, writerCfg := range wc.Writers {
-		worker.WriteTo(writerCfg.build())
-	}
-
-	return worker
-}
-
 type Worker interface {
-	Common
+	Run(context.Context) error
 
-	WriteTo(...io.Writer)
-	ReadFrom(...io.Reader)
-
-	Writers() []io.Writer
-	Readers() []io.Reader
-	LastWriter() io.Writer
-	LastReader() io.Reader
-
-	Reader() io.Reader
 	Writer() io.Writer
-
-	Result() *WorkerResult
+	Reader() io.Reader
+	WriteToWriter(io.Writer, ...WriterWrapFunc)
+	ReadFromReader(io.Reader, ...ReaderWrapFunc)
+	WithWriterWrappers(...WriterWrapFunc)
+	WithReaderWrappers(...ReaderWrapFunc)
+	WriterWrapped() bool
+	ReaderWrapped() bool
+	SupportZeroCopy() bool
 }
 
 type BaseWorker struct {
-	runner.Runner
-
 	r io.Reader
 	w io.Writer
 
-	ws []io.Writer
 	rs []io.Reader
+	ws []io.Writer
+
+	wwrappers []WriterWrapFunc
+	rwrappers []ReaderWrapFunc
+
+	forceCloseOnce func() error
+	closeOnce      func() error
 }
 
-func newBaseWorker(name string) Worker {
-	return &BaseWorker{
-		Runner: runner.Create(name),
-	}
+func (wk *BaseWorker) Init(ctx context.Context) error {
+	wk.wrapWriters()
+	wk.wrapReaders()
+
+	wk.forceCloseOnce = sync.OnceValue(func() error {
+		return errors.Join(closeReaders(wk.rs), closeWriters(wk.ws))
+	})
+	wk.closeOnce = sync.OnceValue(func() error {
+		ws := slices.Clone(wk.ws)
+		slices.Reverse(ws)
+		return errors.Join(closeReaders(wk.rs), closeWriters(ws))
+	})
+
+	return nil
 }
 
-func (b *BaseWorker) Init() error {
-	for _, writer := range b.Writers() {
-		if r, ok := writer.(runner.Runner); ok {
-			r.Inherit(b)
-		}
-
-		if common, ok := writer.(Common); ok {
-			common.WithOptions(setToTeesAndMultiWriters(common))
-		}
-	}
-	for _, reader := range b.Readers() {
-		if r, ok := reader.(runner.Runner); ok {
-			r.Inherit(b)
-		}
-
-		if common, ok := reader.(Common); ok {
-			common.WithOptions(setToTeesAndMultiWriters(common))
-		}
-	}
-
-	for i := len(b.ws) - 2; i >= 0; i-- {
-		if ww, ok := b.ws[i].(writerWrapper); !ok {
-			b.Error("writer is not WriterWrapper", nil, "writer", reflect.TypeOf(b.ws[i]))
-			panic(ErrNotWrapper)
-		} else {
-			ww.WrapWriter(b.ws[i+1])
-		}
-	}
-	if len(b.ws) > 0 {
-		b.w = b.ws[0]
-	}
-
-	for i := len(b.rs) - 2; i >= 0; i-- {
-		if rr, ok := b.rs[i].(readerWrapper); !ok {
-			b.Error("reader is not ReaderWrapper", nil, "reader", reflect.TypeOf(b.rs[i]))
-			panic(ErrNotWrapper)
-		} else {
-			rr.WrapReader(b.rs[i+1])
-		}
-	}
-	if len(b.rs) > 0 {
-		b.r = b.rs[0]
-	}
-
-	var err error
-	for i := len(b.ws) - 1; i >= 0; i-- {
-		if ww, ok := b.ws[i].(runner.Runner); ok {
-			err = runner.Init(ww)
-			if err != nil {
-				return errs.Wrapf(err, "init writer failed: %s", reflect.TypeOf(b.ws[i]).String())
-			}
-		}
-	}
-	for i := len(b.rs) - 1; i >= 0; i-- {
-		if rr, ok := b.rs[i].(runner.Runner); ok {
-			err = runner.Init(rr)
-			if err != nil {
-				return errs.Wrapf(err, "init reader failed: %s", reflect.TypeOf(b.rs[i]).String())
-			}
-		}
-	}
-
-	return b.Runner.Init()
-}
-
-func (b *BaseWorker) Start() error {
+func (wk *BaseWorker) Run(ctx context.Context) error {
 	panic("not implemented")
 }
 
-func (b *BaseWorker) Stop() error {
-	panic("not implemented")
-}
-
-func (b *BaseWorker) WriteTo(w ...io.Writer) {
-	b.ws = append(b.ws, w...)
-}
-
-func (b *BaseWorker) ReadFrom(r ...io.Reader) {
-	b.rs = append(b.rs, r...)
-}
-
-func (b *BaseWorker) Readers() []io.Reader {
-	return b.rs
-}
-
-func (b *BaseWorker) Writers() []io.Writer {
-	return b.ws
-}
-
-func (b *BaseWorker) Reader() io.Reader {
-	return b.r
-}
-
-func (b *BaseWorker) Writer() io.Writer {
-	return b.w
-}
-
-func (b *BaseWorker) LastWriter() io.Writer {
-	if len(b.ws) > 0 {
-		return b.ws[len(b.ws)-1]
-	}
-	return nil
-}
-
-func (b *BaseWorker) LastReader() io.Reader {
-	if len(b.rs) > 0 {
-		return b.rs[len(b.rs)-1]
-	}
-	return nil
-}
-
-func (b *BaseWorker) Close() error {
-	defer b.Cancel()
-	err := errors.Join(b.closeReaders(), b.closeWriters())
-	if err != nil {
-		b.AppendError(errs.Wrap(err, "close failed"))
-	}
-	return nil
-}
-
-func (b *BaseWorker) WithOptions(...Option) {}
-
-func (b *BaseWorker) Result() *WorkerResult {
-	d := &WorkerResult{
-		Data:        b.LoadAll(),
-		ReadersData: make([]map[string]any, len(b.rs)),
-		WritersData: make([]map[string]any, len(b.ws)),
+func (wk *BaseWorker) Close(force bool) error {
+	if force {
+		return wk.forceCloseOnce()
 	}
 
-	for i, r := range b.rs {
-		if c, ok := r.(Common); ok {
-			d.ReadersData[i] = c.LoadAll()
+	return wk.closeOnce()
+}
+
+type flusher interface {
+	Flush() error
+}
+
+type flusher2 interface {
+	Flush()
+}
+
+func closeWriters(ws []io.Writer) error {
+	allErr := make([]error, 0, len(ws))
+	for _, w := range ws {
+		err := closeWriter(w)
+		if err != nil {
+			allErr = append(allErr, err)
 		}
 	}
-	for i, w := range b.ws {
-		if c, ok := w.(Common); ok {
-			d.WritersData[i] = c.LoadAll()
-		}
-	}
-	return d
+	return errors.Join(allErr...)
 }
 
-func (b *BaseWorker) closeReaders() error {
-	var err []error
-	for i, r := range b.rs {
-		e := closeReader(i, r)
-		if e != nil {
-			err = append(err, e)
+func closeReaders(rs []io.Reader) error {
+	allErr := make([]error, 0, len(rs))
+	for _, r := range rs {
+		err := closeReader(r)
+		if err != nil {
+			allErr = append(allErr, err)
 		}
 	}
-
-	if len(err) == 0 {
-		return nil
-	}
-	if len(err) == 1 {
-		return err[0]
-	}
-	return errors.Join(err...)
+	return errors.Join(allErr...)
 }
 
-func closeReader(idx int, r io.Reader) (err error) {
+func closeWriter(w io.Writer) (err error) {
 	defer func() {
 		p := recover()
 		if p != nil {
-			err = errs.PanicToErrWithMsg(p, fmt.Sprintf("panic on close reader(%d) %s", idx, getName(r)))
-		}
-	}()
-
-	if c, ok := r.(io.Closer); ok {
-		e := c.Close()
-		if e != nil {
-			err = errs.Wrapf(e, "err on close reader(%d) %s", idx, getName(r))
-		}
-	}
-	return
-}
-
-func closeWriter(idx int, w io.Writer) (err error) {
-	defer func() {
-		p := recover()
-		if p != nil {
-			err = errs.PanicToErrWithMsg(p, fmt.Sprintf("panic on close writer(%d) %s", idx, getName(w)))
+			err = errs.PanicToErrWithMsg(p, fmt.Sprintf("panic on close writer: %T", w))
 		}
 	}()
 
@@ -338,47 +109,93 @@ func closeWriter(idx int, w io.Writer) (err error) {
 	case io.Closer:
 		e := c.Close()
 		if e != nil {
-			err = errs.Wrapf(e, "failed to close writer(%d) %s", idx, getName(w))
+			err = errs.Wrapf(e, "close writer failed: %T", w)
 		}
 	case flusher:
 		e := c.Flush()
 		if e != nil {
-			err = errs.Wrapf(e, "failed to flush-on-close writer(%d) %s", idx, getName(w))
+			err = errs.Wrapf(e, "flush writer failed: %T", w)
 		}
 	case flusher2:
 		c.Flush()
 	}
 
-	return
+	return err
 }
 
-func (b *BaseWorker) closeWriters() error {
-	var err []error
-	for i, w := range b.ws {
-		e := closeWriter(i, w)
+func closeReader(r io.Reader) (err error) {
+	defer func() {
+		p := recover()
+		if p != nil {
+			err = errs.PanicToErrWithMsg(p, fmt.Sprintf("panic on close reader: %T", r))
+		}
+	}()
+
+	if c, ok := r.(io.Closer); ok {
+		e := c.Close()
 		if e != nil {
-			err = append(err, e)
+			err = errs.Wrapf(e, "close reader failed: %T", r)
 		}
 	}
-
-	if len(err) == 0 {
-		return nil
-	}
-	if len(err) == 1 {
-		return err[0]
-	}
-	return errors.Join(err...)
+	return err
 }
 
-type hasName interface {
-	Name() string
+func (wk *BaseWorker) wrapWriters() {
+	if wk.w == nil {
+		return
+	}
+	wk.ws = append(wk.ws, wk.w)
+	for _, wrapper := range wk.wwrappers {
+		wk.w = wrapper(wk.w)
+		wk.ws = append(wk.ws, wk.w)
+	}
 }
 
-func getName(v any) string {
-	switch vv := v.(type) {
-	case hasName:
-		return vv.Name()
-	default:
-		return reflect.TypeOf(v).String()
+func (wk *BaseWorker) wrapReaders() {
+	if wk.r == nil {
+		return
 	}
+	wk.rs = append(wk.rs, wk.r)
+	for _, wrapper := range wk.rwrappers {
+		wk.r = wrapper(wk.r)
+		wk.rs = append(wk.rs, wk.r)
+	}
+}
+
+func (wk *BaseWorker) Writer() io.Writer {
+	return wk.w
+}
+
+func (wk *BaseWorker) Reader() io.Reader {
+	return wk.r
+}
+
+func (wk *BaseWorker) WriteToWriter(w io.Writer, wrappers ...WriterWrapFunc) {
+	wk.w = w
+	wk.wwrappers = append(wk.wwrappers, wrappers...)
+}
+
+func (wk *BaseWorker) ReadFromReader(r io.Reader, wrappers ...ReaderWrapFunc) {
+	wk.r = r
+	wk.rwrappers = append(wk.rwrappers, wrappers...)
+}
+
+func (wk *BaseWorker) WithWriterWrappers(wrappers ...WriterWrapFunc) {
+	wk.wwrappers = append(wk.wwrappers, wrappers...)
+}
+
+func (wk *BaseWorker) WithReaderWrappers(wrappers ...ReaderWrapFunc) {
+	wk.rwrappers = append(wk.rwrappers, wrappers...)
+}
+
+func (wk *BaseWorker) WriterWrapped() bool {
+	return len(wk.wwrappers) > 0
+}
+
+func (wk *BaseWorker) ReaderWrapped() bool {
+	return len(wk.rwrappers) > 0
+}
+
+func (wk *BaseWorker) SupportZeroCopy() bool {
+	return false
 }

@@ -32,7 +32,14 @@ func SetFirstMatchedField(s any, f any) bool {
 }
 
 func GetFuncName(v any) string {
-	return runtime.FuncForPC(reflect.ValueOf(v).Pointer()).Name()
+	if v == nil {
+		return ""
+	}
+	vv := reflect.ValueOf(v)
+	if vv.Kind() != reflect.Func {
+		panic("not func")
+	}
+	return runtime.FuncForPC(vv.Pointer()).Name()
 }
 
 func IsStructPointer(v any) bool {

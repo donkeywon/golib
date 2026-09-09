@@ -1,15 +1,17 @@
 package step
 
 import (
+	"bytes"
+	"context"
+	"encoding/json/v2"
+
 	"github.com/donkeywon/golib/errs"
+	"github.com/donkeywon/golib/kvs"
 	"github.com/donkeywon/golib/plugin"
-	"github.com/donkeywon/golib/runner"
-	"github.com/donkeywon/golib/util/jsons"
-	"github.com/donkeywon/golib/util/yamls"
+	"github.com/goccy/go-yaml"
+	"github.com/goccy/go-yaml/ast"
 	"github.com/tidwall/gjson"
 )
-
-var CreateBase = newBase
 
 type Type string
 
@@ -22,26 +24,36 @@ type stepCfgOnlyCfg struct {
 	Cfg any `json:"cfg" yaml:"cfg"`
 }
 
-func (s *Cfg) UnmarshalJSON(data []byte) error {
-	return s.customUnmarshal(data, jsons.Unmarshal)
-}
-
-func (s *Cfg) UnmarshalYAML(data []byte) error {
-	return s.customUnmarshal(data, yamls.Unmarshal)
-}
-
-func (s *Cfg) customUnmarshal(data []byte, unmarshaler func([]byte, any) error) error {
+func (c *Cfg) UnmarshalJSON(data []byte) error {
 	typ := gjson.GetBytes(data, "type")
 	if !typ.Exists() {
-		return errs.Errorf("step type is not present")
+		return errs.Errorf("empty step type")
 	}
 	if typ.Type != gjson.String {
 		return errs.Errorf("invalid step type")
 	}
-	s.Type = Type(typ.Str)
+	c.Type = Type(typ.Str)
 
+	return c.customUnmarshal(data, func(b []byte, a any) error { return json.Unmarshal(b, a) })
+}
+
+func (c *Cfg) UnmarshalYAML(data []byte) error {
+	yp, _ := yaml.PathString("$.type")
+	node, err := yp.ReadNode(bytes.NewReader(data))
+	if err != nil {
+		return errs.Wrapf(err, "get step type failed")
+	}
+	if node.Type() != ast.StringType {
+		return errs.Errorf("invalid step type")
+	}
+	c.Type = Type(node.String())
+
+	return c.customUnmarshal(data, yaml.Unmarshal)
+}
+
+func (c *Cfg) customUnmarshal(data []byte, unmarshaler func([]byte, any) error) error {
 	cv := stepCfgOnlyCfg{}
-	cv.Cfg = plugin.CreateCfg[any](s.Type)
+	cv.Cfg = plugin.CreateCfg[any](c.Type)
 	if cv.Cfg == nil {
 		return nil
 	}
@@ -49,25 +61,11 @@ func (s *Cfg) customUnmarshal(data []byte, unmarshaler func([]byte, any) error) 
 	if err != nil {
 		return err
 	}
-	s.Cfg = cv.Cfg
+	c.Cfg = cv.Cfg
 	return nil
 }
 
 type Step interface {
-	runner.Runner
-	plugin.Plugin
-}
-
-type baseStep struct {
-	runner.Runner
-}
-
-func newBase(name string) Step {
-	return &baseStep{
-		Runner: runner.Create(name),
-	}
-}
-
-func (b *baseStep) Store(k string, v any) {
-	b.Runner.StoreAsString(k, v)
+	kvs.KVS[string, any]
+	Run(context.Context) error
 }

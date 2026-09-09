@@ -29,6 +29,7 @@ package errs
 import (
 	"fmt"
 	"io"
+	"log/slog"
 )
 
 // New returns an error with the supplied message.
@@ -74,6 +75,10 @@ func (f *fundamental) Format(s fmt.State, verb rune) {
 	}
 }
 
+func (f *fundamental) LogValue() slog.Value {
+	return slog.StringValue(ErrToStackString(f))
+}
+
 // WithStack annotates err with a stack trace at the point WithStack was called.
 // If err is nil, WithStack returns nil.
 func WithStack(err error) error {
@@ -95,8 +100,6 @@ type withStack struct {
 	foldAt int
 }
 
-func (w *withStack) Cause() error { return w.error }
-
 // Unwrap provides compatibility for Go 1.13 error chains.
 func (w *withStack) Unwrap() error { return w.error }
 
@@ -113,6 +116,10 @@ func (w *withStack) Format(s fmt.State, verb rune) {
 	case 'q':
 		fmt.Fprintf(s, "%q", w.Error())
 	}
+}
+
+func (w *withStack) LogValue() slog.Value {
+	return slog.StringValue(ErrToStackString(w))
 }
 
 // Wrap returns an error annotating err with a stack trace
@@ -185,7 +192,6 @@ type withMessage struct {
 }
 
 func (w *withMessage) Error() string { return w.msg + ": " + w.cause.Error() }
-func (w *withMessage) Cause() error  { return w.cause }
 
 // Unwrap provides compatibility for Go 1.13 error chains.
 func (w *withMessage) Unwrap() error { return w.cause }
@@ -203,28 +209,6 @@ func (w *withMessage) Format(s fmt.State, verb rune) {
 	}
 }
 
-// Cause returns the underlying cause of the error, if possible.
-// An error value has a cause if it implements the following
-// interface:
-//
-//	type causer interface {
-//	       Cause() error
-//	}
-//
-// If the error does not implement Cause, the original error will
-// be returned. If the error is nil, nil will be returned without further
-// investigation.
-func Cause(err error) error {
-	type causer interface {
-		Cause() error
-	}
-
-	for err != nil {
-		cause, ok := err.(causer)
-		if !ok {
-			break
-		}
-		err = cause.Cause()
-	}
-	return err
+func (w *withMessage) LogValue() slog.Value {
+	return slog.StringValue(ErrToStackString(w))
 }

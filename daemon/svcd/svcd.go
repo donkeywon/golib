@@ -1,6 +1,7 @@
 package svcd
 
 import (
+	"context"
 	"fmt"
 	"reflect"
 	"strings"
@@ -8,7 +9,6 @@ import (
 	"github.com/donkeywon/golib/boot"
 	"github.com/donkeywon/golib/errs"
 	"github.com/donkeywon/golib/plugin"
-	"github.com/donkeywon/golib/runner"
 )
 
 const DaemonTypeSvcd boot.DaemonType = "svcd"
@@ -21,27 +21,24 @@ const initSize = 64
 
 var (
 	_svcFQNs        = make([]string, 0, initSize)
-	_svcCreatorsMap = make(map[string]Creator, initSize)
+	_svcCreatorsMap = make(map[string]plugin.Creator[Svc], initSize)
 	_svcMap         = make(map[string]Svc, initSize)
 	_svcCfgMap      = make(map[string]any, initSize)
-	_svcd           = &svcd{
-		Runner: runner.Create("svc"),
-	}
+	_svcCfgSetters  = make(map[string]func(s Svc, cfg any), initSize)
+	_svcd           = &svcd{}
 )
 
 type svcd struct {
-	runner.Runner
-	*Cfg
+	Cfg
 }
 
 func New() boot.Daemon {
 	return _svcd
 }
 
-func (s *svcd) Init() error {
+func (s *svcd) Init(ctx context.Context) error {
 	for _, fqn := range _svcFQNs {
 		creator := _svcCreatorsMap[fqn]
-		s.Debug("create svc", "fqn", fqn)
 
 		ins := creator()
 		if ins == nil {
@@ -50,18 +47,23 @@ func (s *svcd) Init() error {
 
 		_svcMap[fqn] = ins
 		if cfg, hasCfg := _svcCfgMap[fqn]; hasCfg {
-			plugin.SetCfg(ins, cfg)
+			_svcCfgSetters[fqn](ins, cfg)
 		}
 	}
 
-	return s.Runner.Init()
+	return nil
+}
+
+func (s *svcd) Run(ctx context.Context) error {
+	<-ctx.Done()
+	return ctx.Err()
 }
 
 func buildFQN(ns Namespace, m Module, n Name) string {
 	return fmt.Sprintf("%s.%s.%s", ns, m, n)
 }
 
-func validate(ns Namespace, m Module, n Name, creator Creator, cfgCreator CfgCreator) {
+func validate[C any](ns Namespace, m Module, n Name, creator plugin.Creator[Svc], cfgCreator plugin.CfgCreator[C]) {
 	if creator == nil {
 		panic("nil svc creator")
 	}
@@ -102,7 +104,7 @@ func Get[S Svc](ns Namespace, m Module, n Name) S {
 	return s
 }
 
-func Reg(ns Namespace, m Module, n Name, creator Creator, cfgCreator CfgCreator) {
+func Reg[C any](ns Namespace, m Module, n Name, creator plugin.Creator[Svc], cfgCreator plugin.CfgCreator[C]) {
 	validate(ns, m, n, creator, cfgCreator)
 
 	fqn := buildFQN(ns, m, n)
@@ -113,9 +115,25 @@ func Reg(ns Namespace, m Module, n Name, creator Creator, cfgCreator CfgCreator)
 
 	if cfgCreator != nil {
 		cfg := cfgCreator()
-		if cfg != nil {
+		if !isNil(cfg, reflect.ValueOf(cfg)) {
 			_svcCfgMap[fqn] = cfg
 			boot.RegCfg(fqn, cfg)
+
+			_svcCfgSetters[fqn] = func(s Svc, cfg any) {
+				plugin.SetCfg(s, cfg.(C))
+			}
 		}
 	}
+}
+
+func isNil(v any, rv reflect.Value) bool {
+	if v == nil {
+		return true
+	}
+	switch rv.Kind() {
+	case reflect.Pointer, reflect.Map, reflect.Slice, reflect.Interface,
+		reflect.Func, reflect.Chan:
+		return rv.IsNil()
+	}
+	return false
 }

@@ -8,6 +8,7 @@ import (
 	"sync/atomic"
 
 	"github.com/donkeywon/golib/errs"
+	"github.com/donkeywon/golib/util/paths"
 	"github.com/fsnotify/fsnotify"
 )
 
@@ -16,28 +17,66 @@ var (
 
 	ErrFileRemoved = errors.New("file removed")
 	ErrFileRenamed = errors.New("file renamed")
+	ErrTailDir     = errors.New("tail dir")
 )
 
-type Reader struct {
-	fi       os.FileInfo
-	file     *os.File
-	watcher  *fsnotify.Watcher
-	closed   chan struct{}
-	filepath string
-	offset   int64
-	once     sync.Once
+type Option func(*Reader)
+
+func Offset(n int64) Option {
+	return func(r *Reader) {
+		if n >= 0 {
+			r.offset = n
+		}
+	}
 }
 
-func NewReader(filepath string, offset int64) (*Reader, error) {
+func WithWatcher(w *fsnotify.Watcher) Option {
+	return func(r *Reader) {
+		if w != nil {
+			r.withWatcher = true
+			r.watcher = w
+		}
+	}
+}
+
+type Reader struct {
+	file          *os.File
+	withWatcher   bool
+	watcher       *fsnotify.Watcher
+	closed        chan struct{}
+	filepath      string
+	offset        int64
+	closeOnceFunc func() error
+}
+
+func NewReader(path string, opts ...Option) (*Reader, error) {
 	var err error
 
-	r := &Reader{
-		filepath: filepath,
-		offset:   offset,
-		closed:   make(chan struct{}),
+	if paths.DirExist(path) {
+		return nil, ErrTailDir
 	}
 
-	r.file, err = os.Open(filepath)
+	r := &Reader{
+		filepath: path,
+		closed:   make(chan struct{}),
+	}
+	for _, opt := range opts {
+		opt(r)
+	}
+
+	r.closeOnceFunc = sync.OnceValue(func() error {
+		allErr := make([]error, 0, 2)
+		close(r.closed)
+		if r.file != nil {
+			allErr = append(allErr, r.file.Close())
+		}
+		if !r.withWatcher && r.watcher != nil {
+			allErr = append(allErr, r.watcher.Close())
+		}
+		return errors.Join(allErr...)
+	})
+
+	r.file, err = os.Open(path)
 	if err != nil {
 		return nil, err
 	}
@@ -45,43 +84,67 @@ func NewReader(filepath string, offset int64) (*Reader, error) {
 	if r.offset > 0 {
 		_, err = r.file.Seek(r.offset, io.SeekStart)
 		if err != nil {
-			return nil, r.close(errs.Wrap(err, "file seek failed"))
+			return nil, r.closeWithErr(errs.Wrap(err, "file seek failed"))
 		}
 	}
 
-	r.fi, err = r.file.Stat()
-	if err != nil {
-		return nil, r.close(errs.Wrap(err, "get file stat failed"))
+	if r.watcher == nil {
+		r.watcher, err = fsnotify.NewWatcher()
+		if err != nil {
+			return nil, r.closeWithErr(errs.Wrap(err, "create notify watcher failed"))
+		}
 	}
 
-	r.watcher, err = fsnotify.NewWatcher()
+	err = r.watcher.Add(path)
 	if err != nil {
-		return nil, r.close(errs.Wrap(err, "create notify watcher failed"))
+		return nil, r.closeWithErr(errs.Wrapf(err, "watch failed: %s", path))
 	}
-	_ = r.watcher.Add(filepath)
 
 	return r, nil
 }
 
 func (r *Reader) Read(p []byte) (nr int, err error) {
-	nr, err = r.read(p)
-	if err != nil {
-		return
-	}
+	for {
+		nr, err = r.read(p)
+		if err != nil {
+			if errors.Is(err, errTailClosed) {
+				return 0, io.EOF
+			}
+			return
+		}
+		if nr > 0 {
+			return nr, nil
+		}
 
-	if nr > 0 {
-		return nr, nil
-	}
-
-	err = r.wait()
-	switch {
-	case errors.Is(err, errTailClosed):
-		return 0, io.EOF
-	case err == nil:
-		return r.read(p)
-	default:
+		err = r.wait()
+		if err == nil {
+			err = r.resetOffsetIfTruncated()
+			if err != nil {
+				return 0, err
+			}
+			continue
+		}
+		if errors.Is(err, errTailClosed) {
+			return 0, io.EOF
+		}
 		return 0, err
 	}
+}
+
+func (r *Reader) resetOffsetIfTruncated() error {
+	fi, err := r.file.Stat()
+	if err != nil {
+		return err
+	}
+	if fi.Size() >= atomic.LoadInt64(&r.offset) {
+		return nil
+	}
+	_, err = r.file.Seek(0, io.SeekStart)
+	if err != nil {
+		return err
+	}
+	atomic.StoreInt64(&r.offset, 0)
+	return nil
 }
 
 func (r *Reader) read(p []byte) (int, error) {
@@ -90,58 +153,52 @@ func (r *Reader) read(p []byte) (int, error) {
 	if err == nil || err == io.EOF {
 		return nr, nil
 	}
+	if errors.Is(err, os.ErrClosed) {
+		return 0, errTailClosed
+	}
 
 	return nr, err
 }
 
 func (r *Reader) Close() error {
-	return r.close(nil)
+	return r.closeOnceFunc()
+}
+
+func (r *Reader) closeWithErr(err error) error {
+	return errors.Join(r.Close(), err)
 }
 
 func (r *Reader) Offset() int64 {
 	return atomic.LoadInt64(&r.offset)
 }
 
-func (r *Reader) Len() int64 {
-	// file size is growing
-	return -1
-}
-
 func (r *Reader) File() *os.File {
 	return r.file
 }
 
-func (r *Reader) FileInfo() os.FileInfo {
-	return r.fi
-}
-
-func (r *Reader) close(err error) error {
-	r.once.Do(func() {
-		close(r.closed)
-		if r.file != nil {
-			err = errors.Join(err, r.file.Close())
-		}
-		if r.watcher != nil {
-			err = errors.Join(err, r.watcher.Close())
-		}
-	})
-	return err
-}
-
 func (r *Reader) wait() error {
-	select {
-	case <-r.closed:
-		return errTailClosed
-	case e := <-r.watcher.Events:
-		switch e.Op {
-		case fsnotify.Remove:
-			return ErrFileRemoved
-		case fsnotify.Rename:
-			return ErrFileRenamed
-		default:
-			return nil
+	for {
+		select {
+		case <-r.closed:
+			return errTailClosed
+		case e, ok := <-r.watcher.Events:
+			if !ok {
+				return errTailClosed
+			}
+			if e.Has(fsnotify.Remove) {
+				return ErrFileRemoved
+			}
+			if e.Has(fsnotify.Rename) {
+				return ErrFileRenamed
+			}
+			if e.Has(fsnotify.Write) {
+				return nil
+			}
+		case err, ok := <-r.watcher.Errors:
+			if !ok {
+				return errTailClosed
+			}
+			return errs.Wrap(err, "watcher error occurred")
 		}
-	case err := <-r.watcher.Errors:
-		return errs.Wrap(err, "watcher error occurred")
 	}
 }

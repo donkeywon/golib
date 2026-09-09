@@ -1,15 +1,17 @@
 package dbp
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
+	"io"
+	"strconv"
 	"time"
 
 	"github.com/donkeywon/golib/boot"
 	"github.com/donkeywon/golib/daemon/metricsd"
 	"github.com/donkeywon/golib/errs"
-	"github.com/donkeywon/golib/runner"
-	"github.com/prometheus/client_golang/prometheus"
+	"github.com/rs/zerolog"
 )
 
 const DaemonTypeDBP boot.DaemonType = "dbp"
@@ -21,84 +23,21 @@ type DBP interface {
 	Get(string) *sql.DB
 }
 
-var (
-	fqNamespace    = string(DaemonTypeDBP)
-	fqSubsystem    = "pool_stats"
-	variableLabels = []string{"name", "type"}
-
-	maxOpenConnectionsDesc = prometheus.NewDesc(
-		prometheus.BuildFQName(fqNamespace, fqSubsystem, "max_open_connections"),
-		"Maximum number of open connections to the database.",
-		variableLabels,
-		nil,
-	)
-	openConnectionsDesc = prometheus.NewDesc(
-		prometheus.BuildFQName(fqNamespace, fqSubsystem, "open_connections"),
-		"The number of established connections both in use and idle.",
-		variableLabels,
-		nil,
-	)
-	inUseConnectionsDesc = prometheus.NewDesc(
-		prometheus.BuildFQName(fqNamespace, fqSubsystem, "in_use"),
-		"The number of connections currently in use.",
-		variableLabels,
-		nil,
-	)
-	idleConnectionsDesc = prometheus.NewDesc(
-		prometheus.BuildFQName(fqNamespace, fqSubsystem, "idle"),
-		"The number of idle connections.",
-		variableLabels,
-		nil,
-	)
-
-	waitCountDesc = prometheus.NewDesc(
-		prometheus.BuildFQName(fqNamespace, fqSubsystem, "wait_count"),
-		"The total number of connections waited for.",
-		variableLabels,
-		nil,
-	)
-	waitDurationDesc = prometheus.NewDesc(
-		prometheus.BuildFQName(fqNamespace, fqSubsystem, "wait_duration"),
-		"The total time blocked waiting for a new connection.",
-		variableLabels,
-		nil,
-	)
-	maxIdleClosedDesc = prometheus.NewDesc(
-		prometheus.BuildFQName(fqNamespace, fqSubsystem, "max_idle_closed"),
-		"The total number of connections closed due to SetMaxIdleConns.",
-		variableLabels,
-		nil,
-	)
-	maxIdleTimeClosedDesc = prometheus.NewDesc(
-		prometheus.BuildFQName(fqNamespace, fqSubsystem, "max_idle_time_closed"),
-		"The total number of connections closed due to SetConnMaxIdleTime.",
-		variableLabels,
-		nil,
-	)
-	maxLifetimeClosedDesc = prometheus.NewDesc(
-		prometheus.BuildFQName(fqNamespace, fqSubsystem, "max_life_time_closed"),
-		"The total number of connections closed due to SetConnMaxLifeTime.",
-		variableLabels,
-		nil,
-	)
-)
-
 type dbp struct {
-	runner.Runner
-
-	cfg      *Cfg
+	cfg      Cfg
 	dbs      map[string]*sql.DB
 	metricsd metricsd.Metricsd
+	l        *zerolog.Logger
 }
 
 func New() boot.Daemon {
 	return &dbp{
-		Runner: runner.Create(string(DaemonTypeDBP)),
-		dbs:    make(map[string]*sql.DB),
+		dbs: make(map[string]*sql.DB),
 	}
 }
 
-func (d *dbp) Init() error {
+func (d *dbp) Init(ctx context.Context) error {
+	d.l = zerolog.Ctx(ctx)
 	for _, dbCfg := range d.cfg.Pools {
 		db, err := sql.Open(dbCfg.Type, dbCfg.DSN)
 		if err != nil {
@@ -110,7 +49,7 @@ func (d *dbp) Init() error {
 		db.SetConnMaxLifetime(dbCfg.MaxLifeTime)
 		db.SetConnMaxIdleTime(dbCfg.MaxIdleTime)
 
-		err = d.waitDBReady(db, dbCfg.Name, dbCfg.Type, dbCfg.MaxWaitReadyTime, dbCfg.ReadyQuery)
+		err = d.waitDBReady(ctx, db, dbCfg.Name, dbCfg.Type, dbCfg.MaxWaitReadyTime, dbCfg.ReadyQuery)
 		if err != nil {
 			d.closeAll()
 			return errs.Wrapf(err, "wait db ready timed out, name: %s, type: %s", dbCfg.Name, dbCfg.Type)
@@ -120,21 +59,26 @@ func (d *dbp) Init() error {
 	}
 	if d.cfg.EnableExportMetrics {
 		d.metricsd = boot.Get[metricsd.Metricsd](metricsd.DaemonTypeMetricsd)
-		d.metricsd.MustRegister(d)
+		d.metricsd.Metrics().RegisterMetricsWriter(d.writeMetrics)
 	}
-	return d.Runner.Init()
+	return nil
 }
 
-func (d *dbp) SetCfg(cfg any) {
-	d.cfg = cfg.(*Cfg)
+func (d *dbp) Run(ctx context.Context) error {
+	<-ctx.Done()
+	return ctx.Err()
 }
 
-func (d *dbp) waitDBReady(db *sql.DB, name string, typ string, maxWait time.Duration, readyQuery string) error {
+func (d *dbp) SetCfg(cfg Cfg) {
+	d.cfg = cfg
+}
+
+func (d *dbp) waitDBReady(ctx context.Context, db *sql.DB, name string, typ string, maxWait time.Duration, readyQuery string) error {
 	if maxWait == 0 {
-		return d.checkDBReady(db, readyQuery)
+		return d.checkDBReady(ctx, db, readyQuery)
 	}
 
-	ctx, cancel := context.WithTimeout(d.Ctx(), maxWait)
+	ctx, cancel := context.WithTimeout(ctx, maxWait)
 	defer cancel()
 
 	var err error
@@ -145,27 +89,27 @@ func (d *dbp) waitDBReady(db *sql.DB, name string, typ string, maxWait time.Dura
 		case <-ctx.Done():
 			return errs.Wrap(err, "check db ready failed")
 		case <-t.C:
-			err = d.checkDBReady(db, readyQuery)
+			err = d.checkDBReady(ctx, db, readyQuery)
 			if err == nil {
 				return nil
 			}
 
 			t.Reset(time.Second)
-			d.Warn("check db ready failed", "err", err, "name", name, "type", typ)
+			d.l.Warn().Err(err).Str("name", name).Str("type", typ).Msg("check db ready failed")
 		}
 	}
 }
 
-func (d *dbp) checkDBReady(db *sql.DB, query string) error {
+func (d *dbp) checkDBReady(ctx context.Context, db *sql.DB, query string) error {
 	if query == "" {
-		return db.PingContext(d.Ctx())
+		return db.PingContext(ctx)
 	}
 
-	_, err := db.ExecContext(d.Ctx(), query)
+	_, err := db.ExecContext(ctx, query)
 	return err
 }
 
-func (d *dbp) Stop() error {
+func (d *dbp) Stop(ctx context.Context) error {
 	d.closeAll()
 	return nil
 }
@@ -178,41 +122,48 @@ func (d *dbp) closeAll() {
 		}
 		err := db.Close()
 		if err != nil {
-			d.Error("close db failed", err, "name", dbCfg.Name, "type", dbCfg.Type)
+			d.l.Error().Err(err).Str("name", dbCfg.Name).Str("type", dbCfg.Type).Msg("close db failed")
 		}
-	}
-}
-
-func (d *dbp) Describe(ch chan<- *prometheus.Desc) {
-	ch <- maxOpenConnectionsDesc
-	ch <- openConnectionsDesc
-	ch <- inUseConnectionsDesc
-	ch <- idleConnectionsDesc
-	ch <- waitCountDesc
-	ch <- waitDurationDesc
-	ch <- maxIdleClosedDesc
-	ch <- maxIdleTimeClosedDesc
-	ch <- maxLifetimeClosedDesc
-}
-
-func (d *dbp) Collect(ch chan<- prometheus.Metric) {
-	for _, dbCfg := range d.cfg.Pools {
-		db := d.dbs[dbCfg.Name]
-		stats := db.Stats()
-
-		ch <- prometheus.MustNewConstMetric(maxOpenConnectionsDesc, prometheus.GaugeValue, float64(stats.MaxOpenConnections), dbCfg.Name, dbCfg.Type)
-		ch <- prometheus.MustNewConstMetric(openConnectionsDesc, prometheus.GaugeValue, float64(stats.OpenConnections), dbCfg.Name, dbCfg.Type)
-		ch <- prometheus.MustNewConstMetric(idleConnectionsDesc, prometheus.GaugeValue, float64(stats.Idle), dbCfg.Name, dbCfg.Type)
-		ch <- prometheus.MustNewConstMetric(inUseConnectionsDesc, prometheus.GaugeValue, float64(stats.InUse), dbCfg.Name, dbCfg.Type)
-
-		ch <- prometheus.MustNewConstMetric(waitCountDesc, prometheus.CounterValue, float64(stats.WaitCount), dbCfg.Name, dbCfg.Type)
-		ch <- prometheus.MustNewConstMetric(waitDurationDesc, prometheus.CounterValue, float64(stats.WaitDuration), dbCfg.Name, dbCfg.Type)
-		ch <- prometheus.MustNewConstMetric(maxIdleClosedDesc, prometheus.CounterValue, float64(stats.MaxIdleClosed), dbCfg.Name, dbCfg.Type)
-		ch <- prometheus.MustNewConstMetric(maxIdleTimeClosedDesc, prometheus.CounterValue, float64(stats.MaxIdleTimeClosed), dbCfg.Name, dbCfg.Type)
-		ch <- prometheus.MustNewConstMetric(maxLifetimeClosedDesc, prometheus.CounterValue, float64(stats.MaxLifetimeClosed), dbCfg.Name, dbCfg.Type)
 	}
 }
 
 func (d *dbp) Get(name string) *sql.DB {
 	return d.dbs[name]
+}
+
+func (d *dbp) writeMetrics(w io.Writer) {
+	buf := bytes.NewBuffer(make([]byte, 0, 128))
+	for i := range d.cfg.Pools {
+		poolCfg := &d.cfg.Pools[i]
+		db := d.dbs[poolCfg.Name]
+		stats := db.Stats()
+
+		writeMetric(w, buf, "db_pool_stats_max_open_connections", poolCfg, int64(stats.MaxOpenConnections))
+		writeMetric(w, buf, "db_pool_stats_open_connections", poolCfg, int64(stats.OpenConnections))
+		writeMetric(w, buf, "db_pool_stats_idle", poolCfg, int64(stats.Idle))
+		writeMetric(w, buf, "db_pool_stats_in_use", poolCfg, int64(stats.InUse))
+
+		writeMetric(w, buf, "db_pool_stats_wait_count", poolCfg, stats.WaitCount)
+		writeMetric(w, buf, "db_pool_stats_wait_duration", poolCfg, int64(stats.WaitDuration))
+		writeMetric(w, buf, "db_pool_stats_max_idle_closed", poolCfg, stats.MaxIdleClosed)
+		writeMetric(w, buf, "db_pool_stats_max_idle_time_closed", poolCfg, stats.MaxIdleTimeClosed)
+		writeMetric(w, buf, "db_pool_stats_max_life_time_closed", poolCfg, stats.MaxLifetimeClosed)
+	}
+}
+
+func writeMetric(w io.Writer, buf *bytes.Buffer, metricsName string, poolCfg *PoolCfg, v int64) {
+	buf.Reset()
+	buf.WriteString(metricsName)
+	writeLabels(buf, poolCfg)
+	buf.Write(strconv.AppendInt(buf.AvailableBuffer(), v, 10))
+	buf.WriteByte('\n')
+	w.Write(buf.Bytes())
+}
+
+func writeLabels(buf *bytes.Buffer, poolCfg *PoolCfg) {
+	buf.WriteString(`{name="`)
+	buf.WriteString(poolCfg.Name)
+	buf.WriteString(`",type="`)
+	buf.WriteString(poolCfg.Type)
+	buf.WriteString(`"} `)
 }

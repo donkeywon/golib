@@ -1,0 +1,393 @@
+package httpio
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"io"
+	"net"
+	"net/http"
+	"sync"
+	"sync/atomic"
+	"time"
+
+	"github.com/avast/retry-go/v4"
+	"github.com/donkeywon/golib/errs"
+	"github.com/donkeywon/golib/util/httpc"
+	"github.com/donkeywon/golib/util/httpu"
+	"github.com/donkeywon/golib/util/iou"
+)
+
+var (
+	ErrRangeUnsupported = errors.New("range unsupported")
+)
+
+const (
+	defaultResponseHeaderTimeout = time.Second * 15
+)
+
+type respBodyReader struct {
+	io.ReadCloser
+	r *Reader
+}
+
+func (r *respBodyReader) Read(p []byte) (n int, err error) {
+	n, err = r.ReadCloser.Read(p)
+	atomic.AddInt64(&r.r.offset, int64(n))
+	return
+}
+
+type Reader struct {
+	url string
+
+	c *http.Client
+
+	ctx    context.Context
+	cancel context.CancelFunc
+
+	headOnce  sync.Once
+	closeOnce sync.Once
+
+	offset       int64
+	end          int64
+	supportRange bool
+
+	mu       sync.Mutex
+	respBody *respBodyReader
+
+	opt *option
+}
+
+func NewReader(ctx context.Context, url string, opts ...Option) *Reader {
+	if ctx == nil {
+		panic("nil context")
+	}
+
+	r := &Reader{
+		url: url,
+		opt: newOption(),
+	}
+
+	for _, o := range opts {
+		o(r.opt)
+	}
+
+	r.ctx, r.cancel = context.WithCancel(ctx)
+
+	r.offset = r.opt.offset
+	if r.opt.limit > 0 {
+		r.end = r.opt.offset + r.opt.limit
+	}
+
+	if r.opt.client != nil {
+		r.c = r.opt.client
+	} else {
+		trans := &http.Transport{
+			Proxy: http.ProxyFromEnvironment,
+			DialContext: defaultTransportDialContext(&net.Dialer{
+				Timeout:   30 * time.Second,
+				KeepAlive: 30 * time.Second,
+			}),
+			ForceAttemptHTTP2:     true,
+			MaxIdleConns:          1,
+			MaxIdleConnsPerHost:   1,
+			MaxConnsPerHost:       1,
+			ResponseHeaderTimeout: defaultResponseHeaderTimeout,
+			IdleConnTimeout:       90 * time.Second,
+			TLSHandshakeTimeout:   10 * time.Second,
+			ExpectContinueTimeout: 1 * time.Second,
+		}
+		if r.opt.responseHeaderTimeout > 0 {
+			trans.ResponseHeaderTimeout = r.opt.responseHeaderTimeout
+		}
+		r.c = &http.Client{
+			Transport: trans,
+		}
+	}
+
+	return r
+}
+
+func defaultTransportDialContext(dialer *net.Dialer) func(context.Context, string, string) (net.Conn, error) {
+	return dialer.DialContext
+}
+
+func (r *Reader) Read(p []byte) (int, error) {
+	select {
+	case <-r.ctx.Done():
+		return 0, r.ctx.Err()
+	default:
+	}
+
+	if len(p) == 0 {
+		return 0, nil
+	}
+
+	err := r.init()
+	if err != nil {
+		return 0, err
+	}
+
+	if !r.supportRange {
+		r.mu.Lock()
+		defer r.mu.Unlock()
+		if r.respBody == nil {
+			r.respBody, err = r.retryGetNoRange()
+			if err != nil {
+				return 0, err
+			}
+		}
+
+		return r.respBody.Read(p)
+	}
+
+	return r.retryReadFromRemain(p)
+}
+
+func (r *Reader) ReadAt(p []byte, offset int64) (int, error) {
+	select {
+	case <-r.ctx.Done():
+		return 0, r.ctx.Err()
+	default:
+	}
+
+	if len(p) == 0 {
+		return 0, nil
+	}
+
+	err := r.init()
+	if err != nil {
+		return 0, err
+	}
+	if !r.supportRange {
+		return 0, ErrRangeUnsupported
+	}
+
+	var nr int
+	_, err = r.getPart(offset, int64(len(p)), httpc.ToBytes(&nr, p))
+	return nr, err
+}
+
+func (r *Reader) Close() error {
+	var err error
+	r.closeOnce.Do(func() {
+		r.cancel()
+
+		r.mu.Lock()
+		if r.respBody != nil {
+			err = r.respBody.Close()
+		}
+		r.mu.Unlock()
+	})
+	return err
+}
+
+func (r *Reader) WriteTo(w io.Writer) (int64, error) {
+	select {
+	case <-r.ctx.Done():
+		return 0, r.ctx.Err()
+	default:
+	}
+
+	var (
+		nw  int64
+		err error
+	)
+
+	err = r.init()
+	if err != nil {
+		return 0, err
+	}
+
+	if !r.supportRange {
+		_, err = r.get(httpc.ToWriter(w, &nw))
+		return nw, err
+	}
+
+	return r.retryRemainWriteTo(w)
+}
+
+func (r *Reader) init() error {
+	var headErr error
+	r.headOnce.Do(func() {
+		headErr = r.retryHead()
+	})
+	return headErr
+}
+
+func (r *Reader) retryHead() error {
+	return retry.Do(func() error {
+		return r.head()
+	}, retry.Attempts(uint(r.opt.retry)), retry.LastErrorOnly(true), retry.Context(r.ctx))
+}
+
+func (r *Reader) head() error {
+	resp, err := httpc.DoWithClient(r.ctx, http.MethodHead, r.url, r.c, append(r.opt.httpOptions, httpc.CheckStatusCode(nil, nil, http.StatusOK))...)
+	if err != nil {
+		return errs.Wrap(err, "head failed")
+	}
+
+	if resp.Header.Get(httpu.HeaderAcceptRanges) == "bytes" && resp.ContentLength >= 0 {
+		if r.opt.limit <= 0 {
+			r.end = resp.ContentLength
+		}
+		r.supportRange = true
+	}
+
+	return nil
+}
+
+func (r *Reader) retryRemainWriteTo(w io.Writer) (int64, error) {
+	var nw int64
+	err := retry.Do(
+		func() error {
+			n, err := r.remainWriteTo(w)
+			nw += n
+			return err
+		},
+		retry.Attempts(uint(r.opt.retry)),
+		retry.Context(r.ctx),
+	)
+	return nw, err
+}
+
+func (r *Reader) remainWriteTo(w io.Writer) (n int64, err error) {
+	var respBody io.ReadCloser
+	respBody, err = r.getRemain()
+	if err != nil {
+		return 0, err
+	}
+	defer respBody.Close()
+
+	n, err = io.Copy(w, respBody)
+
+	return n, err
+}
+
+func (r *Reader) retryReadFromRemain(p []byte) (int, error) {
+	var nr int
+	err := retry.Do(
+		func() error {
+			n, err := r.readFromRemain(p)
+			p = p[n:]
+			nr += n
+			return err
+		},
+		retry.Attempts(uint(r.opt.retry)),
+		retry.RetryIf(func(err error) bool {
+			return err != nil && err != io.EOF
+		}),
+		retry.LastErrorOnly(true),
+		retry.Context(r.ctx),
+	)
+	return nr, err
+}
+
+func (r *Reader) readFromRemain(p []byte) (n int, err error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if r.respBody == nil {
+		r.respBody, err = r.getRemain()
+		if err != nil {
+			r.respBody = nil
+			return 0, err
+		}
+	}
+
+	n, err = iou.ReadFill(p, r.respBody)
+	if err != nil && err != io.EOF {
+		r.respBody.Close()
+		r.respBody = nil
+	}
+	return n, err
+}
+
+func (r *Reader) getRemain() (*respBodyReader, error) {
+	var respBody io.ReadCloser
+	n := r.Len()
+	if n <= 0 {
+		return nil, io.EOF
+	}
+	_, err := r.getPart(r.Offset(), n, httpc.RespOptionFunc(func(resp *http.Response) error {
+		respBody = resp.Body
+		resp.Body = io.NopCloser(resp.Body)
+		return nil
+	}))
+
+	if err != nil {
+		if respBody != nil {
+			respBody.Close()
+		}
+		return nil, err
+	}
+	return &respBodyReader{ReadCloser: respBody, r: r}, err
+}
+
+func (r *Reader) getPart(offset int64, n int64, opts ...httpc.Option) (*http.Response, error) {
+	end := min(offset+n-1, r.end-1)
+	ranges := fmt.Sprintf("bytes=%d-%d", offset, end)
+
+	allOpts := make([]httpc.Option, 0, len(r.opt.httpOptions)+len(opts)+2)
+	allOpts = append(allOpts, httpc.WithHeaders("Range", ranges), httpc.CheckStatusCode(nil, nil, http.StatusOK, http.StatusPartialContent))
+	allOpts = append(allOpts, opts...)
+	allOpts = append(allOpts, r.opt.httpOptions...)
+
+	return httpc.DoWithClient(r.ctx, http.MethodGet, r.url, r.c, allOpts...)
+}
+
+func (r *Reader) retryGetNoRange() (*respBodyReader, error) {
+	var respBody io.ReadCloser
+	_, err := retry.DoWithData(
+		func() (*http.Response, error) {
+			return r.get(httpc.RespOptionFunc(func(resp *http.Response) error {
+				respBody = resp.Body
+				resp.Body = io.NopCloser(resp.Body)
+				return nil
+			}))
+		},
+		retry.Attempts(uint(r.opt.retry)),
+		retry.Context(r.ctx),
+		retry.OnRetry(func(attempt uint, err error) {
+			if err != nil && respBody != nil {
+				respBody.Close()
+				respBody = nil
+			}
+		}),
+	)
+	if err != nil {
+		if respBody != nil {
+			respBody.Close()
+		}
+		return nil, err
+	}
+	return &respBodyReader{ReadCloser: respBody, r: r}, err
+}
+
+func (r *Reader) get(opts ...httpc.Option) (*http.Response, error) {
+	allOpts := make([]httpc.Option, 0, len(r.opt.httpOptions)+len(opts)+1)
+	allOpts = append(allOpts, httpc.CheckStatusCode(nil, nil, http.StatusOK))
+	allOpts = append(allOpts, opts...)
+	allOpts = append(allOpts, r.opt.httpOptions...)
+	return httpc.DoWithClient(r.ctx, http.MethodGet, r.url, r.c, allOpts...)
+}
+
+// Offset is current offset of read.
+func (r *Reader) Offset() int64 {
+	return atomic.LoadInt64(&r.offset)
+}
+
+// Len returns content length need read, -1 means unknown.
+func (r *Reader) Len() int64 {
+	if r.end <= 0 {
+		return -1
+	}
+	return r.end - r.Offset()
+}
+
+func (r *Reader) Size() int64 {
+	if r.end <= 0 {
+		return -1
+	}
+	return r.end - r.opt.offset
+}

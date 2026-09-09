@@ -1,9 +1,8 @@
 package dbp
 
 import (
+	"encoding/json/v2"
 	"time"
-
-	"github.com/donkeywon/golib/util/jsons"
 )
 
 const (
@@ -23,20 +22,24 @@ type PoolCfg struct {
 }
 
 func (pc *PoolCfg) UnmarshalFlag(value string) error {
-	return jsons.UnmarshalString(value, pc)
+	return json.Unmarshal([]byte(value), pc)
 }
 
-func (pc PoolCfg) MarshalFlag() (string, error) {
-	return jsons.MarshalString(pc)
+func (pc *PoolCfg) MarshalFlag() (string, error) {
+	bs, err := json.Marshal(pc)
+	if err != nil {
+		return "", err
+	}
+	return string(bs), nil
 }
 
 type Cfg struct {
-	Pools               []*PoolCfg `env:"POOLS" env-delim:";"   yaml:"pools"               long:"pools"                 description:"database connection pools"                                 validate:"required"`
-	EnableExportMetrics bool       `env:"ENABLE_EXPORT_METRICS" yaml:"enableExportMetrics" long:"enable-export-metrics" description:"export database conn pool metrics with prometheus protocol"`
+	Pools               []PoolCfg `env:"POOLS" env-delim:";"   yaml:"pools"               long:"pools"                 description:"database connection pools"                                 validate:"required"`
+	EnableExportMetrics bool      `env:"ENABLE_EXPORT_METRICS" yaml:"enableExportMetrics" long:"enable-export-metrics" description:"export database conn pool metrics with prometheus protocol"`
 }
 
-func NewCfg() *Cfg {
-	return &Cfg{
+func NewCfg() Cfg {
+	return Cfg{
 		EnableExportMetrics: DefaultEnableExportMetrics,
 	}
 }

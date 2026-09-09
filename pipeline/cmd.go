@@ -1,92 +1,81 @@
 package pipeline
 
 import (
+	"context"
+	"errors"
 	"os/exec"
 
-	"github.com/donkeywon/golib/consts"
 	"github.com/donkeywon/golib/errs"
-	"github.com/donkeywon/golib/plugin"
-	"github.com/donkeywon/golib/util/cmd"
+	"github.com/donkeywon/golib/util/cmds"
+	"github.com/rs/zerolog"
 )
 
-func init() {
-	plugin.Reg(WorkerCmd, func() Worker { return NewCmd() }, func() any { return cmd.NewCfg() })
+type cmdWorker struct {
+	BaseWorker
+
+	name string
+	args []string
+
+	opts []cmds.Option
 }
 
-const WorkerCmd Type = "cmd"
-
-type Cmd struct {
-	Worker
-	*cmd.Cfg
-}
-
-func NewCmd() *Cmd {
-	return &Cmd{
-		Worker: CreateWorker(string(WorkerCmd)),
-		Cfg:    &cmd.Cfg{},
+func NewCmdWorker(name string, args ...string) Worker {
+	return &cmdWorker{
+		name: name,
+		args: args,
 	}
 }
 
-func (c *Cmd) Start() error {
-	defer c.Close()
+func (c *cmdWorker) WithOptions(opts ...cmds.Option) {
+	c.opts = append(c.opts, opts...)
+}
 
-	c.Cfg.SetPgid = true
+func (c *cmdWorker) Run(ctx context.Context) (err error) {
+	l := zerolog.Ctx(ctx).With().Str("cmd", c.name).Logger()
 
-	c.WithLoggerFields("cmd", c.Cfg.Command[0])
-
-	c.Debug("starting pipeline cmd", "commands", c.Cfg.Command)
-
-	result := cmd.Run(c.Ctx(), c.Cfg, func(cmd *exec.Cmd) {
-		if c.Writer() != nil {
-			switch w := c.Writer().(type) {
-			case Writer:
-				cmd.Stdout = w.DirectWriter()
-			default:
-				cmd.Stdout = c.Writer()
-			}
+	defer func() {
+		closeErr := c.Close(false)
+		if closeErr != nil {
+			err = errors.Join(err, errs.Wrap(closeErr, "close failed"))
 		}
+	}()
 
+	cmd := exec.CommandContext(ctx, c.name, c.args...)
+	cmds.WithOptions(cmd, c.opts...)
+	cmds.WithOptions(cmd, func(cmd *exec.Cmd) {
 		if c.Reader() != nil {
-			switch r := c.Reader().(type) {
-			case Reader:
-				cmd.Stdin = r.DirectReader()
-			default:
-				cmd.Stdin = c.Reader()
-			}
+			cmd.Stdin = c.Reader()
+		}
+		if c.Writer() != nil {
+			cmd.Stdout = c.Writer()
 		}
 	})
+	err = cmd.Run()
+	if err == nil {
+		l.Info().Msg("cmd done")
+	} else {
+		isSignaled, isCoreDump, sig := cmds.IsSignaled(err)
+		exitCode := cmd.ProcessState.ExitCode()
+		if errors.Is(err, context.Canceled) {
+			l.Info().Int("exit_code", exitCode).Bool("is_signaled", isSignaled).Bool("is_coredump", isCoreDump).Str("signal", sig.String()).Msg("cmd canceled")
+		} else if isSignaled {
+			l.Warn().Int("exit_code", exitCode).Bool("is_signaled", isSignaled).Bool("is_coredump", isCoreDump).Str("signal", sig.String()).Msg("cmd signaled")
+		} else {
+			l.Error().Int("exit_code", exitCode).Bool("is_signaled", isSignaled).Bool("is_coredump", isCoreDump).Str("signal", sig.String()).Msg("cmd failed")
+		}
 
-	c.Info("cmd exit", "result", result)
-	if result != nil {
-		c.Store(consts.FieldCmdStderr, result.Stderr)
-		c.Store(consts.FieldCmdStdout, result.Stdout)
-		c.Store(consts.FieldCmdExitCode, result.ExitCode)
-		c.Store(consts.FieldStartTimeNano, result.StartTimeNano)
-		c.Store(consts.FieldStopTimeNano, result.StopTimeNano)
-		c.Store(consts.FieldCmdSignaled, result.Signaled)
-	}
-
-	if result != nil && result.Signaled {
-		select {
-		case <-c.Stopping():
-			c.Info("exit signaled", "err", result.Err())
-			return nil
-		default:
+		closeErr := c.Close(true)
+		if closeErr != nil {
+			err = errors.Join(err, errs.Wrap(closeErr, "close failed"))
 		}
 	}
-
-	if result.Err() != nil {
-		return errs.Wrap(result.Err(), "pipeline cmd failed")
+	if err != nil {
+		return errs.Wrap(err, "exec cmd failed")
 	}
 
 	return nil
 }
 
-func (c *Cmd) Stop() error {
-	c.Cancel()
-	return nil
-}
-
-func (c *Cmd) SetCfg(cfg any) {
-	c.Cfg = cfg.(*cmd.Cfg)
+func (c *cmdWorker) SupportZeroCopy() bool {
+	return true
 }

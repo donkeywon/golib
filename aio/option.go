@@ -4,10 +4,6 @@ import "time"
 
 type Option func(*option)
 
-func (o Option) apply(r *option) {
-	o(r)
-}
-
 type option struct {
 	bufSize              int
 	queueSize            int
@@ -15,9 +11,9 @@ type option struct {
 	deadlineFlushMinSize int
 }
 
-func newOption() *option {
-	return &option{
-		bufSize: 1024 * 1024,
+func newOption() option {
+	return option{
+		bufSize: 32 * 1024,
 	}
 }
 

@@ -1,9 +1,8 @@
 package httpu
 
 import (
-	"bytes"
+	"encoding/json/v2"
 	"encoding/xml"
-	"errors"
 	"io"
 	"net"
 	"net/http"
@@ -11,10 +10,7 @@ import (
 
 	"github.com/donkeywon/golib/errs"
 	"github.com/donkeywon/golib/util/conv"
-	"github.com/donkeywon/golib/util/jsons"
-	"github.com/donkeywon/golib/util/yamls"
-	"github.com/pelletier/go-toml/v2"
-	"google.golang.org/protobuf/proto"
+	"github.com/goccy/go-yaml"
 )
 
 const (
@@ -35,6 +31,8 @@ const (
 	HeaderServer            = "Server"
 	HeaderUserAgent         = "User-Agent"
 	HeaderAccept            = "Accept"
+	HeaderXForwardedFor     = "X-Forwarded-For"
+	HeaderXRealIP           = "X-Real-Ip"
 
 	MIMEHTML              = "text/html"
 	MIMEHTMLUTF8          = "text/html; charset=utf-8"
@@ -54,41 +52,12 @@ const (
 	MIMETOML              = "application/toml"
 )
 
-type Encoder interface {
-	Encode(v any) error
-}
-
-type NewEncoder func(w io.Writer) Encoder
-
-type Decoder interface {
-	Decode(v any) error
-}
-
-type NewDecoder func(r io.Reader) Decoder
-
-func RespAny(w http.ResponseWriter, statusCode int, a any, headersKV ...string) {
-	if a == nil {
-		RespBytes(w, statusCode, nil, headersKV...)
-		return
-	}
-	s, err := conv.ToString(a)
-	if err != nil {
-		var buf bytes.Buffer
-		buf.Grow(128)
-		buf.WriteString("convert response data to string failed: ")
-		buf.WriteString(err.Error())
-		RespBytes(w, http.StatusInternalServerError, buf.Bytes(), headersKV...)
-		return
-	}
-	RespBytes(w, statusCode, conv.String2Bytes(s), headersKV...)
-}
-
 func RespBytes(w http.ResponseWriter, statusCode int, bs []byte, headersKV ...string) {
 	setHeaders(w, headersKV...)
 	w.WriteHeader(statusCode)
 	_, err := w.Write(bs)
 	if err != nil {
-		panic(errs.Wrap(err, "http write data to response failed"))
+		panic(errs.Wrap(err, "write data to http response failed"))
 	}
 }
 
@@ -101,19 +70,19 @@ func RespReader(w http.ResponseWriter, statusCode int, r io.Reader, headersKV ..
 	w.WriteHeader(statusCode)
 	_, err := io.Copy(w, r)
 	if err != nil {
-		panic(err)
+		panic(errs.Wrap(err, "copy reader to http response body failed"))
 	}
 }
 
 func RespJSON(w http.ResponseWriter, statusCode int, data any, headersKV ...string) {
-	RespEncoder(w, statusCode, data, MIMEJSON, func(w io.Writer) Encoder { return jsons.NewEncoder(w) }, headersKV...)
+	RespEncoder(w, statusCode, data, MIMEJSON, func(w io.Writer, a any) error { return json.MarshalWrite(w, a) }, headersKV...)
 }
 
 func RespYAML(w http.ResponseWriter, statusCode int, data any, headersKV ...string) {
-	RespEncoder(w, statusCode, data, MIMEYAML, func(w io.Writer) Encoder { return yamls.NewEncoder(w) }, headersKV...)
+	RespEncoder(w, statusCode, data, MIMEYAML, func(w io.Writer, a any) error { return yaml.NewEncoder(w).Encode(data) }, headersKV...)
 }
 
-func RespEncoder(w http.ResponseWriter, statusCode int, data any, mime string, newEncoder NewEncoder, headersKV ...string) {
+func RespEncoder(w http.ResponseWriter, statusCode int, data any, mime string, encode func(io.Writer, any) error, headersKV ...string) {
 	setContentTypeHeader(w, mime)
 	if data == nil {
 		RespBytes(w, statusCode, nil, headersKV...)
@@ -122,8 +91,7 @@ func RespEncoder(w http.ResponseWriter, statusCode int, data any, mime string, n
 
 	setHeaders(w, headersKV...)
 	w.WriteHeader(statusCode)
-	enc := newEncoder(w)
-	err := enc.Encode(data)
+	err := encode(w, data)
 	if err != nil {
 		panic(errs.Wrap(err, "encode http response data failed"))
 	}
@@ -143,78 +111,50 @@ func setContentTypeHeader(w http.ResponseWriter, t string) {
 }
 
 func ReqToJSON(r *http.Request, obj any) error {
-	return jsons.NewDecoder(r.Body).Decode(obj)
+	err := json.UnmarshalRead(r.Body, obj)
+	if err == io.EOF {
+		return nil
+	}
+	return err
 }
 
 func ReqToXML(r *http.Request, obj any) error {
-	return xml.NewDecoder(r.Body).Decode(obj)
+	err := xml.NewDecoder(r.Body).Decode(obj)
+	if err == io.EOF {
+		return nil
+	}
+	return err
 }
 
 func ReqToYAML(r *http.Request, obj any) error {
-	return yamls.NewDecoder(r.Body).Decode(obj)
-}
-
-func ReqToTOML(r *http.Request, obj any) error {
-	return toml.NewDecoder(r.Body).Decode(obj)
-}
-
-func ReqToPB(r *http.Request, obj any) error {
-	msg, ok := obj.(proto.Message)
-	if !ok {
-		return errors.New("obj is not proto.Message")
-	}
-
-	buf, err := io.ReadAll(r.Body)
-	if err != nil {
-		return err
-	}
-
-	return proto.Unmarshal(buf, msg)
-}
-
-func ReqTo(r *http.Request, obj any) error {
-	var err error
-	contentType := r.Header.Get(HeaderContentType)
-	switch contentType {
-	case MIMEJSON, MIMEJSONUTF8:
-		err = ReqToJSON(r, obj)
-	case MIMEXML, MIMEXML2:
-		err = ReqToXML(r, obj)
-	case MIMEYAML, MIMEYAML2:
-		err = ReqToYAML(r, obj)
-	case MIMETOML:
-		err = ReqToTOML(r, obj)
-	case MIMEPROTOBUF:
-		err = ReqToPB(r, obj)
-	default:
-		err = ReqToJSON(r, obj)
-	}
-	if errors.Is(err, io.EOF) {
+	err := yaml.NewDecoder(r.Body).Decode(obj)
+	if err == io.EOF {
 		return nil
 	}
 	return err
 }
 
 func GetRealRemoteIP(r *http.Request) string {
-	remoteIP := ""
-	// the default is the originating ip. but we try to find better options because this is almost
-	// never the right IP
-	if parts := strings.Split(r.RemoteAddr, ":"); len(parts) == 2 {
-		remoteIP = parts[0]
-	}
-	// If we have a forwarded-for header, take the address from there
-	if xff := strings.Trim(r.Header.Get("X-Forwarded-For"), ","); len(xff) > 0 {
-		addrs := strings.Split(xff, ",")
-		lastFwd := addrs[len(addrs)-1]
-		if ip := net.ParseIP(lastFwd); ip != nil {
-			remoteIP = ip.String()
-		}
-		// parse X-Real-Ip header
-	} else if xri := r.Header.Get("X-Real-Ip"); len(xri) > 0 {
-		if ip := net.ParseIP(xri); ip != nil {
-			remoteIP = ip.String()
+	if xff := r.Header.Get(HeaderXForwardedFor); xff != "" {
+		for part := range strings.SplitSeq(xff, ",") {
+			part = strings.TrimSpace(part)
+			if part == "" {
+				continue
+			}
+			if ip := net.ParseIP(part); ip != nil {
+				return ip.String()
+			}
 		}
 	}
 
-	return remoteIP
+	if xri := strings.TrimSpace(r.Header.Get(HeaderXRealIP)); xri != "" {
+		if ip := net.ParseIP(xri); ip != nil {
+			return ip.String()
+		}
+	}
+
+	if host, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
+		return host
+	}
+	return r.RemoteAddr
 }

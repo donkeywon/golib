@@ -1,11 +1,12 @@
 package httpd
 
 import (
+	"context"
 	"errors"
 	"net/http"
 
 	"github.com/donkeywon/golib/boot"
-	"github.com/donkeywon/golib/runner"
+	"github.com/rs/zerolog"
 )
 
 const DaemonTypeHTTPd boot.DaemonType = "httpd"
@@ -19,6 +20,7 @@ type HTTPd interface {
 	Use(...func(http.Handler) http.Handler)
 	Handle(string, http.Handler)
 	HandleFunc(string, func(http.ResponseWriter, *http.Request))
+	Logger() *zerolog.Logger
 }
 
 type Router interface {
@@ -28,11 +30,10 @@ type Router interface {
 }
 
 type httpd struct {
-	runner.Runner
-
-	cfg *Cfg
+	cfg Cfg
 	s   *http.Server
 
+	l           *zerolog.Logger
 	r           Router
 	patterns    []string
 	handlers    []http.Handler
@@ -40,12 +41,11 @@ type httpd struct {
 }
 
 func New() boot.Daemon {
-	return &httpd{
-		Runner: runner.Create(string(DaemonTypeHTTPd)),
-	}
+	return &httpd{}
 }
 
-func (h *httpd) Init() error {
+func (h *httpd) Init(ctx context.Context) error {
+	h.l = zerolog.Ctx(ctx)
 	if h.r == nil {
 		h.r = http.NewServeMux()
 	}
@@ -55,22 +55,30 @@ func (h *httpd) Init() error {
 	}
 
 	h.s.Handler = h.r
-	return h.Runner.Init()
+	return nil
 }
 
-func (h *httpd) Start() error {
-	return h.s.ListenAndServe()
-}
+func (h *httpd) Run(ctx context.Context) error {
+	errCh := make(chan error, 1)
 
-func (h *httpd) Stop() error {
-	return h.s.Close()
-}
-
-func (h *httpd) AppendError(err ...error) {
-	for _, e := range err {
-		if !errors.Is(e, http.ErrServerClosed) {
-			h.Runner.AppendError(e)
+	go func() {
+		err := h.s.ListenAndServe()
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
+			errCh <- err
 		}
+		close(errCh)
+	}()
+
+	select {
+	case err, ok := <-errCh:
+		if !ok {
+			return nil
+		}
+		return err
+	case <-ctx.Done():
+		shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), h.cfg.ShutdownTimeout)
+		defer cancel()
+		return errors.Join(ctx.Err(), h.s.Shutdown(shutdownCtx))
 	}
 }
 
@@ -88,8 +96,8 @@ func (h *httpd) HandleFunc(pattern string, handler func(http.ResponseWriter, *ht
 	h.handlers = append(h.handlers, http.HandlerFunc(handler))
 }
 
-func (h *httpd) SetCfg(cfg any) {
-	h.cfg = cfg.(*Cfg)
+func (h *httpd) SetCfg(cfg Cfg) {
+	h.cfg = cfg
 	h.s = h.cfg.buildHTTPServer()
 }
 
@@ -99,6 +107,10 @@ func (h *httpd) SetRouter(r Router) {
 
 func (h *httpd) Server() *http.Server {
 	return h.s
+}
+
+func (h *httpd) Logger() *zerolog.Logger {
+	return h.l
 }
 
 func (h *httpd) buildHandlerChain(next http.Handler) http.Handler {

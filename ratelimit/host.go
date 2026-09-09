@@ -3,39 +3,39 @@ package ratelimit
 import (
 	"context"
 	"fmt"
+	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/donkeywon/golib/errs"
 	"github.com/donkeywon/golib/plugin"
-	"github.com/donkeywon/golib/runner"
-	"github.com/donkeywon/golib/util/cloud"
 	"github.com/donkeywon/golib/util/eth"
 	"github.com/donkeywon/golib/util/v"
+	"github.com/rs/zerolog"
+	"github.com/shirou/gopsutil/v4/net"
 	"golang.org/x/time/rate"
 )
 
 func init() {
-	plugin.Reg(TypeHost, func() RxTxRateLimiter { return NewHostRateLimiter() }, func() any { return NewHostRateLimiterCfg() })
+	plugin.Reg(TypeHost, func() RxTxRateLimiter { return NewHost() }, NewHostCfg)
 }
 
 const TypeHost Type = "host"
 
-type HostRateLimiterCfg struct {
-	Nic             string `json:"nic"              yaml:"nic"               validate:"required"`
-	MonitorInterval int    `json:"monitorInterval"  yaml:"monitorInterval"   validate:"required"`
-	MaxPercent      int    `json:"maxPercent"       yaml:"maxPercent"        validate:"gte=0,lte=100"`
-	MaxMBps         int    `json:"maxMBps"          yaml:"maxMBps"`
-	MinMBps         int    `json:"minMBps"          yaml:"minMBps"           validate:"gte=0"`
+type HostCfg struct {
+	Nic             string `json:"nic"              yaml:"nic"             validate:"required"`
+	MonitorInterval int    `json:"monitor_interval" yaml:"monitorInterval" validate:"required"`
+	MaxPercent      int    `json:"max_percent"      yaml:"maxPercent"      validate:"gte=0,lte=100"`
+	MaxMBps         int    `json:"max_mbps"         yaml:"maxMBps"         validate:"gte=0"`
+	MinMBps         int    `json:"min_mbps"         yaml:"minMBps"         validate:"gte=0"`
 }
 
-func NewHostRateLimiterCfg() *HostRateLimiterCfg {
-	return &HostRateLimiterCfg{}
+func NewHostCfg() *HostCfg {
+	return &HostCfg{}
 }
 
-type HostRateLimiter struct {
-	runner.Runner
-	*HostRateLimiterCfg
+type Host struct {
+	cfg *HostCfg
 
 	nicSpeedMBps int
 	maxMBps      int
@@ -43,8 +43,8 @@ type HostRateLimiter struct {
 	rxRL *rate.Limiter
 	txRL *rate.Limiter
 
-	selfRxPass      uint64
-	selfTxPass      uint64
+	selfRxPass      atomic.Uint64
+	selfTxPass      atomic.Uint64
 	selfLastRxPass  uint64
 	selfLastTxPass  uint64
 	selfRxSpeedMBps float64
@@ -52,37 +52,34 @@ type HostRateLimiter struct {
 
 	lastNicRxBytes uint64
 	lastNicTxBytes uint64
+
+	l         *zerolog.Logger
+	closed    chan struct{}
+	closeOnce sync.Once
 }
 
-func NewHostRateLimiter() *HostRateLimiter {
-	return &HostRateLimiter{
-		Runner:             runner.Create("hostRateLimiter"),
-		HostRateLimiterCfg: NewHostRateLimiterCfg(),
+func NewHost() *Host {
+	return &Host{
+		closed: make(chan struct{}),
 	}
 }
 
-func (h *HostRateLimiter) Init() error {
-	err := v.Struct(h.HostRateLimiterCfg)
+func (h *Host) SetCfg(cfg any) {
+	h.cfg = cfg.(*HostCfg)
+}
+
+func (h *Host) Init(ctx context.Context) error {
+	err := v.Struct(h.cfg)
 	if err != nil {
 		return err
 	}
 
-	h.Info("use nic", "nic", h.Nic)
-	nicSpeedMbps, err := eth.GetNicSpeed(h.Nic)
+	h.l = zerolog.Ctx(ctx)
+
+	h.l.Info().Str("nic", h.cfg.Nic).Msg("use nic")
+	nicSpeedMbps, err := eth.GetNicSpeed(ctx, h.cfg.Nic)
 	if err != nil {
-		h.Error("get nic speed failed", err)
-		h.Info("try get nic speed on cloud")
-
-		cloudType := cloud.Which()
-		if cloudType == cloud.TypeUnknown {
-			return errs.Errorf("unknown cloud type")
-		}
-
-		h.Info("host on cloud", "type", cloudType)
-		nicSpeedMbps, err = cloud.GetNicSpeed()
-		if err != nil {
-			return errs.Wrapf(err, "get cloud(%s) network nic speed failed", cloudType)
-		}
+		return errs.Wrapf(err, "get nic speed failed: %s", h.cfg.Nic)
 	}
 
 	if nicSpeedMbps <= 0 {
@@ -90,113 +87,116 @@ func (h *HostRateLimiter) Init() error {
 	}
 
 	h.nicSpeedMBps = nicSpeedMbps / 8
-	h.maxMBps = h.nicSpeedMBps * h.MaxPercent / 100
-	if h.MaxMBps < h.maxMBps {
-		h.maxMBps = h.MaxMBps
-	}
+	h.maxMBps = min(h.nicSpeedMBps*h.cfg.MaxPercent/100, h.cfg.MaxMBps)
 
 	h.rxRL = rate.NewLimiter(rate.Limit(h.maxMBps*1048576), h.maxMBps*1048576)
 	h.txRL = rate.NewLimiter(rate.Limit(h.maxMBps*1048576), h.maxMBps*1048576)
 
-	h.Info("nic rate limit info",
-		"nic_speed", i2MBps(h.nicSpeedMBps),
-		"max", i2MBps(h.maxMBps),
-		"min", i2MBps(h.MinMBps),
-	)
+	h.l.Info().Str("nic_speed", i2MBps(h.nicSpeedMBps)).Str("max", i2MBps(h.maxMBps)).Str("min", i2MBps(h.cfg.MinMBps)).Msg("nic rate limit info")
 
 	go h.monitor()
 
-	return h.Runner.Init()
+	return nil
 }
 
-func (h *HostRateLimiter) NicSpeedMBps() int {
+func (h *Host) Close() error {
+	h.closeOnce.Do(func() { close(h.closed) })
+	return nil
+}
+
+func (h *Host) NicSpeedMBps() int {
 	return h.nicSpeedMBps
 }
 
-func (h *HostRateLimiter) RxWaitN(ctx context.Context, n int, timeout time.Duration) error {
+func (h *Host) RxWaitN(ctx context.Context, n int, timeout time.Duration) error {
 	if ctx == nil {
 		panic("nil context")
 	}
 	if timeout > 0 {
 		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(h.Ctx(), timeout)
+		ctx, cancel = context.WithTimeout(ctx, timeout)
 		defer cancel()
 	}
 	err := h.rxRL.WaitN(ctx, n)
 	if err == nil {
-		atomic.AddUint64(&h.selfRxPass, uint64(n))
+		h.selfRxPass.Add(uint64(n))
 	}
 	return err
 }
 
-func (h *HostRateLimiter) TxWaitN(ctx context.Context, n int, timeout time.Duration) error {
+func (h *Host) TxWaitN(ctx context.Context, n int, timeout time.Duration) error {
 	if ctx == nil {
 		panic("nil context")
 	}
 	if timeout > 0 {
 		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(h.Ctx(), timeout)
+		ctx, cancel = context.WithTimeout(ctx, timeout)
 		defer cancel()
 	}
 	err := h.txRL.WaitN(ctx, n)
 	if err == nil {
-		atomic.AddUint64(&h.selfTxPass, uint64(n))
+		h.selfTxPass.Add(uint64(n))
 	}
 	return err
 }
 
-func (h *HostRateLimiter) monitor() {
-	interval := time.Duration(h.MonitorInterval) * time.Second
+func (h *Host) monitor() {
+	interval := time.Duration(h.cfg.MonitorInterval) * time.Second
 	t := time.NewTicker(interval)
 	defer t.Stop()
-	nic := h.Nic
+	nic := h.cfg.Nic
 	for {
 		select {
-		case <-h.Stopping():
+		case <-h.closed:
 			return
 		case <-t.C:
 			h.monitorSelfSpeed()
 
-			stats, err := eth.GetNetDevStats()
+			stats, err := net.IOCounters(true)
 			if err != nil {
-				h.setRxTxLimit(float64(h.MinMBps), float64(h.MinMBps))
-				h.Error("get net dev stats fail, use min limit", err, "min_limit", i2MBps(h.MinMBps))
+				h.setRxTxLimit(float64(h.cfg.MinMBps), float64(h.cfg.MinMBps))
+				h.l.Error().Err(err).Str("min_limit", i2MBps(h.cfg.MinMBps)).Msg("get nic stats fail, use min limit")
 				continue
 			}
 
-			if _, exists := stats[nic]; !exists {
-				h.setRxTxLimit(float64(h.MinMBps), float64(h.MinMBps))
-				h.Error("nic stats is empty, use min limit", nil, "min_limit", i2MBps(h.MinMBps), "stats", stats)
+			var i int
+			for i = range stats {
+				if stats[i].Name == nic {
+					break
+				}
+			}
+			if i == len(stats) {
+				h.setRxTxLimit(float64(h.cfg.MinMBps), float64(h.cfg.MinMBps))
+				h.l.Error().Str("nic", nic).Str("min_limit", i2MBps(h.cfg.MinMBps)).Any("stats", stats).Msg("nic stats not found, use min limit")
 				continue
 			}
 
-			h.handleNetDevStats(stats[nic])
+			h.handleNetDevStats(&stats[i])
 		}
 	}
 }
 
-func (h *HostRateLimiter) monitorSelfSpeed() {
-	rxPass := atomic.LoadUint64(&h.selfRxPass)
-	txPass := atomic.LoadUint64(&h.selfTxPass)
-	h.selfRxSpeedMBps = float64(rxPass-h.selfLastRxPass) / 1048576 / float64(h.MonitorInterval)
-	h.selfTxSpeedMBps = float64(txPass-h.selfLastTxPass) / 1048576 / float64(h.MonitorInterval)
+func (h *Host) monitorSelfSpeed() {
+	rxPass := h.selfRxPass.Load()
+	txPass := h.selfTxPass.Load()
+	h.selfRxSpeedMBps = float64(rxPass-h.selfLastRxPass) / 1048576 / float64(h.cfg.MonitorInterval)
+	h.selfTxSpeedMBps = float64(txPass-h.selfLastTxPass) / 1048576 / float64(h.cfg.MonitorInterval)
 	h.selfLastRxPass = rxPass
 	h.selfLastTxPass = txPass
 }
 
-func (h *HostRateLimiter) setRxTxLimit(rxL float64, txL float64) {
+func (h *Host) setRxTxLimit(rxL float64, txL float64) {
 	h.rxRL.SetLimit(rate.Limit(rxL * 1048576))
 	h.txRL.SetLimit(rate.Limit(txL * 1048576))
 }
 
-func (h *HostRateLimiter) handleNetDevStats(stat *eth.NetDevStats) {
-	curNicRxBytes := stat.RxBytes
-	curNicTxBytes := stat.TxBytes
+func (h *Host) handleNetDevStats(stat *net.IOCountersStat) {
+	curNicRxBytes := stat.BytesRecv
+	curNicTxBytes := stat.BytesSent
 
 	if h.lastNicRxBytes == 0 || h.lastNicTxBytes == 0 {
-		h.setRxTxLimit(float64(h.MinMBps), float64(h.MinMBps))
-		h.Debug("last rx or tx is 0, use min limit",
-			"last_nic_rx_bytes", h.lastNicRxBytes, "last_nic_tx_bytes", h.lastNicTxBytes, "min", i2MBps(h.MinMBps))
+		h.setRxTxLimit(float64(h.cfg.MinMBps), float64(h.cfg.MinMBps))
+		h.l.Debug().Uint64("last_nic_rx_bytes", h.lastNicRxBytes).Uint64("last_nic_tx_bytes", h.lastNicTxBytes).Str("min", i2MBps(h.cfg.MinMBps)).Msg("last rx or tx is 0, use min limit")
 		h.lastNicRxBytes = curNicRxBytes
 		h.lastNicTxBytes = curNicTxBytes
 		return
@@ -207,28 +207,31 @@ func (h *HostRateLimiter) handleNetDevStats(stat *eth.NetDevStats) {
 		txSub uint64
 	)
 	if curNicRxBytes < h.lastNicRxBytes {
-		h.Warn("cur rx bytes is small than last rx bytes",
-			"last_nic_rx_bytes", h.lastNicRxBytes, "cur_nic_rx_bytes", curNicRxBytes)
+		h.l.Warn().Uint64("last_nic_rx_bytes", h.lastNicRxBytes).Uint64("cur_nic_rx_bytes", curNicRxBytes).Msg("cur rx bytes is small than last rx bytes")
 	} else {
 		rxSub = curNicRxBytes - h.lastNicRxBytes
 	}
 	if curNicTxBytes < h.lastNicTxBytes {
-		h.Warn("cur tx bytes is small than last tx bytes",
-			"last_nic_rx_bytes", h.lastNicTxBytes, "cur_nic_rx_bytes", curNicTxBytes)
+		h.l.Warn().Uint64("last_nic_tx_bytes", h.lastNicTxBytes).Uint64("cur_nic_tx_bytes", curNicTxBytes).Msg("cur tx bytes is small than last tx bytes")
 	} else {
 		txSub = curNicTxBytes - h.lastNicTxBytes
 	}
 
-	rxMBps := float64(rxSub) / float64(1048576) / float64(h.MonitorInterval)
-	txMBps := float64(txSub) / float64(1048576) / float64(h.MonitorInterval)
-	rxLimit := calcLimit(rxMBps, float64(h.maxMBps), float64(h.MinMBps), float64(h.nicSpeedMBps), h.selfRxSpeedMBps)
-	txLimit := calcLimit(txMBps, float64(h.maxMBps), float64(h.MinMBps), float64(h.nicSpeedMBps), h.selfTxSpeedMBps)
-	h.Info("nic limit",
-		"nic_speed", i2MBps(h.nicSpeedMBps), "rx_speed", f2MBps(rxMBps), "tx_speed", f2MBps(txMBps),
-		"rx_limit", f2MBps(rxLimit), "tx_limit", f2MBps(txLimit),
-		"max", i2MBps(h.maxMBps), "min", i2MBps(h.MinMBps),
-		"nic_rx_bytes", curNicRxBytes, "nic_tx_bytes", curNicTxBytes,
-	)
+	rxMBps := float64(rxSub) / float64(1048576) / float64(h.cfg.MonitorInterval)
+	txMBps := float64(txSub) / float64(1048576) / float64(h.cfg.MonitorInterval)
+	rxLimit := calcLimit(rxMBps, float64(h.maxMBps), float64(h.cfg.MinMBps), float64(h.nicSpeedMBps), h.selfRxSpeedMBps)
+	txLimit := calcLimit(txMBps, float64(h.maxMBps), float64(h.cfg.MinMBps), float64(h.nicSpeedMBps), h.selfTxSpeedMBps)
+	h.l.Info().
+		Str("nic_speed", i2MBps(h.nicSpeedMBps)).
+		Str("rx_speed", f2MBps(rxMBps)).
+		Str("tx_speed", f2MBps(txMBps)).
+		Str("rx_limit", f2MBps(rxLimit)).
+		Str("tx_limit", f2MBps(txLimit)).
+		Str("max", i2MBps(h.maxMBps)).
+		Str("min", i2MBps(h.cfg.MinMBps)).
+		Uint64("nic_rx_bytes", curNicRxBytes).
+		Uint64("nic_tx_bytes", curNicTxBytes).
+		Msg("nic limit")
 	h.setRxTxLimit(rxLimit, txLimit)
 
 	h.lastNicRxBytes = curNicRxBytes

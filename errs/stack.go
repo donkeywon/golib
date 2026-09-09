@@ -29,7 +29,6 @@ package errs
 import (
 	"fmt"
 	"io"
-	"path"
 	"path/filepath"
 	"runtime"
 	"strconv"
@@ -97,7 +96,7 @@ func (f Frame) Format(s fmt.State, verb rune) {
 			io.WriteString(s, "\n\t")
 			io.WriteString(s, f.file())
 		default:
-			io.WriteString(s, path.Base(f.file()))
+			io.WriteString(s, filepath.Base(f.file()))
 		}
 	case 'd':
 		io.WriteString(s, strconv.Itoa(f.line()))

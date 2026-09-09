@@ -1,25 +1,37 @@
 package eth
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"fmt"
+	"os/exec"
 	"strconv"
 	"strings"
 
 	"github.com/donkeywon/golib/errs"
-	"github.com/donkeywon/golib/util/cmd"
-	"github.com/shirou/gopsutil/v4/net"
 )
 
 // GetNicSpeed
 // get nic speed in Mbps.
-func GetNicSpeed(nic string) (int, error) {
-	result := cmd.Exec(context.Background(), "powershell", "-Command", fmt.Sprintf(`[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; Get-NetAdapter | Where-Object { $_.Name -eq "%s" } | ForEach-Object { "$($_.Name)|$($_.LinkSpeed)" }`, nic))
-	if result.Err() != nil {
-		return 0, errs.Wrap(result.Err(), "exec Get-NetAdapter failed")
+func GetNicSpeed(ctx context.Context, nic string) (int, error) {
+	c := exec.CommandContext(ctx, "powershell", "-Command", fmt.Sprintf(`[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; Get-NetAdapter | Where-Object { $_.Name -eq "%s" } | ForEach-Object { "$($_.Name)|$($_.LinkSpeed)" }`, nic))
+
+	stdoutBuf := bytes.NewBuffer(nil)
+	c.Stdout = stdoutBuf
+
+	err := c.Run()
+	if err != nil {
+		return 0, errs.Wrap(err, "exec Get-NetAdapter failed")
 	}
-	for _, line := range result.Stdout {
-		if !strings.HasPrefix(line, nic) {
+
+	stdout := stdoutBuf.String()
+
+	scanner := bufio.NewScanner(strings.NewReader(stdout))
+	nicPrefix := nic + "|"
+	for scanner.Scan() {
+		line := scanner.Text()
+		if !strings.HasPrefix(line, nicPrefix) {
 			continue
 		}
 		if !strings.HasSuffix(line, "bps") {
@@ -52,33 +64,9 @@ func GetNicSpeed(nic string) (int, error) {
 		}
 	}
 
-	return 0, errs.Errorf("nic speed not found in Get-NetAdapter output: %s", result.String())
-}
-
-// GetNetDevStats
-// get statistics about nic.
-func GetNetDevStats() (map[string]*NetDevStats, error) {
-	counters, err := net.IOCounters(true)
-	if err != nil {
-		return nil, errs.Wrap(err, "get nic counters failed")
+	if scanner.Err() != nil {
+		return 0, errs.Wrap(scanner.Err(), "scan Get-NetAdapter stdout failed")
 	}
 
-	stats := make(map[string]*NetDevStats, len(counters))
-	for _, c := range counters {
-		stats[c.Name] = &NetDevStats{
-			Name:      c.Name,
-			RxBytes:   c.BytesRecv,
-			RxPackets: c.PacketsRecv,
-			RxErrors:  c.Errin,
-			RxDropped: c.Dropin,
-			RxFIFO:    c.Fifoin,
-			TxBytes:   c.BytesSent,
-			TxPackets: c.PacketsSent,
-			TxErrors:  c.Errout,
-			TxDropped: c.Dropin,
-			TxFIFO:    c.Fifoin,
-		}
-	}
-
-	return stats, nil
+	return 0, errs.Errorf("nic speed not found in Get-NetAdapter stdout: %s", stdout)
 }

@@ -1,286 +1,287 @@
 package task
 
 import (
+	"context"
+	"errors"
 	"fmt"
-	"time"
+	"slices"
 
-	"github.com/donkeywon/golib/consts"
 	"github.com/donkeywon/golib/errs"
+	"github.com/donkeywon/golib/kvs"
 	"github.com/donkeywon/golib/plugin"
-	"github.com/donkeywon/golib/runner"
 	"github.com/donkeywon/golib/task/step"
 	"github.com/donkeywon/golib/util/reflects"
-	"github.com/donkeywon/golib/util/v"
+	"github.com/rs/zerolog"
+)
+
+var (
+	ErrSkip = errors.New("skip")
 )
 
 func init() {
-	plugin.Reg(PluginTypeTask, New, func() any { return NewCfg() })
+	plugin.Reg(PluginTypeTask, New, NewCfg)
 }
 
 const PluginTypeTask plugin.Type = "task"
 
 type Type string
 
-type Collector func(*Task) any
+type StepHook func(context.Context, *Task, int, step.Step, error) error
 
-type StepHook func(*Task, int, step.Step)
-
-type Hook func(*Task, error, *HookExtraData)
-
-type HookExtraData struct {
-	Wait bool
+type initializer interface {
+	Init(context.Context) error
 }
 
 type Cfg struct {
-	ID              string         `json:"id"              validate:"required" yaml:"id"`
-	Type            Type           `json:"type"            validate:"required" yaml:"type"`
-	Steps           []*step.Cfg    `json:"steps"           validate:"required" yaml:"steps"`
-	DeferSteps      []*step.Cfg    `json:"deferSteps"      yaml:"deferSteps"`
-	CurStepIdx      int            `json:"curStepIdx"      yaml:"curStepIdx"`
-	CurDeferStepIdx int            `json:"curDeferStepIdx" yaml:"curDeferStepIdx"`
-	Pool            string         `json:"pool"            yaml:"pool"`
-	Values          map[string]any `json:"values"          yaml:"values"`
+	ID         string     `json:"id"          validate:"required" yaml:"id"`
+	Steps      []step.Cfg `json:"steps"       validate:"required" yaml:"steps"`
+	DeferSteps []step.Cfg `json:"defer_steps"                     yaml:"deferSteps"`
 }
 
-func NewCfg() *Cfg {
-	return &Cfg{}
+func NewCfg() Cfg {
+	return Cfg{}
 }
 
-func (c *Cfg) SetID(id string) *Cfg {
+func (c Cfg) SetID(id string) Cfg {
 	c.ID = id
 	return c
 }
 
-func (c *Cfg) SetType(t Type) *Cfg {
-	c.Type = t
+func (c Cfg) Add(typ step.Type, cfg any) Cfg {
+	c.Steps = append(c.Steps, step.Cfg{Type: typ, Cfg: cfg})
 	return c
 }
 
-func (c *Cfg) Add(typ step.Type, cfg any) *Cfg {
-	c.Steps = append(c.Steps, &step.Cfg{Type: typ, Cfg: cfg})
+func (c Cfg) Defer(typ step.Type, cfg any) Cfg {
+	c.DeferSteps = append(c.DeferSteps, step.Cfg{Type: typ, Cfg: cfg})
 	return c
-}
-
-func (c *Cfg) Defer(typ step.Type, cfg any) *Cfg {
-	c.DeferSteps = append(c.DeferSteps, &step.Cfg{Type: typ, Cfg: cfg})
-	return c
-}
-
-type Result struct {
-	Data           map[string]any   `json:"data"           yaml:"data"`
-	StepsData      []map[string]any `json:"stepsData"      yaml:"stepsData"`
-	DeferStepsData []map[string]any `json:"deferStepsData" yaml:"deferStepsData"`
 }
 
 type Task struct {
-	runner.Runner
-	*Cfg
+	kvs.Map[string, any]
 
-	stepDoneHooks      []StepHook
-	deferStepDoneHooks []StepHook
+	cfg Cfg
+
+	beforeStepRunHooks      []StepHook
+	afterStepDoneHooks      []StepHook
+	beforeDeferStepRunHooks []StepHook
+	afterDeferStepDoneHooks []StepHook
 
 	steps      []step.Step
 	deferSteps []step.Step
+
+	l *zerolog.Logger
 }
 
 func New() *Task {
-	return &Task{
-		Runner: runner.Create("task"),
-		Cfg:    NewCfg(),
-	}
+	return &Task{}
 }
 
-func (t *Task) Init() error {
-	err := v.Struct(t)
-	if err != nil {
-		return err
-	}
+func (t *Task) SetCfg(cfg any) {
+	t.cfg = cfg.(Cfg)
+}
 
-	for i, cfg := range t.Cfg.Steps {
-		step := t.createStep(i, cfg, false)
+func (t *Task) Cfg() Cfg {
+	return t.cfg
+}
+
+func (t *Task) Run(ctx context.Context) (err error) {
+	t.l = zerolog.Ctx(ctx)
+
+	for _, cfg := range t.cfg.Steps {
+		step := plugin.CreateWithCfg[step.Step](cfg.Type, cfg.Cfg)
 		t.steps = append(t.steps, step)
 	}
 
-	for i, cfg := range t.Cfg.DeferSteps {
-		step := t.createStep(i, cfg, true)
+	for _, cfg := range t.cfg.DeferSteps {
+		step := plugin.CreateWithCfg[step.Step](cfg.Type, cfg.Cfg)
 		t.deferSteps = append(t.deferSteps, step)
 	}
 
-	for i := t.Cfg.CurStepIdx; i < len(t.steps); i++ {
-		err = runner.Init(t.steps[i])
-		if err != nil {
-			return errs.Wrapf(err, "init step(%d) %s failed", i, t.steps[i].Name())
+	defer func() {
+		derr := t.runDeferSteps(ctx)
+		if derr != nil {
+			err = errors.Join(err, derr)
 		}
-	}
-
-	for i := len(t.Cfg.DeferSteps) - 1 - t.Cfg.CurDeferStepIdx; i >= 0; i-- {
-		err = runner.Init(t.deferSteps[i])
-		if err != nil {
-			return errs.Wrapf(err, "init defer step(%d) %s failed", i, t.deferSteps[i].Name())
-		}
-	}
-
-	return t.Runner.Init()
+	}()
+	return t.runSteps(ctx)
 }
 
-func (t *Task) Start() error {
-	defer t.final()
-	defer t.runDeferSteps()
-	defer t.recoverStepPanic()
-
-	t.Store(consts.FieldStartTimeNano, time.Now().UnixNano())
-	t.runSteps()
-
-	return nil
+func (t *Task) BeforeStepRun(hook ...StepHook) {
+	t.beforeStepRunHooks = append(t.beforeStepRunHooks, hook...)
 }
 
-func (t *Task) Stop() error {
-	t.Cancel()
-	return nil
+func (t *Task) AfterStepDone(hook ...StepHook) {
+	t.afterStepDoneHooks = append(t.afterStepDoneHooks, hook...)
 }
 
-func (t *Task) HookStepDone(hook ...StepHook) {
-	t.stepDoneHooks = append(t.stepDoneHooks, hook...)
+func (t *Task) BeforeDeferStepRun(hook ...StepHook) {
+	t.beforeDeferStepRunHooks = append(t.beforeDeferStepRunHooks, hook...)
 }
 
-func (t *Task) HookDeferStepDone(hook ...StepHook) {
-	t.deferStepDoneHooks = append(t.deferStepDoneHooks, hook...)
-}
-
-func (t *Task) Result() *Result {
-	r := &Result{}
-	for _, step := range t.Steps() {
-		v := step.LoadAll()
-		r.StepsData = append(r.StepsData, v)
-	}
-	for _, deferStep := range t.DeferSteps() {
-		v := deferStep.LoadAll()
-		r.DeferStepsData = append(r.DeferStepsData, v)
-	}
-	return r
+func (t *Task) AfterDeferStepDone(hook ...StepHook) {
+	t.afterDeferStepDoneHooks = append(t.afterDeferStepDoneHooks, hook...)
 }
 
 func (t *Task) Steps() []step.Step {
-	return t.steps
+	return slices.Clone(t.steps)
 }
 
 func (t *Task) DeferSteps() []step.Step {
-	return t.deferSteps
+	return slices.Clone(t.deferSteps)
 }
 
-func (t *Task) CurDeferStep() step.Step {
-	return t.DeferSteps()[t.CurDeferStepIdx]
-}
-
-func (t *Task) Store(k string, v any) {
-	t.Runner.StoreAsString(k, v)
-}
-
-func (t *Task) createStep(idx int, stepCfg *step.Cfg, isDefer bool) step.Step {
-	var (
-		stepOrDefer string
-	)
-	if isDefer {
-		stepOrDefer = "defer_step"
-	} else {
-		stepOrDefer = "step"
-	}
-
-	s := plugin.CreateWithCfg[step.Step](stepCfg.Type, stepCfg.Cfg)
-	s.Inherit(t)
-	s.WithLoggerFields(stepOrDefer, idx, stepOrDefer+"_type", s.Name())
-	return s
-}
-
-func (t *Task) recoverStepPanic() {
-	err := recover()
-	if err != nil {
-		t.AppendError(errs.PanicToErrWithMsg(err, fmt.Sprintf("step(%d) %s panic", t.CurStepIdx, t.Steps()[t.CurStepIdx].Name())))
-	}
-}
-
-func (t *Task) final() {
-	t.Store(consts.FieldStopTimeNano, time.Now().UnixNano())
-}
-
-func (t *Task) runSteps() {
-	for t.CurStepIdx < len(t.Steps()) {
+func (t *Task) runSteps(ctx context.Context) error {
+	var err error
+	for i, st := range t.steps {
 		select {
-		case <-t.Stopping():
-			return
+		case <-ctx.Done():
+			return ctx.Err()
 		default:
 		}
 
-		st := t.Steps()[t.CurStepIdx]
-		st.Store(consts.FieldStartTimeNano, time.Now().UnixNano())
-		err := runner.Run(st)
-		st.Store(consts.FieldStopTimeNano, time.Now().UnixNano())
-		select {
-		case <-t.Stopping():
-			return
-		default:
-			t.CurStepIdx++
-		}
+		typ := t.cfg.Steps[i].Type
 
-		for i, hook := range t.stepDoneHooks {
-			func(idx int, h StepHook) {
-				defer func() {
-					err := recover()
-					if err != nil {
-						t.Error("hook step panic", errs.PanicToErr(err), "hook_idx", idx, "hook", reflects.GetFuncName(h), "step_idx", t.CurStepIdx, "step_type", st.Name())
-					}
-				}()
-				h(t, t.CurStepIdx, st)
-			}(i, hook)
-		}
+		err = hookStep(ctx, t.beforeStepRunHooks, i, typ, st, nil, t, false)
 		if err != nil {
-			t.AppendError(errs.Wrapf(err, "run step(%d) %s failed", t.CurStepIdx, st.Name()))
-			return
+			if errors.Is(err, ErrSkip) {
+				t.l.Info().Err(err).Int("step_idx", i).Str("step_type", string(typ)).Msg("skip step")
+				continue
+			}
+			return errs.Wrapf(err, "hook before run step failed: %s(%d)", typ, i)
+		}
+
+		err = t.runStep(ctx, i, typ, st, false)
+		if err != nil {
+			err = errs.Wrapf(err, "run step failed: %s(%d)", typ, i)
+		}
+
+		herr := hookStep(ctx, t.afterStepDoneHooks, i, typ, st, err, t, false)
+		if herr == nil {
+			if err != nil {
+				return err
+			}
+			continue
+		}
+
+		if errors.Is(herr, ErrSkip) {
+			if err != nil {
+				t.l.Info().AnErr("hook_err", herr).AnErr("step_err", err).Int("step_idx", i).Str("step_type", string(typ)).Msg("skip step err")
+			}
+			continue
+		}
+
+		herr = errs.Wrapf(herr, "hook after step done failed: %s(%d)", typ, i)
+		if err == nil {
+			return herr
+		} else {
+			return errors.Join(err, herr)
 		}
 	}
+	return nil
 }
 
-func (t *Task) runDeferSteps() {
-	for t.CurDeferStepIdx < len(t.DeferSteps()) {
+func (t *Task) runDeferSteps(ctx context.Context) error {
+	allErr := make([]error, 0, len(t.deferSteps))
+	for i, st := range slices.Backward(t.deferSteps) {
 		select {
-		case <-t.Stopping():
-			return
+		case <-ctx.Done():
+			return ctx.Err()
 		default:
 		}
 
-		deferStep := t.deferSteps[len(t.deferSteps)-1-t.CurDeferStepIdx]
-		func() {
-			defer func() {
-				err := recover()
-				if err != nil {
-					t.AppendError(errs.PanicToErrWithMsg(err, fmt.Sprintf("defer step(%d) %s panic", t.CurDeferStepIdx, t.CurDeferStep().Name())))
-				}
-			}()
-
-			deferStep.Store(consts.FieldStartTimeNano, time.Now().Unix())
-			err := runner.Run(deferStep)
-			deferStep.Store(consts.FieldStopTimeNano, time.Now().Unix())
-			select {
-			case <-t.Stopping():
-				return
-			default:
-				t.CurDeferStepIdx++
+		typ := t.cfg.DeferSteps[i].Type
+		err := hookStep(ctx, t.beforeDeferStepRunHooks, i, typ, st, nil, t, true)
+		if err != nil {
+			if errors.Is(err, ErrSkip) {
+				t.l.Info().Err(err).Int("defer_step_idx", i).Str("defer_step_type", string(typ)).Msg("skip defer step")
+				continue
 			}
+			allErr = append(allErr, errs.Wrapf(err, "hook before run defer step failed: %s(%d)", typ, i))
+		}
 
-			for i, hook := range t.deferStepDoneHooks {
-				func(idx int, h StepHook) {
-					defer func() {
-						err := recover()
-						if err != nil {
-							t.Error("hook defer step panic", errs.PanicToErr(err), "hook_idx", idx, "hook", reflects.GetFuncName(h), "step_idx", t.CurDeferStepIdx, "step_type", deferStep.Name())
-						}
-					}()
-					h(t, t.CurDeferStepIdx, deferStep)
-				}(i, hook)
-			}
+		err = t.runStep(ctx, i, typ, st, true)
+		if err != nil {
+			err = errs.Wrapf(err, "run defer step failed: %s(%d)", typ, i)
+		}
+
+		herr := hookStep(ctx, t.afterDeferStepDoneHooks, i, typ, st, err, t, true)
+		if herr == nil {
 			if err != nil {
-				t.AppendError(errs.Wrapf(err, "run defer(%d) step %s failed", t.CurDeferStepIdx, deferStep.Name()))
+				allErr = append(allErr, err)
 			}
-		}()
+			continue
+		}
+
+		if errors.Is(herr, ErrSkip) {
+			if err != nil {
+				t.l.Info().AnErr("hook_err", herr).AnErr("defer_step_err", err).Int("defer_step_idx", i).Str("defer_step_type", string(typ)).Msg("skip defer step err")
+			}
+			continue
+		}
+
+		herr = errs.Wrapf(herr, "hook after defer step done failed: %s(%d)", typ, i)
+		if err == nil {
+			allErr = append(allErr, herr)
+		} else {
+			allErr = append(allErr, err, herr)
+		}
+
 	}
+	return errors.Join(allErr...)
+}
+
+func (t *Task) runStep(ctx context.Context, i int, typ step.Type, st step.Step, isDefer bool) (err error) {
+	stepMsgName := "step"
+	if isDefer {
+		stepMsgName = "defer step"
+	}
+	defer func() {
+		p := recover()
+		if p != nil {
+			err = errors.Join(err, errs.PanicToErrWithMsg(p, fmt.Sprintf("panic on run %s: %s(%d)", stepMsgName, typ, i)))
+		}
+	}()
+
+	if initer, ok := st.(initializer); ok {
+		err = initer.Init(ctx)
+		if err != nil {
+			return errs.Wrapf(err, "init %s failed: %s(%d)", stepMsgName, typ, i)
+		}
+	}
+
+	err = st.Run(ctx)
+	if err != nil {
+		return errs.Wrapf(err, "start %s failed: %s(%d)", stepMsgName, typ, i)
+	}
+	return nil
+}
+
+func hookStep(ctx context.Context, hooks []StepHook, stepIdx int, typ step.Type, st step.Step, stepErr error, t *Task, isDefer bool) (err error) {
+	allErr := make([]error, 0, len(hooks))
+	for i, h := range hooks {
+		err := hook(ctx, i, h, stepIdx, typ, st, stepErr, t, isDefer)
+		if err != nil {
+			allErr = append(allErr, err)
+		}
+	}
+	return errors.Join(allErr...)
+}
+
+func hook(ctx context.Context, hookIdx int, h StepHook, stepIdx int, typ step.Type, st step.Step, stepErr error, t *Task, isDefer bool) (err error) {
+	stepMsgName := "step"
+	if isDefer {
+		stepMsgName = "defer step"
+	}
+
+	defer func() {
+		p := recover()
+		if p == nil {
+			return
+		}
+
+		pe := errs.PanicToErrWithMsg(p, fmt.Sprintf("panic on hook %s: %s(%d) %s(%d)", stepMsgName, typ, stepIdx, reflects.GetFuncName(h), hookIdx))
+		err = errors.Join(err, pe)
+	}()
+	return h(ctx, t, stepIdx, st, stepErr)
 }

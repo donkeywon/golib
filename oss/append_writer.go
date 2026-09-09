@@ -10,22 +10,20 @@ import (
 	"net/http"
 	"strconv"
 	"sync"
-	"time"
 
 	"github.com/avast/retry-go/v4"
 	"github.com/donkeywon/golib/errs"
 	"github.com/donkeywon/golib/util/httpc"
-	"github.com/donkeywon/golib/util/oss"
+	"github.com/donkeywon/golib/util/ossu"
 )
 
 const appendURLSuffix = "?append"
 
 type AppendWriter struct {
 	ctx               context.Context
-	cfg               *Cfg
+	cfg               Cfg
 	cancel            context.CancelFunc
 	bufw              *bufio.Writer
-	timeout           time.Duration
 	offset            int64
 	closeOnce         sync.Once
 	needContentLength bool
@@ -33,13 +31,12 @@ type AppendWriter struct {
 	blobCreated       bool
 }
 
-func NewAppendWriter(ctx context.Context, cfg *Cfg) *AppendWriter {
+func NewAppendWriter(ctx context.Context, cfg Cfg) *AppendWriter {
 	cfg.setDefaults()
 	w := &AppendWriter{
 		cfg:               cfg,
-		timeout:           time.Second * time.Duration(cfg.Timeout),
-		needContentLength: oss.NeedContentLength(cfg.URL),
-		isBlob:            oss.IsAzblob(cfg.URL),
+		needContentLength: ossu.NeedContentLength(ctx, cfg.URL),
+		isBlob:            ossu.IsAzblob(cfg.URL),
 	}
 	w.ctx, w.cancel = context.WithCancel(ctx)
 	w.offset = cfg.Offset
@@ -111,9 +108,12 @@ func (w *AppendWriter) ReadFrom(r io.Reader) (int64, error) {
 	rr := &readerWrapper{Reader: r}
 	for {
 		lr := io.LimitReader(rr, w.cfg.PartSize)
-		err = w.appendPart(httpc.WithBodyReader(lr))
+		err = w.appendPart(httpc.WithBodyReader(lr)) // no retry
 		if err != nil {
 			break
+		}
+		if w.isBlob {
+			w.offset += (w.cfg.PartSize - lr.(*io.LimitedReader).N)
 		}
 		if rr.eof {
 			break
@@ -129,18 +129,11 @@ func (w *AppendWriter) sealBlob() error {
 	}
 	return retry.Do(
 		func() error {
-			return oss.SealAppendBlob(w.ctx, w.cfg.URL, w.cfg.Ak, w.cfg.Sk)
+			return ossu.SealAppendBlob(w.ctx, w.cfg.URL, w.cfg.Ak, w.cfg.Sk)
 		},
 		retry.Attempts(uint(w.cfg.Retry)),
-		retry.RetryIf(func(err error) bool {
-			select {
-			case <-w.ctx.Done():
-				return false
-			default:
-				return err != nil
-			}
-		}),
 		retry.LastErrorOnly(true),
+		retry.Context(w.ctx),
 	)
 }
 
@@ -149,17 +142,10 @@ func (w *AppendWriter) init() error {
 		return nil
 	}
 	err := retry.Do(
-		func() error { return oss.CreateAppendBlob(w.ctx, w.cfg.URL, w.cfg.Ak, w.cfg.Sk) },
+		func() error { return ossu.CreateAppendBlob(w.ctx, w.cfg.URL, w.cfg.Ak, w.cfg.Sk) },
 		retry.Attempts(uint(w.cfg.Retry)),
-		retry.RetryIf(func(err error) bool {
-			select {
-			case <-w.ctx.Done():
-				return false
-			default:
-				return err != nil
-			}
-		}),
 		retry.LastErrorOnly(true),
+		retry.Context(w.ctx),
 	)
 	if err != nil {
 		return errs.Wrap(err, "create append blob failed")
@@ -169,7 +155,7 @@ func (w *AppendWriter) init() error {
 }
 
 func (w *AppendWriter) addAuth(req *http.Request) error {
-	return oss.Sign(req, w.cfg.Ak, w.cfg.Sk, w.cfg.Region)
+	return ossu.Sign(req, w.cfg.Ak, w.cfg.Sk, w.cfg.Region)
 }
 
 func (w *AppendWriter) retryAppendPart(p []byte) error {
@@ -178,53 +164,46 @@ func (w *AppendWriter) retryAppendPart(p []byte) error {
 			return w.appendPart(httpc.WithBody(p))
 		},
 		retry.Attempts(uint(w.cfg.Retry)),
-		retry.RetryIf(func(err error) bool {
-			select {
-			case <-w.ctx.Done():
-				return false
-			default:
-				return err != nil
-			}
-		}),
 		retry.LastErrorOnly(true),
+		retry.Context(w.ctx),
 	)
 }
 
 func (w *AppendWriter) appendPart(opts ...httpc.Option) error {
 	var (
-		url        string
-		respBody   = bytes.NewBuffer(nil)
-		respStatus string
-		resp       *http.Response
-		err        error
-		allOpts    = make([]httpc.Option, 0, len(opts))
+		url            string
+		respBody       = bytes.NewBuffer(nil)
+		respStatusCode int
+		resp           *http.Response
+		err            error
+		allOpts        = make([]httpc.Option, 0, len(opts)+3)
 	)
 
 	allOpts = append(allOpts, opts...)
-	allOpts = append(allOpts, httpc.ToStatus(&respStatus), httpc.ToBytesBuffer(respBody))
+	allOpts = append(allOpts, httpc.ToWriter(respBody, nil))
 	if w.isBlob {
 		url = w.cfg.URL + "?comp=appendblock"
 		allOpts = append(allOpts,
-			httpc.WithHeaders(oss.HeaderAzblobAppendPositionHeader, strconv.FormatInt(w.offset, 10)),
-			httpc.CheckStatusCode(http.StatusCreated),
+			httpc.WithHeaders(ossu.HeaderAzblobAppendPositionHeader, strconv.FormatInt(w.offset, 10)),
+			httpc.CheckStatusCode(respBody, &respStatusCode, http.StatusCreated),
 		)
 	} else {
 		url = w.cfg.URL + appendURLSuffix + fmt.Sprintf("&position=%d", w.offset)
-		allOpts = append(allOpts, httpc.CheckStatusCode(http.StatusOK))
+		allOpts = append(allOpts, httpc.CheckStatusCode(respBody, &respStatusCode, http.StatusOK))
 	}
 
 	allOpts = append(allOpts, httpc.ReqOptionFunc(w.addAuth))
 
 	resp, err = w.append(url, allOpts...)
 	if err != nil {
-		return errs.Wrapf(err, "append failed with max retry, offset: %d, respStatus: %s, respBody: %s", w.offset, respStatus, respBody.String())
+		return errs.Wrapf(err, "append failed with max retry, offset: %d, resp status code: %d, resp body: %s", w.offset, respStatusCode, respBody.String())
 	}
 
 	if w.isBlob {
 		return nil
 	}
 
-	pos, exists, err := oss.GetNextPositionFromResponse(resp)
+	pos, exists, err := ossu.GetNextPositionFromResponse(resp)
 	if err != nil {
 		return errs.Wrap(err, "failed to get next position from response")
 	}
@@ -237,9 +216,9 @@ func (w *AppendWriter) appendPart(opts ...httpc.Option) error {
 
 func (w *AppendWriter) append(url string, opts ...httpc.Option) (*http.Response, error) {
 	if w.isBlob {
-		return httpc.Put(w.ctx, 0, url, opts...)
+		return httpc.PutTimeout(w.ctx, w.cfg.Timeout, url, opts...)
 	}
-	return httpc.Post(w.ctx, 0, url, opts...)
+	return httpc.PostTimeout(w.ctx, w.cfg.Timeout, url, opts...)
 }
 
 func (w *AppendWriter) Offset() int64 {
