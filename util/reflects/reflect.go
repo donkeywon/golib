@@ -5,32 +5,6 @@ import (
 	"runtime"
 )
 
-func SetFirstMatchedField(s any, f any) bool {
-	sValue := reflect.ValueOf(s)
-	if reflect.Indirect(sValue).Kind() != reflect.Struct {
-		return false
-	}
-
-	fValue := reflect.ValueOf(f)
-
-	found := false
-	idx := 0
-	for ; idx < sValue.Elem().NumField(); idx++ {
-		field := sValue.Elem().Field(idx)
-		if field.CanSet() &&
-			(field.Kind() == fValue.Kind() || field.Kind() == reflect.Interface && fValue.Type().Implements(field.Type())) {
-			found = true
-			break
-		}
-	}
-	if !found {
-		return false
-	}
-
-	sValue.Elem().Field(idx).Set(fValue)
-	return true
-}
-
 func GetFuncName(v any) string {
 	if v == nil {
 		return ""

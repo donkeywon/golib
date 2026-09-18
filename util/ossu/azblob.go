@@ -25,7 +25,7 @@ func CreateAppendBlob(ctx context.Context, url string, ak string, sk string) err
 		respBody       = bytes.NewBuffer(nil)
 		respStatusCode int
 	)
-	_, err := httpc.PutTimeout(ctx, commonTimeout, url,
+	err := httpc.PutTimeout(ctx, commonTimeout, url,
 		httpc.WithHeaders(HeaderXmsBlobType, "AppendBlob"),
 		azblobSignOption(ak, sk),
 		httpc.CheckStatusCode(respBody, &respStatusCode, http.StatusCreated),
@@ -45,7 +45,7 @@ func SealAppendBlob(ctx context.Context, url string, ak string, sk string) error
 		respStatusCode int
 	)
 	url += "?comp=seal"
-	_, err := httpc.PutTimeout(ctx, commonTimeout, url,
+	err := httpc.PutTimeout(ctx, commonTimeout, url,
 		azblobSignOption(ak, sk),
 		httpc.CheckStatusCode(respBody, &respStatusCode, http.StatusOK),
 		httpc.ToWriter(respBody, nil),

@@ -4,6 +4,7 @@ package proc
 
 import (
 	"context"
+	"errors"
 	"syscall"
 	"time"
 )
@@ -17,39 +18,61 @@ func KillGroup(pid int, sig syscall.Signal) error {
 }
 
 func MustKill(ctx context.Context, pid int, interval time.Duration, count int, sig ...syscall.Signal) error {
-	if !Exists(pid) {
+	exists, err := Exists(pid)
+	if err != nil {
+		return err
+	}
+	if !exists {
 		return nil
 	}
 
 	for _, s := range sig {
 		err := syscall.Kill(pid, s)
 		if err != nil {
+			if errors.Is(err, syscall.ESRCH) {
+				return nil
+			}
 			return err
 		}
 
-		if WaitProcExit(ctx, pid, interval, count) {
+		err = WaitProcExit(ctx, pid, interval, count)
+		if err == nil {
 			return nil
+		}
+		if !errors.Is(err, ErrProcessNotExit) {
+			return err
 		}
 	}
 
-	return nil
+	return ErrProcessNotExit
 }
 
-func MustKillGroup(ctx context.Context, pid int, interval time.Duration, count int, sig ...syscall.Signal) error {
-	if !Exists(pid) {
+func MustKillGroup(ctx context.Context, pgid int, interval time.Duration, count int, sig ...syscall.Signal) error {
+	exists, err := Exists(pgid)
+	if err != nil {
+		return err
+	}
+	if !exists {
 		return nil
 	}
 
 	for _, s := range sig {
-		err := syscall.Kill(-pid, s)
+		err := syscall.Kill(-pgid, s)
 		if err != nil {
+			if errors.Is(err, syscall.ESRCH) {
+				return nil
+			}
 			return err
 		}
 
-		if WaitProcExit(ctx, pid, interval, count) {
+		err = WaitProcExit(ctx, pgid, interval, count)
+		if err == nil {
 			return nil
+		}
+		if !errors.Is(err, ErrProcessNotExit) {
+			return err
 		}
 	}
 
-	return nil
+	return ErrProcessNotExit
 }

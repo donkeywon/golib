@@ -1,7 +1,6 @@
 package cmds
 
 import (
-	"context"
 	"errors"
 	"io"
 	"os"
@@ -9,8 +8,6 @@ import (
 	"strings"
 	"syscall"
 	"time"
-
-	"codeberg.org/donkeywon/golib/util/proc"
 )
 
 const (
@@ -40,7 +37,7 @@ func EnvMap(m map[string]string) Option {
 			return
 		}
 		if cmd.Env == nil {
-			cmd.Env = make([]string, 0, len(m))
+			cmd.Env = os.Environ()
 		}
 		var sb strings.Builder
 		for k, v := range m {
@@ -63,7 +60,7 @@ func EnvKVs(kvs ...string) Option {
 			panic("even env kv count")
 		}
 		if cmd.Env == nil {
-			cmd.Env = make([]string, 0, len(kvs)/2)
+			cmd.Env = os.Environ()
 		}
 
 		var sb strings.Builder
@@ -84,28 +81,22 @@ func WaitDelay(d time.Duration) Option {
 	}
 }
 
-func GracefulStop(waitDurationBetweenSignals time.Duration, signals ...os.Signal) Option {
-	if waitDurationBetweenSignals < defaultWaitInterval {
-		waitDurationBetweenSignals = defaultWaitInterval
+func GracefulStop(waitDelay time.Duration, signal os.Signal) Option {
+	if waitDelay < 0 {
+		panic("invalid cmd GracefulStop waitDelay: " + waitDelay.String())
 	}
-	if len(signals) == 0 {
-		return nil
-	}
-
 	return func(cmd *exec.Cmd) {
-		cmd.Cancel = func() error {
-			for _, sig := range signals {
-				err := cmd.Process.Signal(sig)
-				if err != nil {
-					return err
-				}
+		if cmd.WaitDelay == 0 {
+			cmd.WaitDelay = waitDelay
+		}
 
-				if proc.WaitProcExit(context.Background(), cmd.Process.Pid, defaultWaitInterval, int(waitDurationBetweenSignals/defaultWaitInterval)) {
-					return nil
-				}
+		cmd.Cancel = func() error {
+			err := cmd.Process.Signal(signal)
+			if err != nil && !errors.Is(err, os.ErrProcessDone) {
+				return err
 			}
 
-			return cmd.Process.Kill()
+			return nil
 		}
 	}
 }

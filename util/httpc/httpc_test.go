@@ -96,7 +96,7 @@ func (r *errorReader) Read(_ []byte) (int, error) { return 0, r.err }
 func TestDoWithClientTimeout_NilContextPanics(t *testing.T) {
 	t.Parallel()
 	assert.Panics(t, func() {
-		_, _ = DoWithClientTimeout(nil, 0, http.MethodGet, "http://x", http.DefaultClient)
+		_ = DoWithClientTimeout(nil, 0, http.MethodGet, "http://x", http.DefaultClient)
 	})
 }
 
@@ -108,9 +108,8 @@ func TestDoWithClientTimeout_WithTimeout(t *testing.T) {
 	defer svr.Close()
 
 	ctx := context.Background()
-	resp, err := DoWithClientTimeout(ctx, 5*time.Second, http.MethodGet, svr.URL, svr.Client())
+	err := DoWithClientTimeout(ctx, 5*time.Second, http.MethodGet, svr.URL, svr.Client())
 	require.NoError(t, err)
-	resp.Body.Close()
 }
 
 func TestDoWithClientTimeout_ZeroTimeout(t *testing.T) {
@@ -122,15 +121,14 @@ func TestDoWithClientTimeout_ZeroTimeout(t *testing.T) {
 	defer svr.Close()
 
 	ctx := context.Background()
-	resp, err := DoWithClientTimeout(ctx, 0, http.MethodGet, svr.URL, svr.Client())
+	err := DoWithClientTimeout(ctx, 0, http.MethodGet, svr.URL, svr.Client())
 	require.NoError(t, err)
-	resp.Body.Close()
 }
 
 func TestDoWithClientTimeout_NewRequestError(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	_, err := DoWithClientTimeout(ctx, 0, http.MethodGet, "://invalid", http.DefaultClient)
+	err := DoWithClientTimeout(ctx, 0, http.MethodGet, "://invalid", http.DefaultClient)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "create http request failed")
 }
@@ -141,7 +139,7 @@ func TestDoWithClientTimeout_ClientDoError(t *testing.T) {
 	svr.Close() // force connection error
 
 	ctx := context.Background()
-	_, err := DoWithClientTimeout(ctx, time.Second, http.MethodGet, svr.URL, svr.Client())
+	err := DoWithClientTimeout(ctx, time.Second, http.MethodGet, svr.URL, svr.Client())
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "http request failed")
 }
@@ -153,7 +151,7 @@ func TestDoWithClientTimeout_HandleReqError(t *testing.T) {
 
 	ctx := context.Background()
 	opt := ReqOptionFunc(func(r *http.Request) error { return errors.New("boom") })
-	_, err := DoWithClientTimeout(ctx, 0, http.MethodGet, svr.URL, svr.Client(), opt)
+	err := DoWithClientTimeout(ctx, 0, http.MethodGet, svr.URL, svr.Client(), opt)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "handle http request failed")
 }
@@ -166,9 +164,8 @@ func TestDoWithClientTimeout_HandleReqNilOption(t *testing.T) {
 	defer svr.Close()
 
 	ctx := context.Background()
-	resp, err := DoWithClientTimeout(ctx, 0, http.MethodGet, svr.URL, svr.Client(), nil)
+	err := DoWithClientTimeout(ctx, 0, http.MethodGet, svr.URL, svr.Client(), nil)
 	require.NoError(t, err)
-	resp.Body.Close()
 }
 
 func TestDoWithClientTimeout_HandleRespError(t *testing.T) {
@@ -181,7 +178,7 @@ func TestDoWithClientTimeout_HandleRespError(t *testing.T) {
 
 	ctx := context.Background()
 	opt := RespOptionFunc(func(resp *http.Response) error { return errors.New("boom") })
-	_, err := DoWithClientTimeout(ctx, 0, http.MethodGet, svr.URL, svr.Client(), opt)
+	err := DoWithClientTimeout(ctx, 0, http.MethodGet, svr.URL, svr.Client(), opt)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "handle http response failed")
 }
@@ -198,9 +195,8 @@ func TestDo(t *testing.T) {
 	defer svr.Close()
 
 	ctx := context.Background()
-	resp, err := Do(ctx, http.MethodGet, svr.URL)
+	err := Do(ctx, http.MethodGet, svr.URL)
 	require.NoError(t, err)
-	resp.Body.Close()
 }
 
 func TestDoTimeout(t *testing.T) {
@@ -211,9 +207,8 @@ func TestDoTimeout(t *testing.T) {
 	defer svr.Close()
 
 	ctx := context.Background()
-	resp, err := DoTimeout(ctx, 5*time.Second, http.MethodGet, svr.URL)
+	err := DoTimeout(ctx, 5*time.Second, http.MethodGet, svr.URL)
 	require.NoError(t, err)
-	resp.Body.Close()
 }
 
 func TestDoWithClient(t *testing.T) {
@@ -224,9 +219,8 @@ func TestDoWithClient(t *testing.T) {
 	defer svr.Close()
 
 	ctx := context.Background()
-	resp, err := DoWithClient(ctx, http.MethodGet, svr.URL, svr.Client())
+	err := DoWithClient(ctx, http.MethodGet, svr.URL, svr.Client())
 	require.NoError(t, err)
-	resp.Body.Close()
 }
 
 // ============================================================================
@@ -245,7 +239,7 @@ func TestAllMethodFunctions(t *testing.T) {
 
 	noTimeout := []struct {
 		name string
-		fn   func(context.Context, string, ...Option) (*http.Response, error)
+		fn   func(context.Context, string, ...Option) error
 	}{
 		{"Get", Get}, {"Post", Post}, {"Head", Head},
 		{"Delete", Delete}, {"Put", Put}, {"Patch", Patch},
@@ -253,15 +247,14 @@ func TestAllMethodFunctions(t *testing.T) {
 	}
 	for _, tc := range noTimeout {
 		t.Run(tc.name, func(t *testing.T) {
-			resp, err := tc.fn(ctx, svr.URL)
+			err := tc.fn(ctx, svr.URL)
 			require.NoError(t, err)
-			resp.Body.Close()
 		})
 	}
 
 	withTimeout := []struct {
 		name string
-		fn   func(context.Context, time.Duration, string, ...Option) (*http.Response, error)
+		fn   func(context.Context, time.Duration, string, ...Option) error
 	}{
 		{"GetTimeout", GetTimeout}, {"PostTimeout", PostTimeout}, {"HeadTimeout", HeadTimeout},
 		{"DeleteTimeout", DeleteTimeout}, {"PutTimeout", PutTimeout}, {"PatchTimeout", PatchTimeout},
@@ -269,9 +262,8 @@ func TestAllMethodFunctions(t *testing.T) {
 	}
 	for _, tc := range withTimeout {
 		t.Run(tc.name, func(t *testing.T) {
-			resp, err := tc.fn(ctx, 5*time.Second, svr.URL)
+			err := tc.fn(ctx, 5*time.Second, svr.URL)
 			require.NoError(t, err)
-			resp.Body.Close()
 		})
 	}
 }
@@ -308,9 +300,8 @@ func TestWithHeaders_OK(t *testing.T) {
 	}))
 	defer svr.Close()
 
-	resp, err := Get(context.Background(), svr.URL, WithHeaders("X-A", "1", "X-B", "2"))
+	err := Get(context.Background(), svr.URL, WithHeaders("X-A", "1", "X-B", "2"))
 	require.NoError(t, err)
-	resp.Body.Close()
 }
 
 func TestWithHeaders_PanicsOnOddArgs(t *testing.T) {
@@ -333,9 +324,8 @@ func TestWithHeader(t *testing.T) {
 	defer svr.Close()
 
 	h := http.Header{"X-T": {"a"}}
-	resp, err := Get(context.Background(), svr.URL, WithHeader(h))
+	err := Get(context.Background(), svr.URL, WithHeader(h))
 	require.NoError(t, err)
-	resp.Body.Close()
 }
 
 // ============================================================================
@@ -351,9 +341,8 @@ func TestWithHeaderMap(t *testing.T) {
 	defer svr.Close()
 
 	m := map[string]string{"X-M": "v"}
-	resp, err := Get(context.Background(), svr.URL, WithHeaderMap(m))
+	err := Get(context.Background(), svr.URL, WithHeaderMap(m))
 	require.NoError(t, err)
-	resp.Body.Close()
 }
 
 // ============================================================================
@@ -371,9 +360,8 @@ func TestWithBody(t *testing.T) {
 	}))
 	defer svr.Close()
 
-	resp, err := Post(context.Background(), svr.URL, WithBody(body))
+	err := Post(context.Background(), svr.URL, WithBody(body))
 	require.NoError(t, err)
-	resp.Body.Close()
 }
 
 func TestWithBody_Empty(t *testing.T) {
@@ -385,9 +373,8 @@ func TestWithBody_Empty(t *testing.T) {
 	}))
 	defer svr.Close()
 
-	resp, err := Post(context.Background(), svr.URL, WithBody(nil))
+	err := Post(context.Background(), svr.URL, WithBody(nil))
 	require.NoError(t, err)
-	resp.Body.Close()
 }
 
 // ============================================================================
@@ -404,9 +391,8 @@ func TestWithBodyReader_ReadCloser(t *testing.T) {
 	}))
 	defer svr.Close()
 
-	resp, err := Post(context.Background(), svr.URL, WithBodyReader(rc))
+	err := Post(context.Background(), svr.URL, WithBodyReader(rc))
 	require.NoError(t, err)
-	resp.Body.Close()
 }
 
 func TestWithBodyReader_HasLen(t *testing.T) {
@@ -420,9 +406,8 @@ func TestWithBodyReader_HasLen(t *testing.T) {
 	}))
 	defer svr.Close()
 
-	resp, err := Post(context.Background(), svr.URL, WithBodyReader(lr))
+	err := Post(context.Background(), svr.URL, WithBodyReader(lr))
 	require.NoError(t, err)
-	resp.Body.Close()
 }
 
 func TestWithBodyReader_HasLen2(t *testing.T) {
@@ -436,9 +421,8 @@ func TestWithBodyReader_HasLen2(t *testing.T) {
 	}))
 	defer svr.Close()
 
-	resp, err := Post(context.Background(), svr.URL, WithBodyReader(lr))
+	err := Post(context.Background(), svr.URL, WithBodyReader(lr))
 	require.NoError(t, err)
-	resp.Body.Close()
 }
 
 func TestWithBodyReader_HasSize(t *testing.T) {
@@ -450,9 +434,8 @@ func TestWithBodyReader_HasSize(t *testing.T) {
 	}))
 	defer svr.Close()
 
-	resp, err := Post(context.Background(), svr.URL, WithBodyReader(sr))
+	err := Post(context.Background(), svr.URL, WithBodyReader(sr))
 	require.NoError(t, err)
-	resp.Body.Close()
 }
 
 func TestWithBodyReader_HasSize2(t *testing.T) {
@@ -464,9 +447,8 @@ func TestWithBodyReader_HasSize2(t *testing.T) {
 	}))
 	defer svr.Close()
 
-	resp, err := Post(context.Background(), svr.URL, WithBodyReader(sr))
+	err := Post(context.Background(), svr.URL, WithBodyReader(sr))
 	require.NoError(t, err)
-	resp.Body.Close()
 }
 
 func TestWithBodyReader_NoLengthHint(t *testing.T) {
@@ -480,9 +462,8 @@ func TestWithBodyReader_NoLengthHint(t *testing.T) {
 	defer svr.Close()
 
 	reader := &plainReader{data: "no-len-hint"}
-	resp, err := Post(context.Background(), svr.URL, WithBodyReader(reader))
+	err := Post(context.Background(), svr.URL, WithBodyReader(reader))
 	require.NoError(t, err)
-	resp.Body.Close()
 }
 
 // ============================================================================
@@ -504,9 +485,8 @@ func TestWithBodyJSON(t *testing.T) {
 	}))
 	defer svr.Close()
 
-	resp, err := Post(context.Background(), svr.URL, WithBodyJSON(v))
+	err := Post(context.Background(), svr.URL, WithBodyJSON(v))
 	require.NoError(t, err)
-	resp.Body.Close()
 }
 
 // ============================================================================
@@ -525,15 +505,14 @@ func TestWithBodyMarshal(t *testing.T) {
 	defer svr.Close()
 
 	marshal := func(v any) ([]byte, error) { return []byte(v.(string)), nil }
-	resp, err := Post(context.Background(), svr.URL, WithBodyMarshal("custom", "text/plain", marshal))
+	err := Post(context.Background(), svr.URL, WithBodyMarshal("custom", "text/plain", marshal))
 	require.NoError(t, err)
-	resp.Body.Close()
 }
 
 func TestWithBodyMarshal_Error(t *testing.T) {
 	t.Parallel()
 	marshal := func(v any) ([]byte, error) { return nil, errors.New("marshal fail") }
-	_, err := DoWithClientTimeout(
+	err := DoWithClientTimeout(
 		context.Background(), 0, http.MethodPost, "http://x",
 		http.DefaultClient,
 		WithBodyMarshal(nil, "", marshal),
@@ -557,9 +536,8 @@ func TestWithBodyForm(t *testing.T) {
 	}))
 	defer svr.Close()
 
-	resp, err := Post(context.Background(), svr.URL, WithBodyForm(val))
+	err := Post(context.Background(), svr.URL, WithBodyForm(val))
 	require.NoError(t, err)
-	resp.Body.Close()
 }
 
 // ============================================================================
@@ -574,9 +552,8 @@ func TestCheckStatusCode_OK(t *testing.T) {
 	defer svr.Close()
 
 	var sc int
-	resp, err := Get(context.Background(), svr.URL, CheckStatusCode(nil, &sc, http.StatusOK))
+	err := Get(context.Background(), svr.URL, CheckStatusCode(nil, &sc, http.StatusOK))
 	require.NoError(t, err)
-	resp.Body.Close()
 	assert.Equal(t, http.StatusOK, sc)
 }
 
@@ -588,7 +565,7 @@ func TestCheckStatusCode_Mismatch(t *testing.T) {
 	}))
 	defer svr.Close()
 
-	_, err := Get(context.Background(), svr.URL, CheckStatusCode(nil, nil, http.StatusOK))
+	err := Get(context.Background(), svr.URL, CheckStatusCode(nil, nil, http.StatusOK))
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "unexpected response status code: 500")
 }
@@ -602,7 +579,7 @@ func TestCheckStatusCode_MismatchWithBodyDump(t *testing.T) {
 	defer svr.Close()
 
 	var buf bytes.Buffer
-	_, err := Get(context.Background(), svr.URL, CheckStatusCode(&buf, nil, http.StatusOK))
+	err := Get(context.Background(), svr.URL, CheckStatusCode(&buf, nil, http.StatusOK))
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "unexpected response status code: 404")
 	assert.Equal(t, "not found body", buf.String())
@@ -616,9 +593,8 @@ func TestCheckStatusCode_NoExpected(t *testing.T) {
 	defer svr.Close()
 
 	var sc int
-	resp, err := Get(context.Background(), svr.URL, CheckStatusCode(nil, &sc))
+	err := Get(context.Background(), svr.URL, CheckStatusCode(nil, &sc))
 	require.NoError(t, err)
-	resp.Body.Close()
 	assert.Equal(t, http.StatusInternalServerError, sc)
 }
 
@@ -629,9 +605,8 @@ func TestCheckStatusCode_NilStatusCodePtr(t *testing.T) {
 	}))
 	defer svr.Close()
 
-	resp, err := Get(context.Background(), svr.URL, CheckStatusCode(nil, nil, http.StatusOK))
+	err := Get(context.Background(), svr.URL, CheckStatusCode(nil, nil, http.StatusOK))
 	require.NoError(t, err)
-	resp.Body.Close()
 }
 
 // ============================================================================
@@ -646,9 +621,8 @@ func TestCheckStatusCodeRange_OK(t *testing.T) {
 	defer svr.Close()
 
 	var sc int
-	resp, err := Get(context.Background(), svr.URL, CheckStatusCodeRange(nil, &sc, 200, 299))
+	err := Get(context.Background(), svr.URL, CheckStatusCodeRange(nil, &sc, 200, 299))
 	require.NoError(t, err)
-	resp.Body.Close()
 	assert.Equal(t, 200, sc)
 }
 
@@ -659,9 +633,8 @@ func TestCheckStatusCodeRange_Boundary(t *testing.T) {
 	}))
 	defer svr.Close()
 
-	resp, err := Get(context.Background(), svr.URL, CheckStatusCodeRange(nil, nil, 200, 200))
+	err := Get(context.Background(), svr.URL, CheckStatusCodeRange(nil, nil, 200, 200))
 	require.NoError(t, err)
-	resp.Body.Close()
 }
 
 func TestCheckStatusCodeRange_MismatchWithDump(t *testing.T) {
@@ -673,7 +646,7 @@ func TestCheckStatusCodeRange_MismatchWithDump(t *testing.T) {
 	defer svr.Close()
 
 	var buf bytes.Buffer
-	_, err := Get(context.Background(), svr.URL, CheckStatusCodeRange(&buf, nil, 200, 299))
+	err := Get(context.Background(), svr.URL, CheckStatusCodeRange(&buf, nil, 200, 299))
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "unexpected response status code: 500")
 	assert.Equal(t, "boom", buf.String())
@@ -686,9 +659,8 @@ func TestCheckStatusCodeRange_NilStatusPtr(t *testing.T) {
 	}))
 	defer svr.Close()
 
-	resp, err := Get(context.Background(), svr.URL, CheckStatusCodeRange(nil, nil, 100, 399))
+	err := Get(context.Background(), svr.URL, CheckStatusCodeRange(nil, nil, 100, 399))
 	require.NoError(t, err)
-	resp.Body.Close()
 }
 
 // ============================================================================
@@ -704,9 +676,8 @@ func TestToString(t *testing.T) {
 	defer svr.Close()
 
 	var s string
-	resp, err := Get(context.Background(), svr.URL, ToString(&s))
+	err := Get(context.Background(), svr.URL, ToString(&s))
 	require.NoError(t, err)
-	resp.Body.Close()
 	assert.Equal(t, "hello world", s)
 }
 
@@ -718,9 +689,8 @@ func TestToString_Empty(t *testing.T) {
 	defer svr.Close()
 
 	var s string
-	resp, err := Get(context.Background(), svr.URL, ToString(&s))
+	err := Get(context.Background(), svr.URL, ToString(&s))
 	require.NoError(t, err)
-	resp.Body.Close()
 	assert.Equal(t, "", s)
 }
 
@@ -738,9 +708,8 @@ func TestToBytes(t *testing.T) {
 
 	buf := make([]byte, 10)
 	var n int
-	resp, err := Get(context.Background(), svr.URL, ToBytes(&n, buf))
+	err := Get(context.Background(), svr.URL, ToBytes(&n, buf))
 	require.NoError(t, err)
-	resp.Body.Close()
 	assert.Equal(t, 3, n)
 	assert.Equal(t, "abc", string(buf[:n]))
 }
@@ -754,9 +723,8 @@ func TestToBytes_NoN(t *testing.T) {
 	defer svr.Close()
 
 	buf := make([]byte, 3)
-	resp, err := Get(context.Background(), svr.URL, ToBytes(nil, buf))
+	err := Get(context.Background(), svr.URL, ToBytes(nil, buf))
 	require.NoError(t, err)
-	resp.Body.Close()
 	assert.Equal(t, "xyz", string(buf))
 }
 
@@ -771,9 +739,8 @@ func TestToBytes_ReadError(t *testing.T) {
 	// that EOF is consumed (see option.go:243-245), so no error.
 	// To trigger real error: use nil body (no content) and expect io.EOF being silenced.
 	// Real read error: impossible with httptest, skip.
-	resp, err := Get(context.Background(), svr.URL, ToBytes(nil, []byte{}))
+	err := Get(context.Background(), svr.URL, ToBytes(nil, []byte{}))
 	require.NoError(t, err)
-	resp.Body.Close()
 }
 
 // ============================================================================
@@ -793,13 +760,16 @@ func TestToJSON(t *testing.T) {
 	defer svr.Close()
 
 	var got resp
-	r, err := Get(context.Background(), svr.URL, ToJSON(&got))
+	err := Get(context.Background(), svr.URL, ToJSON(&got))
 	require.NoError(t, err)
-	r.Body.Close()
 	assert.Equal(t, 42, got.ID)
 }
 
-func TestToJSON_EmptyBody(t *testing.T) {
+// An empty body is not valid JSON: encoding/json/v2 reports it as "unexpected EOF",
+// and ToAnyDecode only tolerates a bare io.EOF (see TestToAnyDecode_EOFIgnored).
+// A caller that must accept an empty body should read it with ToBytes and check
+// the length itself.
+func TestToJSON_EmptyBody_DecodeError(t *testing.T) {
 	t.Parallel()
 	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -807,9 +777,9 @@ func TestToJSON_EmptyBody(t *testing.T) {
 	defer svr.Close()
 
 	var s string
-	r, err := Get(context.Background(), svr.URL, ToJSON(&s))
-	require.NoError(t, err)
-	r.Body.Close()
+	err := Get(context.Background(), svr.URL, ToJSON(&s))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "decode response body failed")
 }
 
 // ============================================================================
@@ -828,9 +798,8 @@ func TestToAnyDecode(t *testing.T) {
 	defer svr.Close()
 
 	var d data
-	r, err := Get(context.Background(), svr.URL, ToAnyDecode(&d, func(r io.Reader, a any) error { return json.UnmarshalRead(r, a) }))
+	err := Get(context.Background(), svr.URL, ToAnyDecode(&d, func(r io.Reader, a any) error { return json.UnmarshalRead(r, a) }))
 	require.NoError(t, err)
-	r.Body.Close()
 	assert.Equal(t, "hi", d.Val)
 }
 
@@ -850,11 +819,10 @@ func TestToAnyUnmarshal(t *testing.T) {
 	defer svr.Close()
 
 	var d data
-	r, err := Get(context.Background(), svr.URL, ToAnyUnmarshal(&d, func(bs []byte, v any) error {
+	err := Get(context.Background(), svr.URL, ToAnyUnmarshal(&d, func(bs []byte, v any) error {
 		return json.Unmarshal(bs, v)
 	}))
 	require.NoError(t, err)
-	r.Body.Close()
 	assert.Equal(t, "hi", d.Val)
 }
 
@@ -867,7 +835,7 @@ func TestToAnyUnmarshal_Error(t *testing.T) {
 	defer svr.Close()
 
 	var s string
-	_, err := Get(context.Background(), svr.URL, ToAnyUnmarshal(&s, func(bs []byte, v any) error {
+	err := Get(context.Background(), svr.URL, ToAnyUnmarshal(&s, func(bs []byte, v any) error {
 		return errors.New("unmarshal fail")
 	}))
 	require.Error(t, err)
@@ -888,9 +856,8 @@ func TestToWriter_WithN(t *testing.T) {
 
 	var buf bytes.Buffer
 	var n int64
-	resp, err := Get(context.Background(), svr.URL, ToWriter(&buf, &n))
+	err := Get(context.Background(), svr.URL, ToWriter(&buf, &n))
 	require.NoError(t, err)
-	resp.Body.Close()
 	assert.Equal(t, int64(11), n)
 	assert.Equal(t, "writer-data", buf.String())
 }
@@ -904,9 +871,8 @@ func TestToWriter_NilN(t *testing.T) {
 	defer svr.Close()
 
 	var buf bytes.Buffer
-	resp, err := Get(context.Background(), svr.URL, ToWriter(&buf, nil))
+	err := Get(context.Background(), svr.URL, ToWriter(&buf, nil))
 	require.NoError(t, err)
-	resp.Body.Close()
 	assert.Equal(t, "ok", buf.String())
 }
 
@@ -973,9 +939,8 @@ func TestToBytes_EOFIgnored(t *testing.T) {
 
 	buf := make([]byte, 100)
 	var n int
-	resp, err := Get(context.Background(), svr.URL, ToBytes(&n, buf))
+	err := Get(context.Background(), svr.URL, ToBytes(&n, buf))
 	require.NoError(t, err)
-	resp.Body.Close()
 	assert.Equal(t, 2, n)
 	assert.Equal(t, "ok", string(buf[:n]))
 }
@@ -1010,7 +975,7 @@ func TestCheckStatusCode_BodyDumpError(t *testing.T) {
 	}))
 	defer svr.Close()
 
-	_, err := Get(context.Background(), svr.URL, CheckStatusCode(&errorWriter{}, nil, http.StatusOK))
+	err := Get(context.Background(), svr.URL, CheckStatusCode(&errorWriter{}, nil, http.StatusOK))
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "read response body failed")
 }
@@ -1023,7 +988,7 @@ func TestCheckStatusCodeRange_BodyDumpError(t *testing.T) {
 	}))
 	defer svr.Close()
 
-	_, err := Get(context.Background(), svr.URL, CheckStatusCodeRange(&errorWriter{}, nil, 200, 299))
+	err := Get(context.Background(), svr.URL, CheckStatusCodeRange(&errorWriter{}, nil, 200, 299))
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "read response body failed")
 }
@@ -1042,9 +1007,8 @@ func TestWithBodyMarshal_ZeroLength(t *testing.T) {
 	defer svr.Close()
 
 	marshal := func(v any) ([]byte, error) { return []byte{}, nil }
-	resp, err := Post(context.Background(), svr.URL, WithBodyMarshal(nil, "", marshal))
+	err := Post(context.Background(), svr.URL, WithBodyMarshal(nil, "", marshal))
 	require.NoError(t, err)
-	resp.Body.Close()
 }
 
 // ============================================================================
@@ -1078,10 +1042,31 @@ func TestDoWithClientTimeout_RespBodyCloseOnHandleRespError(t *testing.T) {
 		// Read a bit, then return error — body close in defer should still work.
 		return errors.New("resp handler error")
 	})
-	_, err := DoWithClientTimeout(context.Background(), 0, http.MethodGet, svr.URL, svr.Client(), opt)
+	err := DoWithClientTimeout(context.Background(), 0, http.MethodGet, svr.URL, svr.Client(), opt)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "handle http response failed")
 	// No leak panic = close worked.
+}
+
+func TestDetachBody_SurvivesAutoClose(t *testing.T) {
+	t.Parallel()
+	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprint(w, "detached")
+	}))
+	defer svr.Close()
+
+	// The helper closes the response body before returning, so DetachBody is the
+	// only way to keep it readable afterwards.
+	var body io.ReadCloser
+	err := DoWithClientTimeout(context.Background(), 0, http.MethodGet, svr.URL, svr.Client(), DetachBody(&body))
+	require.NoError(t, err)
+	require.NotNil(t, body)
+
+	bs, err := io.ReadAll(body)
+	require.NoError(t, err)
+	assert.Equal(t, "detached", string(bs))
+	require.NoError(t, body.Close())
 }
 
 // ============================================================================
@@ -1094,7 +1079,7 @@ func TestAllMethodsWithBody(t *testing.T) {
 
 	type testCase struct {
 		name   string
-		fn     func(context.Context, string, ...Option) (*http.Response, error)
+		fn     func(context.Context, string, ...Option) error
 		method string
 	}
 	tests := []testCase{
@@ -1111,9 +1096,8 @@ func TestAllMethodsWithBody(t *testing.T) {
 			}))
 			defer svr.Close()
 
-			resp, err := tc.fn(ctx, svr.URL, WithBody([]byte("data")))
+			err := tc.fn(ctx, svr.URL, WithBody([]byte("data")))
 			require.NoError(t, err)
-			resp.Body.Close()
 		})
 	}
 }
@@ -1133,23 +1117,21 @@ func TestAllMethodsPassOpts(t *testing.T) {
 	ctx := context.Background()
 	opt := WithHeaders("X-Test", "yes")
 
-	noTimeout := []func(context.Context, string, ...Option) (*http.Response, error){
+	noTimeout := []func(context.Context, string, ...Option) error{
 		Get, Post, Head, Delete, Put, Patch, Connect, Options, Trace,
 	}
 	for _, fn := range noTimeout {
-		resp, err := fn(ctx, svr.URL, opt)
+		err := fn(ctx, svr.URL, opt)
 		require.NoError(t, err)
-		resp.Body.Close()
 	}
 
-	withTimeout := []func(context.Context, time.Duration, string, ...Option) (*http.Response, error){
+	withTimeout := []func(context.Context, time.Duration, string, ...Option) error{
 		GetTimeout, PostTimeout, HeadTimeout, DeleteTimeout,
 		PutTimeout, PatchTimeout, ConnectTimeout, OptionsTimeout, TraceTimeout,
 	}
 	for _, fn := range withTimeout {
-		resp, err := fn(ctx, 5*time.Second, svr.URL, opt)
+		err := fn(ctx, 5*time.Second, svr.URL, opt)
 		require.NoError(t, err)
-		resp.Body.Close()
 	}
 }
 
@@ -1172,7 +1154,7 @@ func TestCheckStatusCode_BodyDumpSuccess(t *testing.T) {
 	defer svr.Close()
 
 	var buf bytes.Buffer
-	_, err := Get(context.Background(), svr.URL, CheckStatusCode(&buf, nil, http.StatusOK))
+	err := Get(context.Background(), svr.URL, CheckStatusCode(&buf, nil, http.StatusOK))
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "unexpected response status code: 404")
 	// body was dumped successfully
@@ -1188,7 +1170,7 @@ func TestCheckStatusCodeRange_BodyDumpSuccess(t *testing.T) {
 	defer svr.Close()
 
 	var buf bytes.Buffer
-	_, err := Get(context.Background(), svr.URL, CheckStatusCodeRange(&buf, nil, 200, 299))
+	err := Get(context.Background(), svr.URL, CheckStatusCodeRange(&buf, nil, 200, 299))
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "unexpected response status code: 404")
 	assert.Equal(t, "out of range", buf.String())
@@ -1202,9 +1184,8 @@ func TestCheckStatusCodeRange_StatusInRange(t *testing.T) {
 	defer svr.Close()
 
 	var sc int
-	resp, err := Get(context.Background(), svr.URL, CheckStatusCodeRange(nil, &sc, 200, 299))
+	err := Get(context.Background(), svr.URL, CheckStatusCodeRange(nil, &sc, 200, 299))
 	require.NoError(t, err)
-	resp.Body.Close()
 	assert.Equal(t, 204, sc)
 }
 
@@ -1229,8 +1210,11 @@ func TestToBytes_ReadErrorDirect(t *testing.T) {
 
 func TestToAnyDecode_EOFIgnored(t *testing.T) {
 	t.Parallel()
+	// ToAnyDecode tolerates a bare io.EOF, which is what decode-style APIs report
+	// for an empty stream. Any other error, including a truncated document, is
+	// still returned to the caller.
 	var v any
-	opt := ToAnyDecode(&v, func(r io.Reader, a any) error { return json.UnmarshalRead(r, a) })
+	opt := ToAnyDecode(&v, func(io.Reader, any) error { return io.EOF })
 	err := opt.HandleResp(&http.Response{Body: io.NopCloser(strings.NewReader(""))})
 	require.NoError(t, err)
 }
@@ -1284,9 +1268,8 @@ func TestCheckStatusCode_ContainsMatch(t *testing.T) {
 	defer svr.Close()
 
 	var sc int
-	resp, err := Get(context.Background(), svr.URL, CheckStatusCode(nil, &sc, http.StatusOK, http.StatusOK))
+	err := Get(context.Background(), svr.URL, CheckStatusCode(nil, &sc, http.StatusOK, http.StatusOK))
 	require.NoError(t, err)
-	resp.Body.Close()
 }
 
 func TestCheckStatusCodeRange_ContainsMatch(t *testing.T) {
@@ -1296,9 +1279,8 @@ func TestCheckStatusCodeRange_ContainsMatch(t *testing.T) {
 	}))
 	defer svr.Close()
 
-	resp, err := Get(context.Background(), svr.URL, CheckStatusCodeRange(nil, nil, 200, 200))
+	err := Get(context.Background(), svr.URL, CheckStatusCodeRange(nil, nil, 200, 200))
 	require.NoError(t, err)
-	resp.Body.Close()
 }
 
 func TestToAnyDecode_Success(t *testing.T) {

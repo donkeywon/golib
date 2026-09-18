@@ -25,8 +25,10 @@ func (pc *PoolCfg) UnmarshalFlag(value string) error {
 	return json.Unmarshal([]byte(value), pc)
 }
 
-func (pc *PoolCfg) MarshalFlag() (string, error) {
-	bs, err := json.Marshal(pc)
+func (pc PoolCfg) MarshalFlag() (string, error) {
+	redacted := pc
+	redacted.DSN = "***"
+	bs, err := json.Marshal(&redacted)
 	if err != nil {
 		return "", err
 	}
@@ -34,7 +36,7 @@ func (pc *PoolCfg) MarshalFlag() (string, error) {
 }
 
 type Cfg struct {
-	Pools               []PoolCfg `env:"POOLS" env-delim:";"   yaml:"pools"               long:"pools"                 description:"database connection pools"                                 validate:"required"`
+	Pools               []PoolCfg `env:"POOLS" env-delim:"\n"   yaml:"pools"               long:"pools"                 description:"database connection pools"                                 validate:"required"`
 	EnableExportMetrics bool      `env:"ENABLE_EXPORT_METRICS" yaml:"enableExportMetrics" long:"enable-export-metrics" description:"export database conn pool metrics with prometheus protocol"`
 }
 

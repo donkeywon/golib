@@ -21,8 +21,8 @@ func (e *loadOnceError) Has() bool {
 }
 
 func (e *loadOnceError) LoadOnce() error {
-	e.mu.RLock()
-	defer e.mu.RUnlock()
+	e.mu.Lock()
+	defer e.mu.Unlock()
 	if e.loaded {
 		return nil
 	}
@@ -31,8 +31,8 @@ func (e *loadOnceError) LoadOnce() error {
 }
 
 func (e *loadOnceError) Load() error {
-	e.mu.RLock()
-	defer e.mu.RUnlock()
+	e.mu.Lock()
+	defer e.mu.Unlock()
 	if len(e.errs) == 0 {
 		return nil
 	}
@@ -110,7 +110,7 @@ func (w *AsyncWriter) Write(p []byte) (n int, err error) {
 			continue
 		}
 
-		err = w.flushNoLock()
+		err = w.flushNoLock(false)
 		w.mu.Unlock()
 		if err != nil {
 			return
@@ -122,7 +122,9 @@ func (w *AsyncWriter) Write(p []byte) (n int, err error) {
 func (w *AsyncWriter) Close() error {
 	var err error
 	w.closeOnce.Do(func() {
-		err = w.Flush()
+		w.mu.Lock()
+		w.flushNoLock(true)
+		w.mu.Unlock()
 
 		close(w.closed)
 
@@ -134,9 +136,7 @@ func (w *AsyncWriter) Close() error {
 			<-w.asyncWriteDone
 		}
 
-		if err == nil {
-			err = w.asyncWriteErr.LoadOnce()
-		}
+		err = w.asyncWriteErr.LoadOnce()
 	})
 	return err
 }
@@ -144,13 +144,26 @@ func (w *AsyncWriter) Close() error {
 func (w *AsyncWriter) Flush() error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	return w.flushNoLock()
+	return w.flushNoLock(false)
 }
 
-func (w *AsyncWriter) flushNoLock() error {
-	err := w.asyncWriteErr.Load()
-	if err != nil {
-		return err
+func (w *AsyncWriter) flushNoLock(noLoadAsyncWriteErr bool) error {
+	if noLoadAsyncWriteErr {
+		// do not load err
+		if w.asyncWriteErr.Has() {
+			return nil
+		}
+	} else {
+		err := w.asyncWriteErr.Load()
+		if err != nil {
+			return err
+		}
+	}
+
+	select {
+	case <-w.closed:
+		return io.ErrClosedPipe
+	default:
 	}
 
 	if w.buf == nil || w.offset == 0 {
@@ -245,5 +258,5 @@ func (w *AsyncWriter) deadlineFlush() {
 		return
 	}
 
-	w.flushNoLock()
+	w.flushNoLock(true)
 }

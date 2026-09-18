@@ -1,5 +1,3 @@
-//go:build linux || darwin || freebsd || solaris
-
 package eth
 
 import (

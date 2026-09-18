@@ -6,6 +6,7 @@ const (
 	DefaultEnableWebProf        = false
 	DefaultEnableWebPrettyTrace = false
 	DefaultEnableStatsViz       = false
+	DefaultAllowRemote          = false
 	DefaultHTTPURLPrefix        = ""
 )
 
@@ -15,6 +16,7 @@ type Cfg struct {
 	WebAuthUser          string `yaml:"webAuthUser"          env:"WEB_AUTH_USER"`
 	WebAuthPwd           string `yaml:"webAuthPwd"           env:"WEB_AUTH_PWD"`
 	HTTPURLPrefix        string `yaml:"httpUrlPrefix"        env:"HTTP_URL_PREFIX"         long:"http-url-prefix"         description:"http url prefix"`
+	AllowRemote          bool   `yaml:"allowRemote"          env:"ALLOW_REMOTE"            long:"allow-remote"            description:"allow remote request prof"`
 
 	EnableGoPs bool   `yaml:"enableGoPs" env:"ENABLE_GOPS" long:"enable-gops" description:"enable gops agent"`
 	GoPsAddr   string `yaml:"goPsAddr"   env:"GOPS_ADDR"   long:"gops-addr"   description:"gops agent listen addr"`
@@ -24,6 +26,7 @@ type Cfg struct {
 
 func NewCfg() Cfg {
 	return Cfg{
+		AllowRemote:          DefaultAllowRemote,
 		EnableGoPs:           DefaultEnableGoPs,
 		GoPsAddr:             DefaultGoPsAddr,
 		EnableWebProf:        DefaultEnableWebProf,

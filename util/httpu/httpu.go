@@ -4,9 +4,7 @@ import (
 	"encoding/json/v2"
 	"encoding/xml"
 	"io"
-	"net"
 	"net/http"
-	"strings"
 
 	"codeberg.org/donkeywon/golib/errs"
 	"codeberg.org/donkeywon/golib/util/conv"
@@ -132,29 +130,4 @@ func ReqToYAML(r *http.Request, obj any) error {
 		return nil
 	}
 	return err
-}
-
-func GetRealRemoteIP(r *http.Request) string {
-	if xff := r.Header.Get(HeaderXForwardedFor); xff != "" {
-		for part := range strings.SplitSeq(xff, ",") {
-			part = strings.TrimSpace(part)
-			if part == "" {
-				continue
-			}
-			if ip := net.ParseIP(part); ip != nil {
-				return ip.String()
-			}
-		}
-	}
-
-	if xri := strings.TrimSpace(r.Header.Get(HeaderXRealIP)); xri != "" {
-		if ip := net.ParseIP(xri); ip != nil {
-			return ip.String()
-		}
-	}
-
-	if host, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
-		return host
-	}
-	return r.RemoteAddr
 }

@@ -449,8 +449,8 @@ func (w *MultiPartWriter) abort() error {
 		respBody       = bytes.NewBuffer(nil)
 		respStatusCode int
 	)
-	_, err := retry.DoWithData(
-		func() (*http.Response, error) {
+	err := retry.Do(
+		func() error {
 			respBody.Reset()
 			return httpc.DeleteTimeout(context.Background(), w.cfg.Timeout, w.cfg.URL+"?uploadId="+w.uploadID,
 				httpc.ReqOptionFunc(w.addAuth),
@@ -514,8 +514,8 @@ func (w *MultiPartWriter) complete() error {
 		method = http.MethodPost
 	}
 
-	_, err = retry.DoWithData(
-		func() (*http.Response, error) {
+	err = retry.Do(
+		func() error {
 			respBody.Reset()
 			return httpc.DoTimeout(context.Background(), w.cfg.Timeout, method, url,
 				httpc.WithBodyMarshal(body, contentType, xml.Marshal),
@@ -555,12 +555,11 @@ func (w *MultiPartWriter) initMultiPart() (string, error) {
 	result := &InitiateMultipartUploadResult{}
 	err = retry.Do(
 		func() error {
-			_, err = httpc.PostTimeout(w.ctx, w.cfg.Timeout, w.cfg.URL+"?uploads",
+			return httpc.PostTimeout(w.ctx, w.cfg.Timeout, w.cfg.URL+"?uploads",
 				httpc.ReqOptionFunc(w.addAuth),
 				httpc.CheckStatusCode(respBody, &respStatusCode, http.StatusOK),
 				httpc.ToWriter(respBody, nil),
 			)
-			return err
 		},
 		retry.LastErrorOnly(true),
 		retry.Attempts(uint(w.cfg.Retry)),
@@ -597,7 +596,6 @@ func (w *MultiPartWriter) uploadPart(partNo int, opts ...httpc.Option) *uploadPa
 	var (
 		url            string
 		checkStatus    httpc.Option
-		resp           *http.Response
 		respStatusCode int
 		respBody       = bytes.NewBuffer(nil)
 		etag           string
@@ -613,7 +611,15 @@ func (w *MultiPartWriter) uploadPart(partNo int, opts ...httpc.Option) *uploadPa
 		checkStatus = httpc.CheckStatusCode(respBody, &respStatusCode, http.StatusOK)
 	}
 
-	resp, err = w.upload(url, append(opts, checkStatus)...)
+	err = w.upload(url, append(opts, checkStatus, httpc.RespOptionFunc(func(resp *http.Response) error {
+		if !w.isBlob {
+			etag = resp.Header.Get("Etag")
+			if etag == "" {
+				etag = resp.Header.Get("ETag")
+			}
+		}
+		return nil
+	}))...)
 
 	r := &uploadPartResult{
 		partNo: partNo,
@@ -624,10 +630,6 @@ func (w *MultiPartWriter) uploadPart(partNo int, opts ...httpc.Option) *uploadPa
 	}
 
 	if !w.isBlob {
-		etag = resp.Header.Get("Etag")
-		if etag == "" {
-			etag = resp.Header.Get("ETag")
-		}
 		if etag == "" {
 			r.err = errs.Errorf("etag not exists in resp header, resp status code: %d, resp body: %s", respStatusCode, respBody.String())
 			return r
@@ -644,7 +646,7 @@ func (w *MultiPartWriter) uploadPart(partNo int, opts ...httpc.Option) *uploadPa
 	return r
 }
 
-func (w *MultiPartWriter) upload(url string, opts ...httpc.Option) (*http.Response, error) {
+func (w *MultiPartWriter) upload(url string, opts ...httpc.Option) error {
 	allOpts := make([]httpc.Option, 0, len(opts)+1)
 	allOpts = append(allOpts, opts...)
 	allOpts = append(allOpts, httpc.ReqOptionFunc(w.addAuth))

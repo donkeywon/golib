@@ -46,11 +46,11 @@ var (
 )
 
 func whichByHead(ctx context.Context, url string) Type {
-	resp, err := httpc.HeadTimeout(ctx, time.Second*5, url)
+	var serverHeader string
+	err := httpc.HeadTimeout(ctx, time.Second*5, url, httpc.GetHeader(httpu.HeaderServer, &serverHeader))
 	if err != nil {
 		return TypeUnknown
 	}
-	serverHeader := resp.Header.Get(httpu.HeaderServer)
 	if serverHeader == "" {
 		return TypeUnknown
 	}
@@ -82,17 +82,17 @@ func IsSupportAppend(ctx context.Context, url string) bool {
 	}
 }
 
-func GetNextPositionFromResponse(resp *http.Response) (int, bool, error) {
-	if resp == nil {
+func GetNextPositionFromResponseHeader(header http.Header) (int, bool, error) {
+	if header == nil {
 		return 0, false, nil
 	}
 
-	nextPositionHeader := resp.Header.Get(HeaderOSSAppendNextPositionHeader)
+	nextPositionHeader := header.Get(HeaderOSSAppendNextPositionHeader)
 	if nextPositionHeader == "" {
-		nextPositionHeader = resp.Header.Get(HeaderOBSAppendNextPositionHeader)
+		nextPositionHeader = header.Get(HeaderOBSAppendNextPositionHeader)
 	}
 	if nextPositionHeader == "" {
-		nextPositionHeader = resp.Header.Get(HeaderAliOSSAppendNextPositionHeader)
+		nextPositionHeader = header.Get(HeaderAliOSSAppendNextPositionHeader)
 	}
 	if nextPositionHeader == "" {
 		return 0, false, nil
@@ -132,7 +132,7 @@ func Delete(ctx context.Context, timeout time.Duration, url string, ak string, s
 		checkStatus = []int{http.StatusNoContent}
 	}
 
-	_, err := httpc.DeleteTimeout(ctx, timeout, url,
+	err := httpc.DeleteTimeout(ctx, timeout, url,
 		httpc.ReqOptionFunc(func(req *http.Request) error {
 			return Sign(req, ak, sk, region)
 		}),
@@ -147,25 +147,24 @@ func Delete(ctx context.Context, timeout time.Duration, url string, ak string, s
 	return nil
 }
 
-func Head(ctx context.Context, timeout time.Duration, url string, ak string, sk string, region string) (*http.Response, error) {
+func Head(ctx context.Context, timeout time.Duration, url string, ak string, sk string, region string, opts ...httpc.Option) error {
 	var (
 		respStatusCode int
 		respBody       = bytes.NewBuffer(nil)
 	)
 
-	resp, err := httpc.HeadTimeout(ctx, timeout, url,
-		httpc.ReqOptionFunc(func(req *http.Request) error {
-			return Sign(req, ak, sk, region)
-		}),
+	opts = append(opts,
+		httpc.ReqOptionFunc(func(req *http.Request) error { return Sign(req, ak, sk, region) }),
 		httpc.CheckStatusCode(respBody, &respStatusCode, http.StatusOK),
-		httpc.ToWriter(respBody, nil),
-	)
+		httpc.ToWriter(respBody, nil))
+
+	err := httpc.HeadTimeout(ctx, timeout, url, opts...)
 
 	if err != nil {
-		return nil, errs.Wrapf(err, "http head failed, resp status code: %d, respBody: %s", respStatusCode, respBody.String())
+		return errs.Wrapf(err, "http head failed, resp status code: %d, respBody: %s", respStatusCode, respBody.String())
 	}
 
-	return resp, nil
+	return nil
 }
 
 type ListBucketResult struct {
@@ -210,7 +209,7 @@ func List(ctx context.Context, timeout time.Duration, url string, ak string, sk 
 		azResult       listBlobResult
 	)
 
-	_, err := httpc.GetTimeout(ctx, timeout, url,
+	err := httpc.GetTimeout(ctx, timeout, url,
 		httpc.ReqOptionFunc(func(r *http.Request) error {
 			return Sign(r, ak, sk, region)
 		}),

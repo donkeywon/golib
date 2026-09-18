@@ -15,11 +15,11 @@ const (
 
 type Cfg struct {
 	Addr              string        `env:"ADDR"                long:"addr"                yaml:"addr"              validate:"required" description:"http listen address"`
-	WriteTimeout      time.Duration `env:"WRITE_TIMEOUT"       long:"write-timeout"       yaml:"writeTimeout"                          description:"maximum duration before timing out writes of the response"`
-	ReadTimeout       time.Duration `env:"READ_TIMEOUT"        long:"read-timeout"        yaml:"readTimeout"                           description:"maximum duration for reading the entire request, including the body. A zero or negative value means there will be no timeout."`
-	ReadHeaderTimeout time.Duration `env:"READ_HEADER_TIMEOUT" long:"read-header-timeout" yaml:"readHeaderTimeout"                     description:"the amount of time allowed to read request headers"`
-	IdleTimeout       time.Duration `env:"IDLE_TIMEOUT"        long:"idle-timeout"        yaml:"idleTimeout"                           description:"maximum amount of time to wait for the next request when keep-alives are enabled"`
-	ShutdownTimeout   time.Duration `env:"SHUTDOWN_TIMEOUT"    long:"shutdown-timeout"    yaml:"shutdownTimeout"                       description:"maximum duration for shutting down"`
+	WriteTimeout      time.Duration `env:"WRITE_TIMEOUT"       long:"write-timeout"       yaml:"writeTimeout"      validate:"gt=0"     description:"maximum duration before timing out writes of the response"`
+	ReadTimeout       time.Duration `env:"READ_TIMEOUT"        long:"read-timeout"        yaml:"readTimeout"       validate:"gt=0"     description:"maximum duration for reading the entire request, including the body. A zero or negative value means there will be no timeout."`
+	ReadHeaderTimeout time.Duration `env:"READ_HEADER_TIMEOUT" long:"read-header-timeout" yaml:"readHeaderTimeout" validate:"gt=0"     description:"the amount of time allowed to read request headers"`
+	IdleTimeout       time.Duration `env:"IDLE_TIMEOUT"        long:"idle-timeout"        yaml:"idleTimeout"       validate:"gt=0"     description:"maximum amount of time to wait for the next request when keep-alives are enabled"`
+	ShutdownTimeout   time.Duration `env:"SHUTDOWN_TIMEOUT"    long:"shutdown-timeout"    yaml:"shutdownTimeout"   validate:"gt=0"     description:"maximum duration for shutting down"`
 }
 
 func NewCfg() Cfg {

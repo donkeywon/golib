@@ -271,12 +271,20 @@ func initDaemons(ctx context.Context, l *zerolog.Logger) error {
 func runDaemons(ctx context.Context, options *options, l *zerolog.Logger) {
 	var hasErr atomic.Bool
 
-	wg := &sync.WaitGroup{}
 	for _, daemonType := range _daemonTypes {
 		di := _daemonsMap[daemonType]
 		di.ctx, di.cancel = context.WithCancelCause(context.Background()) // no direct with ctx for stop in order
 		di.ctx = l.With().Str("daemon", string(daemonType)).Logger().WithContext(di.ctx)
+	}
 
+	wg := &sync.WaitGroup{}
+	for _, daemonType := range _daemonTypes {
+		di := _daemonsMap[daemonType]
+		if _stopping.Load() {
+			l.Warn().Str("daemon", string(daemonType)).Msg("shutdown in progress, skip starting daemon")
+			close(di.done)
+			continue
+		}
 		wg.Go(func() {
 			defer close(di.done)
 			defer di.cancel(nil)
@@ -377,10 +385,13 @@ func loadCfgFromFile(options *options, cfgMap map[string]any) error {
 		if errors.Is(err, yaml.ErrNotFoundNode) {
 			continue
 		}
+		if err != nil {
+			return errs.Wrapf(err, "find cfg name in yaml failed: %s", name)
+		}
 
 		err = yaml.NodeToValue(node, cfg)
 		if err != nil {
-			return errs.Wrapf(err, "unmarshal cfg fail: %s", name)
+			return errs.Wrapf(err, "unmarshal cfg failed: %s", name)
 		}
 	}
 

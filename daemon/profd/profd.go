@@ -4,13 +4,13 @@ import (
 	"context"
 	"net/http"
 	"net/http/pprof"
+	"net/netip"
 	"sync"
 	"time"
 
 	"codeberg.org/donkeywon/golib/boot"
 	"codeberg.org/donkeywon/golib/daemon/httpd"
 	"codeberg.org/donkeywon/golib/errs"
-	"codeberg.org/donkeywon/golib/util/httpu"
 	"github.com/arl/statsviz"
 	"github.com/felixge/fgprof"
 	"github.com/google/gops/agent"
@@ -24,7 +24,6 @@ var _ Profd = (*profd)(nil)
 
 type Profd interface {
 	boot.Daemon
-	SetAllowedIPsGetter(func() map[string]struct{})
 }
 
 type profd struct {
@@ -32,8 +31,6 @@ type profd struct {
 
 	cfg Cfg
 	ctx context.Context
-
-	allowedIPsGetter func() map[string]struct{}
 
 	prettystackMu       sync.Mutex
 	prettystackLastTime time.Time
@@ -78,7 +75,7 @@ func (p *profd) Init(ctx context.Context) error {
 		p.httpd.Handle(p.cfg.HTTPURLPrefix+"/debug/pprof/mutex", p.midSecure(pprof.Handler("mutex").ServeHTTP))
 		p.httpd.Handle(p.cfg.HTTPURLPrefix+"/debug/pprof/threadcreate", p.midSecure(pprof.Handler("threadcreate").ServeHTTP))
 
-		p.httpd.Handle(p.cfg.HTTPURLPrefix+"/debug/fgprof", fgprof.Handler())
+		p.httpd.Handle(p.cfg.HTTPURLPrefix+"/debug/fgprof", p.midSecure(fgprof.Handler().ServeHTTP))
 	}
 
 	if p.cfg.EnableWebPrettyTrace {
@@ -108,10 +105,6 @@ func (p *profd) Cfg() Cfg {
 	return p.cfg
 }
 
-func (p *profd) SetAllowedIPsGetter(allowedIPsGetter func() map[string]struct{}) {
-	p.allowedIPsGetter = allowedIPsGetter
-}
-
 func (p *profd) midSecure(f http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if !p.secure(w, r) {
@@ -135,22 +128,27 @@ func (p *profd) secure(w http.ResponseWriter, r *http.Request) bool {
 }
 
 func (p *profd) ipAllowed(w http.ResponseWriter, r *http.Request) bool {
-	if p.allowedIPsGetter == nil {
+	if p.cfg.AllowRemote {
 		return true
 	}
 
-	ips := p.allowedIPsGetter()
-	if len(ips) == 0 {
-		return true
-	}
-
-	remoteIP := httpu.GetRealRemoteIP(r)
-	if _, exist := ips[remoteIP]; exist {
+	peer, ok := peerAddr(r)
+	if ok && peer.IsLoopback() {
 		return true
 	}
 
 	http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
 	return false
+}
+
+func peerAddr(r *http.Request) (netip.Addr, bool) {
+	if ap, err := netip.ParseAddrPort(r.RemoteAddr); err == nil {
+		return ap.Addr().WithZone("").Unmap(), true
+	}
+	if addr, err := netip.ParseAddr(r.RemoteAddr); err == nil {
+		return addr.WithZone("").Unmap(), true
+	}
+	return netip.Addr{}, false
 }
 
 func (p *profd) auth(w http.ResponseWriter, r *http.Request) bool {

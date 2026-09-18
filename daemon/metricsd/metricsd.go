@@ -22,6 +22,7 @@ type Metricsd interface {
 	DecGauge(string)
 	IncCounter(string)
 	AddCounter(string, int)
+	AddCountInt64(string, int64)
 	Metrics() *metrics.Set
 }
 

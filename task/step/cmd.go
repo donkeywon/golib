@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"os"
 	"os/exec"
 	"syscall"
 	"time"
@@ -25,16 +24,16 @@ func init() {
 const TypeCmd Type = "cmd"
 
 type CmdStepCfg struct {
-	Name                                   string            `json:"name"                                        yaml:"name"                                   validate:"required"`
-	Args                                   []string          `json:"args"                                        yaml:"args"`
-	Env                                    map[string]string `json:"env"                                         yaml:"env"`
-	RunAsUser                              string            `json:"run_as_user"                                 yaml:"runAsUser"`
-	WorkingDir                             string            `json:"working_dir"                                 yaml:"workingDir"`
-	SetPgid                                bool              `json:"set_pgid"                                    yaml:"setPgid"`
-	DumpStdout                             bool              `json:"dump_stdout"                                 yaml:"dumpStdout"`
-	DumpStderr                             bool              `json:"dump_stderr"                                 yaml:"dumpStderr"`
-	GracefulStopSignals                    []int             `json:"graceful_stop_signals"                       yaml:"gracefulStopSignals"`
-	GracefulStopWaitDurationBetweenSignals time.Duration     `json:"graceful_stop_wait_duration_between_signals" yaml:"gracefulStopWaitDurationBetweenSignals"`
+	Name               string            `json:"name"                 yaml:"name"               validate:"required"`
+	Args               []string          `json:"args"                 yaml:"args"`
+	Env                map[string]string `json:"env"                  yaml:"env"`
+	RunAsUser          string            `json:"run_as_user"          yaml:"runAsUser"`
+	WorkingDir         string            `json:"working_dir"          yaml:"workingDir"`
+	SetPgid            bool              `json:"set_pgid"             yaml:"setPgid"`
+	DumpStdout         bool              `json:"dump_stdout"          yaml:"dumpStdout"`
+	DumpStderr         bool              `json:"dump_stderr"          yaml:"dumpStderr"`
+	GracefulStopSignal int               `json:"graceful_stop_signal" yaml:"gracefulStopSignal"`
+	WaitDelay          time.Duration     `json:"wait_delay"           yaml:"waitDelay"`
 }
 
 func NewCmdStepCfg() CmdStepCfg {
@@ -76,12 +75,11 @@ func (c *CmdStep) Run(ctx context.Context) error {
 	if c.cfg.SetPgid {
 		opts = append(opts, cmds.SetPgid())
 	}
-	if len(c.cfg.GracefulStopSignals) > 0 {
-		sigs := make([]os.Signal, 0, len(c.cfg.GracefulStopSignals))
-		for _, sig := range c.cfg.GracefulStopSignals {
-			sigs = append(sigs, syscall.Signal(sig))
-		}
-		opts = append(opts, cmds.GracefulStop(c.cfg.GracefulStopWaitDurationBetweenSignals, sigs...))
+	if c.cfg.WaitDelay > 0 {
+		opts = append(opts, cmds.WaitDelay(c.cfg.WaitDelay))
+	}
+	if c.cfg.GracefulStopSignal > 0 {
+		opts = append(opts, cmds.GracefulStop(c.cfg.WaitDelay, syscall.Signal(c.cfg.GracefulStopSignal)))
 	}
 
 	var (

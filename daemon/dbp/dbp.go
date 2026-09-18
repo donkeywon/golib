@@ -37,10 +37,16 @@ func New() boot.Daemon {
 }
 
 func (d *dbp) Init(ctx context.Context) error {
+	err := d.checkDup()
+	if err != nil {
+		return err
+	}
+
 	d.l = zerolog.Ctx(ctx)
 	for _, dbCfg := range d.cfg.Pools {
 		db, err := sql.Open(dbCfg.Type, dbCfg.DSN)
 		if err != nil {
+			d.closeAll()
 			return errs.Wrapf(err, "open db failed, name: %s, type: %s", dbCfg.Name, dbCfg.Type)
 		}
 
@@ -48,14 +54,13 @@ func (d *dbp) Init(ctx context.Context) error {
 		db.SetMaxOpenConns(dbCfg.MaxOpen)
 		db.SetConnMaxLifetime(dbCfg.MaxLifeTime)
 		db.SetConnMaxIdleTime(dbCfg.MaxIdleTime)
+		d.dbs[dbCfg.Name] = db
 
 		err = d.waitDBReady(ctx, db, dbCfg.Name, dbCfg.Type, dbCfg.MaxWaitReadyTime, dbCfg.ReadyQuery)
 		if err != nil {
 			d.closeAll()
 			return errs.Wrapf(err, "wait db ready timed out, name: %s, type: %s", dbCfg.Name, dbCfg.Type)
 		}
-
-		d.dbs[dbCfg.Name] = db
 	}
 	if d.cfg.EnableExportMetrics {
 		d.metricsd = boot.Get[metricsd.Metricsd](metricsd.DaemonTypeMetricsd)
@@ -73,6 +78,17 @@ func (d *dbp) SetCfg(cfg Cfg) {
 	d.cfg = cfg
 }
 
+func (d *dbp) checkDup() error {
+	m := make(map[string]struct{}, len(d.cfg.Pools))
+	for _, dbcfg := range d.cfg.Pools {
+		if _, exists := m[dbcfg.Name]; exists {
+			return errs.Errorf("duplicate db pool name: %s", dbcfg.Name)
+		}
+		m[dbcfg.Name] = struct{}{}
+	}
+	return nil
+}
+
 func (d *dbp) waitDBReady(ctx context.Context, db *sql.DB, name string, typ string, maxWait time.Duration, readyQuery string) error {
 	if maxWait == 0 {
 		return d.checkDBReady(ctx, db, readyQuery)
@@ -87,7 +103,7 @@ func (d *dbp) waitDBReady(ctx context.Context, db *sql.DB, name string, typ stri
 	for {
 		select {
 		case <-ctx.Done():
-			return errs.Wrap(err, "check db ready failed")
+			return ctx.Err()
 		case <-t.C:
 			err = d.checkDBReady(ctx, db, readyQuery)
 			if err == nil {
@@ -136,6 +152,9 @@ func (d *dbp) writeMetrics(w io.Writer) {
 	for i := range d.cfg.Pools {
 		poolCfg := &d.cfg.Pools[i]
 		db := d.dbs[poolCfg.Name]
+		if db == nil {
+			continue
+		}
 		stats := db.Stats()
 
 		writeMetric(w, buf, "db_pool_stats_max_open_connections", poolCfg, int64(stats.MaxOpenConnections))

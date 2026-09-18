@@ -14,16 +14,22 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-var MustKillSignals = []syscall.Signal{syscall.SIGINT, syscall.SIGKILL}
+var (
+	MustKillSignals   = []syscall.Signal{syscall.SIGINT, syscall.SIGKILL}
+	ErrProcessNotExit = errors.New("process not exit")
+)
 
-func Exists(pid int) bool {
-	exists, _ := process.PidExists(int32(pid))
-	return exists
+func Exists(pid int) (bool, error) {
+	return process.PidExists(int32(pid))
 }
 
-func WaitProcExit(ctx context.Context, pid int, interval time.Duration, count int) bool {
-	if !Exists(pid) {
-		return true
+func WaitProcExit(ctx context.Context, pid int, interval time.Duration, count int) error {
+	exists, err := Exists(pid)
+	if err != nil {
+		return err
+	}
+	if !exists {
+		return nil
 	}
 
 	ticker := time.NewTicker(interval)
@@ -37,17 +43,21 @@ func WaitProcExit(ctx context.Context, pid int, interval time.Duration, count in
 	for {
 		select {
 		case <-ticker.C:
-			if !Exists(pid) {
-				return true
+			exists, err = Exists(pid)
+			if err != nil {
+				return err
+			}
+			if !exists {
+				return nil
 			}
 		case <-ctx.Done():
-			return false
+			return ctx.Err()
 		}
 
 		if !inf {
 			count--
 			if count <= 0 {
-				return false
+				return ErrProcessNotExit
 			}
 		}
 	}

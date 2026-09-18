@@ -39,9 +39,9 @@ func AliSign(req *http.Request, ak, sk, region string) error {
 	query := req.URL.Query()
 	headers := req.Header
 
-	now := time.Now()
-	nowShortFormat := now.UTC().Format("20060102")
-	nowFormat := now.UTC().Format("20060102T150405Z")
+	now := time.Now().UTC()
+	nowShortFormat := now.Format("20060102")
+	nowFormat := now.Format("20060102T150405Z")
 
 	headers.Set(HeaderAliDate, nowFormat)
 	headers.Set(HeaderAliContentSHA256, UnsignedPayloadHash)

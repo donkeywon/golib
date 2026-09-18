@@ -152,8 +152,9 @@ func TestAsyncWriter_ErrVisibleInWrite(t *testing.T) {
 		return err != nil
 	}, time.Second, time.Millisecond)
 
+	// Write already handed this error to a caller, so Close must not repeat it.
 	err = w.Close()
-	require.ErrorIs(t, err, errTestFail)
+	require.NoError(t, err)
 }
 
 func TestAsyncWriter_ConcurrentWrite(t *testing.T) {
@@ -162,7 +163,6 @@ func TestAsyncWriter_ConcurrentWrite(t *testing.T) {
 
 	var wg sync.WaitGroup
 	for range 4 {
-		wg.Add(1)
 		wg.Go(func() {
 			data := strings.Repeat("abcd", 100)
 			n, err := w.Write([]byte(data))
@@ -205,6 +205,36 @@ func TestLoadOnceError_LoadedBranch(t *testing.T) {
 	e.Add(errTestFail)
 	require.ErrorIs(t, e.LoadOnce(), errTestFail)
 	require.NoError(t, e.LoadOnce()) // already loaded
+}
+
+func TestLoadOnceError_LoadMarksDelivered(t *testing.T) {
+	e := &loadOnceError{}
+	e.Add(errTestFail)
+
+	// Load hands the error to a caller, so LoadOnce (Close's decision point) does
+	// not report the same error again.
+	require.ErrorIs(t, e.Load(), errTestFail)
+	require.NoError(t, e.LoadOnce())
+}
+
+func TestAsyncWriter_FlushWithoutLoadKeepsError(t *testing.T) {
+	w := NewAsyncWriter(&bytes.Buffer{}, BufSize(8), QueueSize(2))
+	w.asyncWriteErr.Add(errTestFail)
+
+	// The deadline/Close path discards the return value, so it must not mark the
+	// error as delivered; Close still has to report it.
+	w.mu.Lock()
+	err := w.flushNoLock(true)
+	w.mu.Unlock()
+	require.NoError(t, err)
+	require.ErrorIs(t, w.asyncWriteErr.LoadOnce(), errTestFail)
+}
+
+func TestAsyncWriter_CloseReportsUndeliveredError(t *testing.T) {
+	w := NewAsyncWriter(&failWriter{}, BufSize(8), QueueSize(2))
+	w.asyncWriteErr.Add(errTestFail) // recorded, but no caller was ever told
+
+	require.ErrorIs(t, w.Close(), errTestFail, "Close must report an undelivered error")
 }
 
 func TestAsyncWriter_ShortWrite(t *testing.T) {

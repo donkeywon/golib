@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"bytes"
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -29,6 +28,7 @@ type AppendWriter struct {
 	needContentLength bool
 	isBlob            bool
 	blobCreated       bool
+	appendFailed      bool
 }
 
 func NewAppendWriter(ctx context.Context, cfg Cfg) *AppendWriter {
@@ -61,6 +61,7 @@ func (w *AppendWriter) Write(p []byte) (int, error) {
 
 	err = w.retryAppendPart(p)
 	if err != nil {
+		w.appendFailed = true
 		return 0, errs.Wrap(err, "append part failed")
 	}
 
@@ -74,11 +75,20 @@ func (w *AppendWriter) Write(p []byte) (int, error) {
 func (w *AppendWriter) Close() error {
 	var err error
 	w.closeOnce.Do(func() {
+		defer w.cancel()
+
 		if w.bufw != nil {
 			err = w.bufw.Flush()
+			if err != nil {
+				return
+			}
 		}
-		err = errors.Join(err, w.sealBlob())
-		w.cancel()
+
+		if w.appendFailed {
+			return
+		}
+
+		err = w.sealBlob()
 	})
 	return err
 }
@@ -102,7 +112,11 @@ func (w *AppendWriter) ReadFrom(r io.Reader) (int64, error) {
 
 	if w.needContentLength {
 		w.bufw = bufio.NewWriterSize(apwWithoutReadFrom{AppendWriter: w}, int(w.cfg.PartSize))
-		return io.Copy(w.bufw, r)
+		n, err := io.Copy(w.bufw, r)
+		if err != nil {
+			w.appendFailed = true
+		}
+		return n, err
 	}
 
 	rr := &readerWrapper{Reader: r}
@@ -110,6 +124,7 @@ func (w *AppendWriter) ReadFrom(r io.Reader) (int64, error) {
 		lr := io.LimitReader(rr, w.cfg.PartSize)
 		err = w.appendPart(httpc.WithBodyReader(lr)) // no retry
 		if err != nil {
+			w.appendFailed = true
 			break
 		}
 		if w.isBlob {
@@ -124,7 +139,7 @@ func (w *AppendWriter) ReadFrom(r io.Reader) (int64, error) {
 }
 
 func (w *AppendWriter) sealBlob() error {
-	if !w.isBlob {
+	if !w.isBlob || !w.blobCreated {
 		return nil
 	}
 	return retry.Do(
@@ -174,7 +189,6 @@ func (w *AppendWriter) appendPart(opts ...httpc.Option) error {
 		url            string
 		respBody       = bytes.NewBuffer(nil)
 		respStatusCode int
-		resp           *http.Response
 		err            error
 		allOpts        = make([]httpc.Option, 0, len(opts)+3)
 	)
@@ -192,9 +206,12 @@ func (w *AppendWriter) appendPart(opts ...httpc.Option) error {
 		allOpts = append(allOpts, httpc.CheckStatusCode(respBody, &respStatusCode, http.StatusOK))
 	}
 
-	allOpts = append(allOpts, httpc.ReqOptionFunc(w.addAuth))
-
-	resp, err = w.append(url, allOpts...)
+	var header http.Header
+	allOpts = append(allOpts, httpc.ReqOptionFunc(w.addAuth), httpc.RespOptionFunc(func(resp *http.Response) error {
+		header = resp.Header
+		return nil
+	}))
+	err = w.append(url, allOpts...)
 	if err != nil {
 		return errs.Wrapf(err, "append failed with max retry, offset: %d, resp status code: %d, resp body: %s", w.offset, respStatusCode, respBody.String())
 	}
@@ -203,7 +220,7 @@ func (w *AppendWriter) appendPart(opts ...httpc.Option) error {
 		return nil
 	}
 
-	pos, exists, err := ossu.GetNextPositionFromResponse(resp)
+	pos, exists, err := ossu.GetNextPositionFromResponseHeader(header)
 	if err != nil {
 		return errs.Wrap(err, "failed to get next position from response")
 	}
@@ -214,7 +231,7 @@ func (w *AppendWriter) appendPart(opts ...httpc.Option) error {
 	return nil
 }
 
-func (w *AppendWriter) append(url string, opts ...httpc.Option) (*http.Response, error) {
+func (w *AppendWriter) append(url string, opts ...httpc.Option) error {
 	if w.isBlob {
 		return httpc.PutTimeout(w.ctx, w.cfg.Timeout, url, opts...)
 	}

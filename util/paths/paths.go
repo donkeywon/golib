@@ -15,6 +15,9 @@ func PathExist(path string, isDir bool) bool {
 	if os.IsNotExist(err) {
 		return false
 	}
+	if info == nil {
+		return false
+	}
 
 	if info.IsDir() && !isDir || !info.IsDir() && isDir {
 		return false

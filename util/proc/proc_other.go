@@ -16,6 +16,12 @@ func FindAllChildrenProcess(ctx context.Context, p *process.Process) ([]*process
 
 	var allChildren []*process.Process
 	for _, child := range children {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		default:
+		}
+
 		allChildren = append(allChildren, child)
 		subChildren, err := FindAllChildrenProcess(ctx, child)
 		if err != nil {

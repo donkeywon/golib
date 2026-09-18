@@ -219,6 +219,9 @@ func deduplicateWithStackErr(err error, s *stack) int {
 		} else {
 			errs = terr.(anotherWrappedErrs).WrappedErrors()
 		}
+		if len(errs) == 0 {
+			return len(*s)
+		}
 		minIdx := deduplicateWithStackErr(errs[0], s)
 		for i := 1; i < len(errs); i++ {
 			minIdx = minInt(minIdx, deduplicateWithStackErr(errs[i], s))

@@ -26,17 +26,6 @@ const (
 	defaultResponseHeaderTimeout = time.Second * 15
 )
 
-type respBodyReader struct {
-	io.ReadCloser
-	r *Reader
-}
-
-func (r *respBodyReader) Read(p []byte) (n int, err error) {
-	n, err = r.ReadCloser.Read(p)
-	atomic.AddInt64(&r.r.offset, int64(n))
-	return
-}
-
 type Reader struct {
 	url string
 
@@ -52,8 +41,9 @@ type Reader struct {
 	end          int64
 	supportRange bool
 
-	mu       sync.Mutex
-	respBody *respBodyReader
+	mu         sync.Mutex
+	respBody   io.ReadCloser
+	noRangeErr error
 
 	opt *option
 }
@@ -129,19 +119,39 @@ func (r *Reader) Read(p []byte) (int, error) {
 	}
 
 	if !r.supportRange {
-		r.mu.Lock()
-		defer r.mu.Unlock()
-		if r.respBody == nil {
-			r.respBody, err = r.retryGetNoRange()
-			if err != nil {
-				return 0, err
-			}
-		}
-
-		return r.respBody.Read(p)
+		return r.readNoRange(p)
 	}
 
 	return r.retryReadFromRemain(p)
+}
+
+func (r *Reader) readNoRange(p []byte) (int, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if r.noRangeErr != nil {
+		return 0, r.noRangeErr
+	}
+	if r.Offset() > 0 {
+		return 0, ErrRangeUnsupported
+	}
+
+	if r.respBody == nil {
+		var err error
+		r.respBody, err = r.retryGetNoRange()
+		if err != nil {
+			return 0, err
+		}
+	}
+
+	n, err := r.respBody.Read(p)
+	atomic.AddInt64(&r.offset, int64(n))
+	if err != nil && err != io.EOF {
+		r.respBody.Close()
+		r.respBody = nil
+		r.noRangeErr = err
+	}
+	return n, err
 }
 
 func (r *Reader) ReadAt(p []byte, offset int64) (int, error) {
@@ -164,7 +174,10 @@ func (r *Reader) ReadAt(p []byte, offset int64) (int, error) {
 	}
 
 	var nr int
-	_, err = r.getPart(offset, int64(len(p)), httpc.ToBytes(&nr, p))
+	err = r.getPart(offset, int64(len(p)), httpc.ToBytes(&nr, p))
+	if err == nil && nr < len(p) {
+		return nr, io.EOF
+	}
 	return nr, err
 }
 
@@ -200,7 +213,12 @@ func (r *Reader) WriteTo(w io.Writer) (int64, error) {
 	}
 
 	if !r.supportRange {
-		_, err = r.get(httpc.ToWriter(w, &nw))
+		if r.Offset() > 0 {
+			return 0, ErrRangeUnsupported
+		}
+
+		err = r.get(httpc.ToWriter(w, &nw))
+		atomic.AddInt64(&r.offset, nw)
 		return nw, err
 	}
 
@@ -222,14 +240,22 @@ func (r *Reader) retryHead() error {
 }
 
 func (r *Reader) head() error {
-	resp, err := httpc.DoWithClient(r.ctx, http.MethodHead, r.url, r.c, append(r.opt.httpOptions, httpc.CheckStatusCode(nil, nil, http.StatusOK))...)
+	var (
+		headerAcceptRange string
+		contentLength     int64
+	)
+	err := httpc.DoWithClient(r.ctx, http.MethodHead, r.url, r.c,
+		append(r.opt.httpOptions,
+			httpc.CheckStatusCode(nil, nil, http.StatusOK),
+			httpc.GetHeader(httpu.HeaderAcceptRanges, &headerAcceptRange),
+			httpc.GetContentLength(&contentLength))...)
 	if err != nil {
 		return errs.Wrap(err, "head failed")
 	}
 
-	if resp.Header.Get(httpu.HeaderAcceptRanges) == "bytes" && resp.ContentLength >= 0 {
+	if headerAcceptRange == "bytes" && contentLength >= 0 {
 		if r.opt.limit <= 0 {
-			r.end = resp.ContentLength
+			r.end = contentLength
 		}
 		r.supportRange = true
 	}
@@ -243,6 +269,7 @@ func (r *Reader) retryRemainWriteTo(w io.Writer) (int64, error) {
 		func() error {
 			n, err := r.remainWriteTo(w)
 			nw += n
+			atomic.AddInt64(&r.offset, n)
 			return err
 		},
 		retry.Attempts(uint(r.opt.retry)),
@@ -252,16 +279,16 @@ func (r *Reader) retryRemainWriteTo(w io.Writer) (int64, error) {
 }
 
 func (r *Reader) remainWriteTo(w io.Writer) (n int64, err error) {
-	var respBody io.ReadCloser
-	respBody, err = r.getRemain()
+	respBody, err := r.getRemain()
+	if errors.Is(err, io.EOF) {
+		return 0, nil
+	}
 	if err != nil {
 		return 0, err
 	}
 	defer respBody.Close()
 
-	n, err = io.Copy(w, respBody)
-
-	return n, err
+	return io.Copy(w, respBody)
 }
 
 func (r *Reader) retryReadFromRemain(p []byte) (int, error) {
@@ -296,6 +323,7 @@ func (r *Reader) readFromRemain(p []byte) (n int, err error) {
 	}
 
 	n, err = iou.ReadFill(p, r.respBody)
+	atomic.AddInt64(&r.offset, int64(n))
 	if err != nil && err != io.EOF {
 		r.respBody.Close()
 		r.respBody = nil
@@ -303,28 +331,23 @@ func (r *Reader) readFromRemain(p []byte) (n int, err error) {
 	return n, err
 }
 
-func (r *Reader) getRemain() (*respBodyReader, error) {
+func (r *Reader) getRemain() (io.ReadCloser, error) {
 	var respBody io.ReadCloser
 	n := r.Len()
 	if n <= 0 {
 		return nil, io.EOF
 	}
-	_, err := r.getPart(r.Offset(), n, httpc.RespOptionFunc(func(resp *http.Response) error {
-		respBody = resp.Body
-		resp.Body = io.NopCloser(resp.Body)
-		return nil
-	}))
-
+	err := r.getPart(r.Offset(), n, httpc.DetachBody(&respBody))
 	if err != nil {
 		if respBody != nil {
 			respBody.Close()
 		}
 		return nil, err
 	}
-	return &respBodyReader{ReadCloser: respBody, r: r}, err
+	return respBody, nil
 }
 
-func (r *Reader) getPart(offset int64, n int64, opts ...httpc.Option) (*http.Response, error) {
+func (r *Reader) getPart(offset int64, n int64, opts ...httpc.Option) error {
 	end := min(offset+n-1, r.end-1)
 	ranges := fmt.Sprintf("bytes=%d-%d", offset, end)
 
@@ -336,15 +359,11 @@ func (r *Reader) getPart(offset int64, n int64, opts ...httpc.Option) (*http.Res
 	return httpc.DoWithClient(r.ctx, http.MethodGet, r.url, r.c, allOpts...)
 }
 
-func (r *Reader) retryGetNoRange() (*respBodyReader, error) {
+func (r *Reader) retryGetNoRange() (io.ReadCloser, error) {
 	var respBody io.ReadCloser
-	_, err := retry.DoWithData(
-		func() (*http.Response, error) {
-			return r.get(httpc.RespOptionFunc(func(resp *http.Response) error {
-				respBody = resp.Body
-				resp.Body = io.NopCloser(resp.Body)
-				return nil
-			}))
+	err := retry.Do(
+		func() error {
+			return r.get(httpc.DetachBody(&respBody))
 		},
 		retry.Attempts(uint(r.opt.retry)),
 		retry.Context(r.ctx),
@@ -361,10 +380,10 @@ func (r *Reader) retryGetNoRange() (*respBodyReader, error) {
 		}
 		return nil, err
 	}
-	return &respBodyReader{ReadCloser: respBody, r: r}, err
+	return respBody, nil
 }
 
-func (r *Reader) get(opts ...httpc.Option) (*http.Response, error) {
+func (r *Reader) get(opts ...httpc.Option) error {
 	allOpts := make([]httpc.Option, 0, len(r.opt.httpOptions)+len(opts)+1)
 	allOpts = append(allOpts, httpc.CheckStatusCode(nil, nil, http.StatusOK))
 	allOpts = append(allOpts, opts...)

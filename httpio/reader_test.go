@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -860,10 +861,7 @@ func TestReadFromRemain_BodyReadError(t *testing.T) {
 
 	// Replace respBody with one that errors on read.
 	r.mu.Lock()
-	r.respBody = &respBodyReader{
-		ReadCloser: io.NopCloser(&errorReader{err: errors.New("injected body read error")}),
-		r:          r,
-	}
+	r.respBody = io.NopCloser(&errorReader{err: errors.New("injected body read error")})
 	r.mu.Unlock()
 
 	buf := make([]byte, 10)
@@ -1148,4 +1146,164 @@ func TestRetryGetNoRange_ErrorCleanup(t *testing.T) {
 	if err == nil {
 		require.Error(t, err, "expected error from retryGetNoRange")
 	}
+}
+
+// TestRead_NoRange_WithOffset_ReturnsError covers the offset check on the
+// non-range path: without byte ranges a response always starts at byte 0, so
+// reading from an offset must fail instead of silently returning the head.
+func TestRead_NoRange_WithOffset_ReturnsError(t *testing.T) {
+	content := []byte("0123456789")
+	s := newRangableServer(content)
+	s.supportRange = false
+	defer s.Close()
+
+	r := s.newReader(context.Background(), Offset(5))
+	_, err := r.Read(make([]byte, 5))
+	require.ErrorIs(t, err, ErrRangeUnsupported)
+
+	r2 := s.newReader(context.Background(), Offset(5))
+	var buf bytes.Buffer
+	_, err = r2.WriteTo(&buf)
+	require.ErrorIs(t, err, ErrRangeUnsupported)
+	assert.Empty(t, buf.Bytes())
+}
+
+// TestRead_NoRange_BodyErrorIsSticky covers the non-range body error path: the
+// failed body is released, and the error is kept so the next Read can not
+// silently restart the stream from byte 0 and repeat data.
+func TestRead_NoRange_BodyErrorIsSticky(t *testing.T) {
+	content := []byte("no-range-body-error")
+	s := newRangableServer(content)
+	s.supportRange = false
+	defer s.Close()
+
+	r := s.newReader(context.Background())
+	require.NoError(t, r.init())
+
+	bodyErr := errors.New("injected body read error")
+	r.mu.Lock()
+	r.respBody = io.NopCloser(&errorReader{err: bodyErr})
+	r.mu.Unlock()
+
+	_, err := r.Read(make([]byte, 4))
+	require.ErrorIs(t, err, bodyErr)
+
+	r.mu.Lock()
+	assert.Nil(t, r.respBody, "failed body must be released")
+	r.mu.Unlock()
+
+	_, err = r.Read(make([]byte, 4))
+	require.ErrorIs(t, err, bodyErr, "error must stay sticky")
+}
+
+// TestReadAt_ShortBody_ReturnsEOF covers the io.ReaderAt contract: a short read
+// at the tail of an object must report io.EOF, not silence the EOF into nil.
+func TestReadAt_ShortBody_ReturnsEOF(t *testing.T) {
+	content := []byte("0123456789")
+	s := newRangableServer(content)
+	defer s.Close()
+
+	r := s.newReader(context.Background())
+
+	buf := make([]byte, 5)
+	n, err := r.ReadAt(buf, 8) // only 2 bytes left
+	require.ErrorIs(t, err, io.EOF)
+	assert.Equal(t, 2, n)
+	assert.Equal(t, content[8:], buf[:n])
+}
+
+// failFirstWriter fails the first write and accepts everything afterwards.
+type failFirstWriter struct {
+	buf      bytes.Buffer
+	failures int
+}
+
+func (w *failFirstWriter) Write(p []byte) (int, error) {
+	if w.failures > 0 {
+		w.failures--
+		return 0, errors.New("injected write error")
+	}
+	return w.buf.Write(p)
+}
+
+// TestWriteTo_WriteError_OffsetFollowsWrittenBytes covers the WriteTo retry: the
+// offset may only advance for bytes the writer accepted, otherwise the retry
+// resumes past data that was never delivered.
+func TestWriteTo_WriteError_OffsetFollowsWrittenBytes(t *testing.T) {
+	content := []byte(strings.Repeat("0123456789", 20)) // 200 bytes
+	s := newRangableServer(content)
+	defer s.Close()
+
+	r := s.newReader(context.Background(), Retry(2))
+	w := &failFirstWriter{failures: 1}
+
+	n, err := r.WriteTo(w)
+	require.NoError(t, err)
+	assert.Equal(t, int64(len(content)), n)
+	assert.Equal(t, content, w.buf.Bytes())
+	assert.Equal(t, int64(len(content)), r.Offset())
+}
+
+// ctxBlockingBody blocks in Read until the reader's context is cancelled.
+type ctxBlockingBody struct {
+	ctx     context.Context
+	started chan struct{}
+	once    sync.Once
+}
+
+func (b *ctxBlockingBody) Read([]byte) (int, error) {
+	b.once.Do(func() { close(b.started) })
+	<-b.ctx.Done()
+	return 0, b.ctx.Err()
+}
+
+func (b *ctxBlockingBody) Close() error { return nil }
+
+// TestClose_UnblocksRead covers Close being called from another goroutine than
+// the one blocked in Read, which is how an in-flight read gets interrupted. The
+// error path of readNoRange mutates respBody/noRangeErr, so it has to hold the
+// same lock as Close.
+func TestClose_UnblocksRead(t *testing.T) {
+	content := []byte("close-unblocks-read")
+	s := newRangableServer(content)
+	s.supportRange = false
+	defer s.Close()
+
+	r := s.newReader(context.Background())
+	require.NoError(t, r.init())
+
+	body := &ctxBlockingBody{ctx: r.ctx, started: make(chan struct{})}
+	r.mu.Lock()
+	r.respBody = body
+	r.mu.Unlock()
+
+	readErrCh := make(chan error, 1)
+	go func() {
+		_, err := r.Read(make([]byte, 8))
+		readErrCh <- err
+	}()
+
+	<-body.started // Read is blocked inside the body
+
+	closeErrCh := make(chan error, 1)
+	go func() { closeErrCh <- r.Close() }()
+
+	select {
+	case err := <-readErrCh:
+		require.ErrorIs(t, err, context.Canceled)
+	case <-time.After(10 * time.Second):
+		t.Fatal("Close did not unblock the blocked Read")
+	}
+
+	select {
+	case err := <-closeErrCh:
+		require.NoError(t, err, "Close")
+	case <-time.After(10 * time.Second):
+		t.Fatal("Close did not return")
+	}
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	assert.Nil(t, r.respBody, "the failed body must be released by the Read, not by Close")
+	assert.ErrorIs(t, r.noRangeErr, context.Canceled)
 }

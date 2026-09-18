@@ -219,6 +219,29 @@ func CheckStatusCodeRange(checkFailedBodyWriter io.Writer, statusCode *int, min,
 	})
 }
 
+func DetachBody(dst *io.ReadCloser) Option {
+	return RespOptionFunc(func(resp *http.Response) error {
+		*dst = resp.Body
+		resp.Body = http.NoBody
+		return nil
+	})
+}
+
+func GetHeader(k string, v *string) Option {
+	return RespOptionFunc(func(resp *http.Response) error {
+		vv := resp.Header.Get(k)
+		*v = vv
+		return nil
+	})
+}
+
+func GetContentLength(v *int64) Option {
+	return RespOptionFunc(func(resp *http.Response) error {
+		*v = resp.ContentLength
+		return nil
+	})
+}
+
 func ToString(s *string) Option {
 	return RespOptionFunc(func(resp *http.Response) error {
 		var sb strings.Builder
