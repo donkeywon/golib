@@ -47,7 +47,7 @@ func (s *svcd) Init(ctx context.Context) error {
 
 		_svcMap[fqn] = ins
 		if cfg, hasCfg := _svcCfgMap[fqn]; hasCfg {
-			_svcCfgSetters[fqn](ins, cfg)
+			_svcCfgSetters[fqn](ins, reflect.ValueOf(cfg).Elem().Interface())
 		}
 	}
 
@@ -79,6 +79,9 @@ func validate[C any](ns Namespace, m Module, n Name, creator plugin.Creator[Svc]
 	}
 	if string(n) == "" {
 		panic("empty svc name")
+	}
+	if cfgCreator != nil && reflect.TypeFor[C]().Kind() != reflect.Struct {
+		panic(fmt.Sprintf("svc cfg creator return non-struct type, FQN: %s.%s.%s", ns, m, n))
 	}
 
 	// allow duplicate reg for replacing or testing
@@ -115,25 +118,12 @@ func Reg[C any](ns Namespace, m Module, n Name, creator plugin.Creator[Svc], cfg
 
 	if cfgCreator != nil {
 		cfg := cfgCreator()
-		if !isNil(cfg, reflect.ValueOf(cfg)) {
-			_svcCfgMap[fqn] = cfg
-			boot.RegCfg(fqn, cfg)
-
-			_svcCfgSetters[fqn] = func(s Svc, cfg any) {
-				plugin.SetCfg(s, cfg.(C))
-			}
-		}
+		cfgPtr := &cfg
+		boot.RegCfg(fqn, cfgPtr)
+		_svcCfgMap[fqn] = cfgPtr
+		_svcCfgSetters[fqn] = func(s Svc, cfg any) { plugin.SetCfg(s, cfg.(C)) }
+	} else {
+		delete(_svcCfgMap, fqn)
+		delete(_svcCfgSetters, fqn)
 	}
-}
-
-func isNil(v any, rv reflect.Value) bool {
-	if v == nil {
-		return true
-	}
-	switch rv.Kind() {
-	case reflect.Pointer, reflect.Map, reflect.Slice, reflect.Interface,
-		reflect.Func, reflect.Chan:
-		return rv.IsNil()
-	}
-	return false
 }

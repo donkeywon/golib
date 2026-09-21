@@ -175,17 +175,19 @@ func (w *MultiPartWriter) ReadFrom(r io.Reader) (int64, error) {
 			n, err = iou.ReadFill(b, r)
 			total += int64(n)
 			if n > 0 {
-				b = b[:n]
-				w.parallelChan <- &uploadPartReq{partNo: w.curPartNo, b: b}
+				w.parallelChan <- &uploadPartReq{partNo: w.curPartNo, b: b[:n]}
 				w.curPartNo++
 			}
-			if err != nil {
+			if err == nil {
+				continue
+			}
+			if errors.Is(err, io.EOF) {
+				err = nil
 				break
 			}
-		}
 
-		if err == io.EOF {
-			err = nil
+			w.parallelErrs.Store(errs.Wrap(err, "read from src failed"))
+			break
 		}
 
 		return total, err
@@ -350,20 +352,10 @@ func (w *MultiPartWriter) Close() error {
 		}
 		w.cancel()
 
-		if w.cfg.Parallel > 1 {
-			parallelErr := w.parallelErrs.Err()
-			hasParallelErr := w.parallelErrs.Has()
-			if hasParallelErr || alreadyCancelled {
-				err = errors.Join(err, parallelErr, w.abort())
-			} else {
-				err = errors.Join(err, w.complete())
-			}
+		if w.parallelErrs.Has() || w.uploadErr != nil || alreadyCancelled {
+			err = errors.Join(err, w.parallelErrs.Err(), w.abort())
 		} else {
-			if w.uploadErr != nil || alreadyCancelled {
-				err = errors.Join(err, w.abort())
-			} else {
-				err = errors.Join(err, w.complete())
-			}
+			err = errors.Join(err, w.complete())
 		}
 	})
 	return err
@@ -391,7 +383,6 @@ func (w *MultiPartWriter) init() error {
 	}
 
 	w.isBlob = ossu.IsAzblob(w.cfg.URL)
-	w.ctx, w.cancel = context.WithCancel(w.ctx)
 	w.needContentLength = ossu.NeedContentLength(w.ctx, w.cfg.URL)
 
 	var err error
@@ -402,6 +393,7 @@ func (w *MultiPartWriter) init() error {
 		}
 	}
 
+	w.ctx, w.cancel = context.WithCancel(w.ctx)
 	w.initialized = true
 	w.curPartNo = 1
 	if w.cfg.Parallel > 1 {
@@ -555,6 +547,7 @@ func (w *MultiPartWriter) initMultiPart() (string, error) {
 	result := &InitiateMultipartUploadResult{}
 	err = retry.Do(
 		func() error {
+			respBody.Reset()
 			return httpc.PostTimeout(w.ctx, w.cfg.Timeout, w.cfg.URL+"?uploads",
 				httpc.ReqOptionFunc(w.addAuth),
 				httpc.CheckStatusCode(respBody, &respStatusCode, http.StatusOK),

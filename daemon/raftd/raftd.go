@@ -24,6 +24,7 @@ var (
 	ErrInvalidNodeID   = errors.New("invalid node id or addr")
 	ErrDuplicateNodeID = errors.New("duplicate node id or addr")
 	ErrNodeIDNotExists = errors.New("node id not exists")
+	ErrNotReady        = errors.New("not ready")
 )
 
 const DaemonTypeRaftd boot.DaemonType = "raftd"
@@ -154,11 +155,14 @@ func (r *Raftd) FSM() raft.FSM {
 	return r.fsm
 }
 
-func (r *Raftd) Nodes() ([]raft.Server, []string, []string) {
+func (r *Raftd) Nodes() ([]raft.Server, []string, []string, error) {
+	if r.r == nil {
+		return nil, nil, nil, ErrNotReady
+	}
 	f := r.r.GetConfiguration()
 	err := f.Error()
 	if err != nil {
-		panic(errs.ErrToStackString(errs.Wrap(err, "get raft nodes failed, should not happen")))
+		return nil, nil, nil, errs.Wrap(err, "get raft nodes failed")
 	}
 
 	c := f.Configuration()
@@ -170,11 +174,14 @@ func (r *Raftd) Nodes() ([]raft.Server, []string, []string) {
 		addrs[i] = string(s.Address)
 	}
 
-	return c.Servers, ids, addrs
+	return c.Servers, ids, addrs, nil
 }
 
 func (r *Raftd) Node(id string) (raft.Server, error) {
-	nodes, _, _ := r.Nodes()
+	nodes, _, _, err := r.Nodes()
+	if err != nil {
+		return raft.Server{}, errs.Wrap(err, "get nodes failed")
+	}
 	for i := range nodes {
 		if nodes[i].ID == raft.ServerID(id) {
 			return nodes[i], nil
@@ -206,13 +213,16 @@ func (r *Raftd) AddNode(nodeID string, nodeAddr string, timeout time.Duration) e
 	if strings.Contains(nodeID, ":") || !strings.Contains(nodeAddr, ":") {
 		return ErrInvalidNodeID
 	}
-	_, nodeIDs, nodeAddrs := r.Nodes()
+	_, nodeIDs, nodeAddrs, err := r.Nodes()
+	if err != nil {
+		return errs.Wrap(err, "get nodes failed")
+	}
 	if slices.Contains(nodeIDs, nodeID) || slices.Contains(nodeAddrs, nodeAddr) {
 		return ErrDuplicateNodeID
 	}
 
 	f := r.r.AddVoter(raft.ServerID(nodeID), raft.ServerAddress(nodeAddr), 0, timeout)
-	err := f.Error()
+	err = f.Error()
 	if err != nil {
 		return errs.Wrap(err, "add node failed")
 	}
@@ -226,13 +236,16 @@ func (r *Raftd) DelNode(nodeID string, timeout time.Duration) error {
 	if strings.Contains(nodeID, ":") {
 		return ErrInvalidNodeID
 	}
-	_, nodeIDs, _ := r.Nodes()
+	_, nodeIDs, _, err := r.Nodes()
+	if err != nil {
+		return errs.Wrap(err, "get nodes failed")
+	}
 	if !slices.Contains(nodeIDs, nodeID) {
 		return ErrNodeIDNotExists
 	}
 
 	f := r.r.RemoveServer(raft.ServerID(nodeID), 0, timeout)
-	err := f.Error()
+	err = f.Error()
 	if err != nil {
 		return errs.Wrap(err, "del node failed")
 	}
@@ -246,13 +259,16 @@ func (r *Raftd) TransferLeadershipTo(nodeID string, nodeAddr string) error {
 	if strings.Contains(nodeID, ":") || !strings.Contains(nodeAddr, ":") {
 		return ErrInvalidNodeID
 	}
-	_, nodeIDs, nodeAddrs := r.Nodes()
+	_, nodeIDs, nodeAddrs, err := r.Nodes()
+	if err != nil {
+		return errs.Wrap(err, "get nodes failed")
+	}
 	if !slices.Contains(nodeIDs, nodeID) || !slices.Contains(nodeAddrs, nodeAddr) {
 		return ErrNodeIDNotExists
 	}
 
 	f := r.r.LeadershipTransferToServer(raft.ServerID(nodeID), raft.ServerAddress(nodeAddr))
-	err := f.Error()
+	err = f.Error()
 	if err != nil {
 		return errs.Wrap(err, "transfer leadership failed")
 	}

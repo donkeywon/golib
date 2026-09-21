@@ -882,44 +882,38 @@ func TestToWriter_NilN(t *testing.T) {
 
 func TestGuessContentLength_HasLen(t *testing.T) {
 	t.Parallel()
-	l, err := guessContentLength(&lenReader{data: []byte("12345")})
-	require.NoError(t, err)
+	l := guessContentLength(&lenReader{data: []byte("12345")})
 	assert.Equal(t, int64(5), l)
 }
 
 func TestGuessContentLength_HasLen2(t *testing.T) {
 	t.Parallel()
-	l, err := guessContentLength(&lenReader2{data: []byte("123456")})
-	require.NoError(t, err)
+	l := guessContentLength(&lenReader2{data: []byte("123456")})
 	assert.Equal(t, int64(6), l)
 }
 
 func TestGuessContentLength_HasSize(t *testing.T) {
 	t.Parallel()
-	l, err := guessContentLength(&sizeReader{data: []byte("1234")})
-	require.NoError(t, err)
+	l := guessContentLength(&sizeReader{data: []byte("1234")})
 	assert.Equal(t, int64(4), l)
 }
 
 func TestGuessContentLength_HasSize2(t *testing.T) {
 	t.Parallel()
-	l, err := guessContentLength(&sizeReader2{data: []byte("12345")})
-	require.NoError(t, err)
+	l := guessContentLength(&sizeReader2{data: []byte("12345")})
 	assert.Equal(t, int64(5), l)
 }
 
 func TestGuessContentLength_Default(t *testing.T) {
 	t.Parallel()
 	// plainReader has no Len()/Size() — falls through to default case
-	l, err := guessContentLength(&plainReader{data: "hello"})
-	require.NoError(t, err)
+	l := guessContentLength(&plainReader{data: "hello"})
 	assert.Equal(t, int64(0), l)
 }
 
 func TestGuessContentLength_Nil(t *testing.T) {
 	t.Parallel()
-	l, err := guessContentLength(nil)
-	require.NoError(t, err)
+	l := guessContentLength(nil)
 	assert.Equal(t, int64(0), l)
 }
 

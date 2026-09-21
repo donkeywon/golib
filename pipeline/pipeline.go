@@ -13,6 +13,8 @@ import (
 
 type Pipeline struct {
 	ws []Worker
+
+	osPipes []io.Closer
 }
 
 func New() *Pipeline {
@@ -43,8 +45,9 @@ func (p *Pipeline) Init(ctx context.Context) error {
 		if p.ws[i].SupportZeroCopy() && p.ws[i+1].SupportZeroCopy() && !p.ws[i].WriterWrapped() && !p.ws[i+1].ReaderWrapped() {
 			pr, pw, err = os.Pipe()
 			if err != nil {
-				return errs.Wrap(err, "create os pipe failed")
+				return errors.Join(errs.Wrap(err, "create os pipe failed"), errs.Wrap(p.closeOSPipes(), "close os pipes failed"))
 			}
+			p.osPipes = append(p.osPipes, pr)
 		} else {
 			pr, pw = io.Pipe()
 		}
@@ -83,5 +86,19 @@ func (p *Pipeline) Run(ctx context.Context) error {
 	}
 
 	wg.Wait()
+	return errors.Join(allErr...)
+}
+
+func (p *Pipeline) closeOSPipes() error {
+	if len(p.osPipes) == 0 {
+		return nil
+	}
+	allErr := make([]error, 0, len(p.osPipes))
+	for i := range len(p.osPipes) {
+		err := p.osPipes[i].Close()
+		if err != nil {
+			allErr = append(allErr, err)
+		}
+	}
 	return errors.Join(allErr...)
 }

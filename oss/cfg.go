@@ -22,7 +22,7 @@ func (c *Cfg) setDefaults() {
 		c.Timeout = 60 * time.Second
 	}
 	if c.PartSize <= 0 {
-		c.PartSize = 512 * 1024
+		c.PartSize = 5 * 1024 * 1024
 	}
 	if c.Parallel <= 0 {
 		c.Parallel = 1

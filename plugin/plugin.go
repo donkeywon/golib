@@ -3,6 +3,8 @@ package plugin
 import (
 	"fmt"
 	"reflect"
+
+	"codeberg.org/donkeywon/golib/util/reflects"
 )
 
 type Creator[P Plugin] func() P
@@ -36,6 +38,9 @@ func Reg[P Plugin, C any](typ any, creator Creator[P], cfgCreator CfgCreator[C])
 
 			SetCfg(p, cfgAny.(C))
 		}
+	} else {
+		delete(_pluginCfgCreators, typ)
+		delete(_pluginCfgSetters, typ)
 	}
 }
 
@@ -59,6 +64,33 @@ func validate[P Plugin, C any](typ any, creator Creator[P], cfgCreator CfgCreato
 }
 
 func CreateWithCfg[P Plugin, C any](typ any, cfg C) P {
+	p := Create[P](typ)
+
+	if cfgSetter, ok := _pluginCfgSetters[typ]; ok {
+		cfgSetter(p, cfg)
+	} else if !reflects.IsNil(cfg) {
+		SetCfg(p, cfg)
+	}
+
+	return p
+}
+
+func CreateCfg[C any](typ any) C {
+	var zero C
+	f, exists := _pluginCfgCreators[typ]
+	if !exists {
+		return zero
+	}
+
+	c := f()
+	cc, ok := c.(C)
+	if !ok {
+		panic(fmt.Sprintf("plugin cfg type mismatch: want %v, got %v (type: %+v)", reflect.TypeFor[C](), reflect.TypeOf(c), typ))
+	}
+	return cc
+}
+
+func Create[P Plugin](typ any) P {
 	f, exists := _pluginCreators[typ]
 	if !exists {
 		panic(fmt.Sprintf("plugin not exists: %+v", typ))
@@ -70,35 +102,7 @@ func CreateWithCfg[P Plugin, C any](typ any, cfg C) P {
 		panic(fmt.Sprintf("plugin type mismatch: want %v, got %v (type: %+v)", reflect.TypeFor[P](), reflect.TypeOf(p), typ))
 	}
 
-	if cfgSetter, ok := _pluginCfgSetters[typ]; ok {
-		cfgSetter(pp, cfg)
-	} else {
-		SetCfg(pp, cfg)
-	}
-
 	return pp
-}
-
-func CreateCfg[C any](typ any) C {
-	var zero C
-	f, exists := _pluginCfgCreators[typ]
-	if !exists {
-		return zero
-	}
-
-	c := f()
-	switch cc := c.(type) {
-	case C:
-		return cc
-	case *C:
-		return *cc
-	default:
-		panic(fmt.Sprintf("plugin cfg type mismatch: want %v, got %v (type: %+v)", reflect.TypeFor[C](), reflect.TypeOf(c), typ))
-	}
-}
-
-func Create[P Plugin, C any](typ any) P {
-	return CreateWithCfg[P](typ, CreateCfg[C](typ))
 }
 
 func setCfgReflect(p any, cfg any) {

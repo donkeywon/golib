@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"net/url"
 	"slices"
-	"strconv"
 	"strings"
 
 	"codeberg.org/donkeywon/golib/errs"
@@ -94,11 +93,8 @@ type hasSize2 interface {
 	Size() int64
 }
 
-func guessContentLength(r any) (int64, error) {
-	var (
-		l   int64
-		err error
-	)
+func guessContentLength(r any) int64 {
+	var l int64
 	switch rt := r.(type) {
 	case hasLen:
 		l = int64(rt.Len())
@@ -111,7 +107,7 @@ func guessContentLength(r any) (int64, error) {
 	default:
 	}
 
-	return l, err
+	return l
 }
 
 func WithBodyReader(reader io.Reader) Option {
@@ -122,14 +118,9 @@ func WithBodyReader(reader io.Reader) Option {
 			r.Body = io.NopCloser(reader)
 		}
 
-		l, err := guessContentLength(reader)
-		if err != nil {
-			return errs.Wrap(err, "guess content length failed")
-		}
-
+		l := guessContentLength(reader)
 		if l > 0 {
 			r.ContentLength = l
-			r.Header.Set(httpu.HeaderContentLength, strconv.FormatInt(l, 10))
 		}
 
 		return nil
@@ -149,7 +140,6 @@ func WithBodyMarshal(v any, contentType string, marshal func(v any) ([]byte, err
 		r.Header.Set(httpu.HeaderContentType, contentType)
 		r.Body = io.NopCloser(bytes.NewReader(bs))
 		r.ContentLength = int64(len(bs))
-		r.Header.Set(httpu.HeaderContentLength, strconv.FormatInt(r.ContentLength, 10))
 		return nil
 	})
 }
@@ -163,7 +153,6 @@ func WithBodyForm(form url.Values) Option {
 		r.Body = io.NopCloser(strings.NewReader(s))
 		r.Header.Set(httpu.HeaderContentType, httpu.MIMEPOSTForm)
 		r.ContentLength = int64(len(s))
-		r.Header.Set(httpu.HeaderContentLength, strconv.FormatInt(r.ContentLength, 10))
 		return nil
 	})
 }

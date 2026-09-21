@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -119,8 +120,16 @@ func (w *AppendWriter) ReadFrom(r io.Reader) (int64, error) {
 		return n, err
 	}
 
-	rr := &readerWrapper{Reader: r}
+	br := bufio.NewReaderSize(r, 1)
+	rr := &readerWrapper{Reader: br}
 	for {
+		if _, err = br.Peek(1); err != nil {
+			if errors.Is(err, io.EOF) {
+				err = nil
+			}
+			break
+		}
+
 		lr := io.LimitReader(rr, w.cfg.PartSize)
 		err = w.appendPart(httpc.WithBodyReader(lr)) // no retry
 		if err != nil {

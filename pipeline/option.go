@@ -30,12 +30,18 @@ func AsyncWrite(opts ...aio.Option) WriterWrapFunc {
 }
 
 func Tee(w ...io.Writer) ReaderWrapFunc {
+	if len(w) == 0 {
+		panic("empty tee")
+	}
 	return func(r io.Reader) io.Reader {
 		return io.TeeReader(r, io.MultiWriter(w...))
 	}
 }
 
 func MultiWrite(ws ...io.Writer) WriterWrapFunc {
+	if len(ws) == 0 {
+		panic("empty multi write")
+	}
 	return func(w io.Writer) io.Writer {
 		wss := make([]io.Writer, 0, len(ws)+1)
 		wss = append(wss, w)

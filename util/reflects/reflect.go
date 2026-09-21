@@ -36,3 +36,30 @@ func IsStruct(v any) bool {
 func IsFunc(v any) bool {
 	return reflect.ValueOf(v).Kind() == reflect.Func
 }
+
+func IsNil(v any) bool {
+	if v == nil {
+		return true
+	}
+	rv := reflect.ValueOf(v)
+	switch rv.Kind() {
+	case reflect.Pointer, reflect.Map, reflect.Slice, reflect.Interface,
+		reflect.Func, reflect.Chan:
+		return rv.IsNil()
+	}
+	return false
+}
+
+func ToPointerIfNot(v any) any {
+	rv := reflect.ValueOf(v)
+	if !rv.IsValid() {
+		return v
+	}
+	if rv.Kind() == reflect.Pointer {
+		return v
+	}
+
+	p := reflect.New(rv.Type())
+	p.Elem().Set(rv)
+	return p.Interface()
+}

@@ -113,7 +113,7 @@ func TestTaskPluginRegistered(t *testing.T) {
 	cfg := plugin.CreateCfg[any](PluginTypeTask)
 	require.IsType(t, Cfg{}, cfg)
 
-	tk := plugin.Create[*Task, Cfg](PluginTypeTask)
+	tk := plugin.Create[*Task](PluginTypeTask)
 	require.NotNil(t, tk)
 }
 

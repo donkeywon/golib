@@ -90,16 +90,20 @@ func Reg[C any](typ DaemonType, creator plugin.Creator[Daemon], cfgCreator plugi
 
 // RegCfg register additional config, cfg type must be pointer.
 func RegCfg[C any](name string, cfg C) {
-	if _, exists := _additionalCfgMap[name]; exists {
-		panic("duplicate register cfg: " + name)
-	}
 	if slices.Contains(_daemonTypes, DaemonType(name)) {
-		panic("duplicate register cfg: " + name)
+		panic("cfg name conflict with daemon: " + name)
 	}
 	if !reflects.IsPointer(cfg) {
 		panic(fmt.Sprintf("cfg type must be pointer: %s/%T", name, cfg))
 	}
-	_additionalCfgKeys = append(_additionalCfgKeys, name)
+	if reflects.IsNil(cfg) {
+		panic(fmt.Sprintf("nil cfg: %s/%T", name, cfg))
+	}
+
+	if _, exists := _additionalCfgMap[name]; !exists {
+		_additionalCfgKeys = append(_additionalCfgKeys, name)
+	}
+
 	_additionalCfgMap[name] = cfg
 }
 
@@ -231,8 +235,14 @@ func createDaemons(ctx context.Context, cfgMap map[string]any, options *options,
 		default:
 		}
 
+		var d Daemon
 		cfg := cfgMap[string(daemonType)]
-		d := plugin.CreateWithCfg[Daemon](daemonType, reflect.ValueOf(cfg).Elem().Interface())
+		if reflects.IsNil(cfg) {
+			d = plugin.Create[Daemon](daemonType)
+		} else {
+			d = plugin.CreateWithCfg[Daemon](daemonType, reflect.ValueOf(cfg).Elem().Interface())
+		}
+
 		_daemonsMap[daemonType] = &daemonInfo{
 			d:    d,
 			done: make(chan struct{}),
@@ -416,32 +426,19 @@ func buildCfgMap(options *options) (map[string]any, []string) {
 	cfgKeys := make([]string, 0, len(_daemonTypes)+len(_additionalCfgKeys)+1)
 
 	cfgKeys = append(cfgKeys, options.loggerCfgKey)
-	options.loggerCreator = toPointerIfNot(options.loggerCreator).(LoggerCreator)
+	options.loggerCreator = reflects.ToPointerIfNot(options.loggerCreator).(LoggerCreator)
 	cfgMap[options.loggerCfgKey] = options.loggerCreator
 
 	for _, daemonType := range _daemonTypes {
 		cfg := plugin.CreateCfg[any](daemonType)
-		cfgMap[string(daemonType)] = toPointerIfNot(cfg)
+		cfgMap[string(daemonType)] = reflects.ToPointerIfNot(cfg)
 		cfgKeys = append(cfgKeys, string(daemonType))
 	}
 	for key, cfg := range _additionalCfgMap {
-		cfgMap[key] = toPointerIfNot(cfg)
+		cfgMap[key] = reflects.ToPointerIfNot(cfg)
 		cfgKeys = append(cfgKeys, key)
 	}
 	return cfgMap, cfgKeys
-}
-
-func toPointerIfNot(cfg any) any {
-	if cfg == nil {
-		return &cfg
-	}
-	if reflects.IsPointer(cfg) {
-		return cfg
-	}
-
-	pv := reflect.New(reflect.TypeOf(cfg))
-	pv.Elem().Set(reflect.ValueOf(cfg))
-	return pv.Interface()
 }
 
 func buildFlagParser(options *options, cfgMap map[string]any, cfgKeys []string) (*flags.Parser, error) {

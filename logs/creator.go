@@ -91,10 +91,16 @@ func (r RotateLoggerCreator) Create() (zerolog.Logger, error) {
 }
 
 func buildOutputs(c *RotateLoggerCreator) ([]io.Writer, error) {
-	fps := util.Unique(strings.Split(c.Filepath, FilepathSplitter))
+	fps := strings.Split(c.Filepath, FilepathSplitter)
+	for i := range fps {
+		fps[i] = strings.TrimSpace(fps[i])
+	}
+	fps = util.Unique(fps)
 	var outputs []io.Writer
 	for _, fp := range fps {
-		fp = strings.TrimSpace(fp)
+		if fp == "" {
+			continue
+		}
 		fpl := strings.ToLower(fp)
 		switch fpl {
 		case "stdout":

@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"codeberg.org/donkeywon/golib/logs"
+	"codeberg.org/donkeywon/golib/util/reflects"
 	"github.com/rs/zerolog"
 )
 
@@ -58,7 +59,7 @@ func WithLoggerCreator(cfgKey string, c LoggerCreator) Option {
 	if cfgKey == "" {
 		panic("empty logger cfg key")
 	}
-	if c == nil {
+	if c == nil || reflects.IsNil(c) {
 		panic("nil logger creator")
 	}
 	return func(o *options) {
