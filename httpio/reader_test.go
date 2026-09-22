@@ -268,7 +268,7 @@ func TestReadAt_NoRange_ReturnsError(t *testing.T) {
 	r := s.newReader(ctx)
 
 	// Need to trigger init() first
-	r.init()
+	r.initOnce()
 
 	// init() called explicitly instead of letting ReadAt trigger it,
 	// so ReadAt skips init() and goes straight to the ErrRangeUnsupported branch.
@@ -404,7 +404,7 @@ func TestLen(t *testing.T) {
 	}
 
 	// Trigger init
-	r.init()
+	r.initOnce()
 
 	// After init, Len should be contentLength
 	if got := r.Len(); got != int64(len(content)) {
@@ -425,7 +425,7 @@ func TestSize(t *testing.T) {
 		t.Fatalf("Size before init: got %d, want -1", got)
 	}
 
-	r.init()
+	r.initOnce()
 
 	if got := r.Size(); got != int64(len(content)) {
 		t.Fatalf("Size after init: got %d, want %d", got, len(content))
@@ -440,7 +440,7 @@ func TestSize_WithOffset(t *testing.T) {
 	ctx := context.Background()
 	r := s.newReader(ctx, Offset(5))
 
-	r.init()
+	r.initOnce()
 
 	// Size should be from opt.offset to end
 	if got := r.Size(); got != int64(len(content))-5 {
@@ -854,7 +854,7 @@ func TestReadFromRemain_BodyReadError(t *testing.T) {
 	ctx := context.Background()
 	r := s.newReader(ctx)
 
-	err := r.init()
+	err := r.initOnce()
 	if err != nil {
 		t.Fatalf("init: %v", err)
 	}
@@ -917,7 +917,7 @@ func TestReadAt_GetPartError(t *testing.T) {
 	// ReadAt does NOT retry, so a single getPart failure propagates.
 	// init() called explicitly to succeed first, so ReadAt skips init()
 	// and reaches the getPart() error path instead of the init error path.
-	err := r.init()
+	err := r.initOnce()
 	if err != nil {
 		t.Fatalf("init: %v", err)
 	}
@@ -983,7 +983,7 @@ func TestRemainWriteTo_GetRemainError(t *testing.T) {
 	ctx := context.Background()
 	r := s.newReader(ctx)
 
-	err := r.init()
+	err := r.initOnce()
 	if err != nil {
 		t.Fatalf("init: %v", err)
 	}
@@ -1009,7 +1009,7 @@ func TestGetRemain_RespBodyCleanup(t *testing.T) {
 	ctx := context.Background()
 	r := s.newReader(ctx)
 
-	err := r.init()
+	err := r.initOnce()
 	if err != nil {
 		t.Fatalf("init: %v", err)
 	}
@@ -1034,7 +1034,7 @@ func TestRetryGetNoRange_OnRetryAndError(t *testing.T) {
 	ctx := context.Background()
 	r := s.newReader(ctx, Retry(3))
 
-	err := r.init()
+	err := r.initOnce()
 	if err != nil {
 		t.Fatalf("init: %v", err)
 	}
@@ -1060,7 +1060,7 @@ func TestRead_RetryGetNoRangeError(t *testing.T) {
 	ctx := context.Background()
 	r := s.newReader(ctx, Retry(1)) // no retry
 
-	err := r.init()
+	err := r.initOnce()
 	if err != nil {
 		t.Fatalf("init: %v", err)
 	}
@@ -1135,7 +1135,7 @@ func TestRetryGetNoRange_ErrorCleanup(t *testing.T) {
 	// Failure goes through the final error check where respBody != nil.
 	r := s.newReader(ctx, Retry(1))
 
-	err := r.init()
+	err := r.initOnce()
 	if err != nil {
 		t.Fatalf("init: %v", err)
 	}
@@ -1178,7 +1178,7 @@ func TestRead_NoRange_BodyErrorIsSticky(t *testing.T) {
 	defer s.Close()
 
 	r := s.newReader(context.Background())
-	require.NoError(t, r.init())
+	require.NoError(t, r.initOnce())
 
 	bodyErr := errors.New("injected body read error")
 	r.mu.Lock()
@@ -1270,7 +1270,7 @@ func TestClose_UnblocksRead(t *testing.T) {
 	defer s.Close()
 
 	r := s.newReader(context.Background())
-	require.NoError(t, r.init())
+	require.NoError(t, r.initOnce())
 
 	body := &ctxBlockingBody{ctx: r.ctx, started: make(chan struct{})}
 	r.mu.Lock()

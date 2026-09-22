@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"slices"
+	"strconv"
 	"strings"
 
 	"codeberg.org/donkeywon/golib/errs"
@@ -15,6 +16,12 @@ import (
 	"codeberg.org/donkeywon/golib/util/httpu"
 	"codeberg.org/donkeywon/golib/util/iou"
 )
+
+type StatusCodeError int
+
+func (e StatusCodeError) Error() string {
+	return "unexpected response status code: " + strconv.Itoa(int(e))
+}
 
 type Option interface {
 	HandleReq(*http.Request) error
@@ -169,7 +176,8 @@ func CheckStatusCode(checkFailedBodyWriter io.Writer, statusCode *int, expectedS
 			return nil
 		}
 
-		err := errs.Errorf("unexpected response status code: %d", resp.StatusCode)
+		var err error
+		err = StatusCodeError(resp.StatusCode)
 		if checkFailedBodyWriter != nil {
 			_, e := io.Copy(checkFailedBodyWriter, resp.Body)
 			if e == io.EOF {
@@ -193,7 +201,8 @@ func CheckStatusCodeRange(checkFailedBodyWriter io.Writer, statusCode *int, min,
 			return nil
 		}
 
-		err := errs.Errorf("unexpected response status code: %d", resp.StatusCode)
+		var err error
+		err = StatusCodeError(resp.StatusCode)
 		if checkFailedBodyWriter != nil {
 			_, e := io.Copy(checkFailedBodyWriter, resp.Body)
 			if e == io.EOF {

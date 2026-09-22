@@ -29,13 +29,14 @@ const (
 type Reader struct {
 	url string
 
-	c *http.Client
+	c          *http.Client
+	withClient bool
 
 	ctx    context.Context
 	cancel context.CancelFunc
 
-	headOnce  sync.Once
-	closeOnce sync.Once
+	initOnce  func() error
+	closeOnce func() error
 
 	offset       int64
 	end          int64
@@ -57,6 +58,21 @@ func NewReader(ctx context.Context, url string, opts ...Option) *Reader {
 		url: url,
 		opt: newOption(),
 	}
+	r.initOnce = sync.OnceValue(r.retryHead)
+	r.closeOnce = sync.OnceValue(func() error {
+		if !r.withClient {
+			defer r.c.CloseIdleConnections()
+		}
+		r.cancel()
+
+		var err error
+		r.mu.Lock()
+		if r.respBody != nil {
+			err = r.respBody.Close()
+		}
+		r.mu.Unlock()
+		return err
+	})
 
 	for _, o := range opts {
 		o(r.opt)
@@ -71,6 +87,7 @@ func NewReader(ctx context.Context, url string, opts ...Option) *Reader {
 
 	if r.opt.client != nil {
 		r.c = r.opt.client
+		r.withClient = true
 	} else {
 		trans := &http.Transport{
 			Proxy: http.ProxyFromEnvironment,
@@ -113,7 +130,7 @@ func (r *Reader) Read(p []byte) (int, error) {
 		return 0, nil
 	}
 
-	err := r.init()
+	err := r.initOnce()
 	if err != nil {
 		return 0, err
 	}
@@ -125,14 +142,14 @@ func (r *Reader) Read(p []byte) (int, error) {
 	return r.retryReadFromRemain(p)
 }
 
-func (r *Reader) readNoRange(p []byte) (int, error) {
+func (r *Reader) readNoRange(p []byte) (n int, err error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
 	if r.noRangeErr != nil {
 		return 0, r.noRangeErr
 	}
-	if r.Offset() > 0 {
+	if r.opt.offset > 0 {
 		return 0, ErrRangeUnsupported
 	}
 
@@ -144,7 +161,15 @@ func (r *Reader) readNoRange(p []byte) (int, error) {
 		}
 	}
 
-	n, err := r.respBody.Read(p)
+	var remain int64
+	if r.opt.limit > 0 {
+		if remain = r.end - r.Offset(); remain <= 0 {
+			return 0, io.EOF
+		}
+		p = p[:min(int64(len(p)), remain)]
+	}
+
+	n, err = r.respBody.Read(p)
 	atomic.AddInt64(&r.offset, int64(n))
 	if err != nil && err != io.EOF {
 		r.respBody.Close()
@@ -155,6 +180,9 @@ func (r *Reader) readNoRange(p []byte) (int, error) {
 }
 
 func (r *Reader) ReadAt(p []byte, offset int64) (int, error) {
+	if offset < 0 {
+		return 0, errors.New("httpio.Reader.ReadAt: negative offset")
+	}
 	select {
 	case <-r.ctx.Done():
 		return 0, r.ctx.Err()
@@ -165,7 +193,7 @@ func (r *Reader) ReadAt(p []byte, offset int64) (int, error) {
 		return 0, nil
 	}
 
-	err := r.init()
+	err := r.initOnce()
 	if err != nil {
 		return 0, err
 	}
@@ -173,8 +201,20 @@ func (r *Reader) ReadAt(p []byte, offset int64) (int, error) {
 		return 0, ErrRangeUnsupported
 	}
 
+	if offset >= r.end {
+		return 0, io.EOF
+	}
+
 	var nr int
-	err = r.getPart(offset, int64(len(p)), httpc.ToBytes(&nr, p))
+	err = retry.Do(
+		func() error {
+			return r.getPart(offset, int64(len(p)), httpc.ToBytes(&nr, p))
+		},
+		retry.Attempts(uint(r.opt.retry)),
+		retry.LastErrorOnly(true),
+		retry.RetryIf(retryable),
+		retry.Context(r.ctx),
+	)
 	if err == nil && nr < len(p) {
 		return nr, io.EOF
 	}
@@ -182,17 +222,7 @@ func (r *Reader) ReadAt(p []byte, offset int64) (int, error) {
 }
 
 func (r *Reader) Close() error {
-	var err error
-	r.closeOnce.Do(func() {
-		r.cancel()
-
-		r.mu.Lock()
-		if r.respBody != nil {
-			err = r.respBody.Close()
-		}
-		r.mu.Unlock()
-	})
-	return err
+	return r.closeOnce()
 }
 
 func (r *Reader) WriteTo(w io.Writer) (int64, error) {
@@ -207,36 +237,58 @@ func (r *Reader) WriteTo(w io.Writer) (int64, error) {
 		err error
 	)
 
-	err = r.init()
+	err = r.initOnce()
 	if err != nil {
 		return 0, err
 	}
 
-	if !r.supportRange {
-		if r.Offset() > 0 {
-			return 0, ErrRangeUnsupported
-		}
-
-		err = r.get(httpc.ToWriter(w, &nw))
-		atomic.AddInt64(&r.offset, nw)
-		return nw, err
+	if r.supportRange {
+		return r.retryRemainWriteTo(w)
 	}
 
-	return r.retryRemainWriteTo(w)
-}
+	if r.opt.offset > 0 {
+		return 0, ErrRangeUnsupported
+	}
 
-func (r *Reader) init() error {
-	var headErr error
-	r.headOnce.Do(func() {
-		headErr = r.retryHead()
-	})
-	return headErr
+	err = r.get(httpc.RespOptionFunc(func(resp *http.Response) error {
+		var cerr error
+		if r.opt.limit > 0 {
+			nw, cerr = io.CopyN(w, resp.Body, r.opt.limit)
+			if cerr == io.EOF {
+				cerr = nil
+			}
+		} else {
+			nw, cerr = io.Copy(w, resp.Body)
+		}
+		return cerr
+	}))
+	atomic.AddInt64(&r.offset, nw)
+	return nw, err
 }
 
 func (r *Reader) retryHead() error {
 	return retry.Do(func() error {
 		return r.head()
-	}, retry.Attempts(uint(r.opt.retry)), retry.LastErrorOnly(true), retry.Context(r.ctx))
+	}, retry.Attempts(uint(r.opt.retry)), retry.LastErrorOnly(true), retry.RetryIf(retryable), retry.Context(r.ctx))
+}
+
+func retryable(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	if statusErr, ok := errors.AsType[httpc.StatusCodeError](err); ok {
+		code := int(statusErr)
+		return code >= http.StatusInternalServerError ||
+			code == http.StatusRequestTimeout ||
+			code == http.StatusTooManyRequests
+	}
+
+	return true
+}
+
+func retryableWithoutEOF(err error) bool {
+	return err != io.EOF && retryable(err)
 }
 
 func (r *Reader) head() error {
@@ -273,6 +325,8 @@ func (r *Reader) retryRemainWriteTo(w io.Writer) (int64, error) {
 			return err
 		},
 		retry.Attempts(uint(r.opt.retry)),
+		retry.LastErrorOnly(true),
+		retry.RetryIf(retryable),
 		retry.Context(r.ctx),
 	)
 	return nw, err
@@ -301,9 +355,7 @@ func (r *Reader) retryReadFromRemain(p []byte) (int, error) {
 			return err
 		},
 		retry.Attempts(uint(r.opt.retry)),
-		retry.RetryIf(func(err error) bool {
-			return err != nil && err != io.EOF
-		}),
+		retry.RetryIf(retryableWithoutEOF),
 		retry.LastErrorOnly(true),
 		retry.Context(r.ctx),
 	)
@@ -367,6 +419,7 @@ func (r *Reader) retryGetNoRange() (io.ReadCloser, error) {
 		},
 		retry.Attempts(uint(r.opt.retry)),
 		retry.Context(r.ctx),
+		retry.RetryIf(retryable),
 		retry.OnRetry(func(attempt uint, err error) {
 			if err != nil && respBody != nil {
 				respBody.Close()
