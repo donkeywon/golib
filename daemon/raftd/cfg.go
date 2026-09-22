@@ -29,11 +29,11 @@ const (
 )
 
 type Cfg struct {
-	DataDir       string `env:"DATA_DIR"       long:"data-dir"       yaml:"dataDir"       description:"raft data dir"          validate:"required"`
-	ListenAddr    string `env:"LISTEN_ADDR"    long:"listen-addr"    yaml:"listenAddr"    description:"raft listen address"    validate:"required"`
-	AdvertiseAddr string `env:"ADVERTISE_ADDR" long:"advertise-addr" yaml:"advertiseAddr" description:"raft advertise address" validate:"required"`
-	NodeID        string `env:"NODE_ID"        long:"node-id"        yaml:"nodeID"        description:"raft node id"           validate:"required"`
-	Nodes         []Node `env:"NODES"          long:"nodes"          yaml:"nodes"         description:"raft nodes list"        validate:"required,min=1,dive" env-delim:","`
+	DataDir       string `env:"DATA_DIR"       long:"data-dir"       yaml:"dataDir"       description:"raft data dir"                          validate:"required"`
+	ListenAddr    string `env:"LISTEN_ADDR"    long:"listen-addr"    yaml:"listenAddr"    description:"raft listen address"                    validate:"required"`
+	AdvertiseAddr string `env:"ADVERTISE_ADDR" long:"advertise-addr" yaml:"advertiseAddr" description:"raft advertise address"                 validate:"required"`
+	NodeID        string `env:"NODE_ID"        long:"node-id"        yaml:"nodeID"        description:"raft node id"                           validate:"required"`
+	Nodes         []Node `env:"NODES"          long:"nodes"          yaml:"nodes"         description:"raft nodes list, format = id:host:port" validate:"required,min=1,dive" env-delim:","`
 
 	ApplyTimeout        time.Duration `env:"APPLY_TIMEOUT"         long:"apply-timeout"         yaml:"applyTimeout"        description:"limit the amount of time wait for the command to be started"`
 	HeartbeatTimeout    time.Duration `env:"HEARTBEAT_TIMEOUT"     long:"heartbeat-timeout"     yaml:"heartbeatTimeout"    description:"heartbeat timeout"`

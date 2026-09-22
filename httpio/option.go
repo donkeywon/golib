@@ -47,7 +47,9 @@ func Retry(retry int) Option {
 		panic("negative retry")
 	}
 	return func(o *option) {
-		o.retry = retry
+		if retry > 0 {
+			o.retry = retry
+		}
 	}
 }
 

@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -97,9 +98,11 @@ func IsAzblob(url string) bool {
 func azblobBuildStringToSign(req *http.Request, accountName string) (string, error) {
 	// https://docs.microsoft.com/en-us/rest/api/storageservices/authentication-for-the-azure-storage-services
 	headers := req.Header
-	contentLength := getHeader(httpu.HeaderContentLength, headers)
-	if contentLength == "0" {
-		contentLength = ""
+	contentLength := ""
+	if req.ContentLength > 0 {
+		contentLength = strconv.FormatInt(req.ContentLength, 10)
+	} else if v := getHeader(httpu.HeaderContentLength, headers); v != "0" {
+		contentLength = v
 	}
 
 	canonicalizedResource, err := azblobBuildCanonicalizedResource(req.URL, accountName)

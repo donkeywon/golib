@@ -11,7 +11,7 @@ const (
 type Cfg struct {
 	Size            int           `json:"size"             yaml:"size"            validate:"gt=0"`
 	QueueSize       int           `json:"queue_size"       yaml:"queueSize"       validate:"gt=0"`
-	ShutdownTimeout time.Duration `json:"shutdown_timeout" yaml:"shutdownTimeout" validate:"gte=0"`
+	ShutdownTimeout time.Duration `json:"shutdown_timeout" yaml:"shutdownTimeout" validate:"gt=0"`
 }
 
 func NewCfg() Cfg {

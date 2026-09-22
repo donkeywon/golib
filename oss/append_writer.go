@@ -126,6 +126,8 @@ func (w *AppendWriter) ReadFrom(r io.Reader) (int64, error) {
 		if _, err = br.Peek(1); err != nil {
 			if errors.Is(err, io.EOF) {
 				err = nil
+			} else {
+				w.appendFailed = true
 			}
 			break
 		}

@@ -47,7 +47,7 @@ func (p *Pipeline) Init(ctx context.Context) error {
 			if err != nil {
 				return errors.Join(errs.Wrap(err, "create os pipe failed"), errs.Wrap(p.closeOSPipes(), "close os pipes failed"))
 			}
-			p.osPipes = append(p.osPipes, pr)
+			p.osPipes = append(p.osPipes, pr, pw)
 		} else {
 			pr, pw = io.Pipe()
 		}
