@@ -10,7 +10,6 @@ type Cfg struct {
 	Retry    int           `json:"retry"    yaml:"retry"`
 	Timeout  time.Duration `json:"timeout"  yaml:"timeout"`  // for reader is Head Timeout and ResponseHeaderTimeout, for writer is init and put and abort
 	Offset   int64         `json:"offset"   yaml:"offset"`   // for reader and append writer
-	PartSize int64         `json:"partSize" yaml:"partSize"` // for writer
 	Parallel int           `json:"parallel" yaml:"parallel"` // only for multipart writer
 }
 
@@ -20,9 +19,6 @@ func (c *Cfg) setDefaults() {
 	}
 	if c.Timeout <= 0 {
 		c.Timeout = 60 * time.Second
-	}
-	if c.PartSize <= 0 {
-		c.PartSize = 5 * 1024 * 1024
 	}
 	if c.Parallel <= 0 {
 		c.Parallel = 1

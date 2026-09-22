@@ -29,6 +29,7 @@ type BaseWorker struct {
 	r io.Reader
 	w io.Writer
 
+	// onion, inner -> outer
 	rs []io.Reader
 	ws []io.Writer
 

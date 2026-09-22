@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strconv"
 	"sync"
 
 	"codeberg.org/donkeywon/golib/errs"
@@ -68,7 +69,7 @@ func (p *Pipeline) Run(ctx context.Context) error {
 		if initer, ok := w.(initializer); ok {
 			err := initer.Init(ctx)
 			if err != nil {
-				return errs.Wrapf(err, "init worker failed: %T(%d)", w, i)
+				return errors.Join(errs.Wrapf(err, "init worker failed: %T(%d)", w, i), errs.Wrap(p.closeOSPipes(), "close os pipes failed"))
 			}
 		}
 	}
@@ -78,6 +79,12 @@ func (p *Pipeline) Run(ctx context.Context) error {
 	wg := &sync.WaitGroup{}
 	for i, w := range p.ws {
 		wg.Go(func() {
+			defer func() {
+				pnc := recover()
+				if pnc != nil {
+					allErr[i] = errs.PanicToErrWithMsg(pnc, "panic on run worker "+strconv.Itoa(i))
+				}
+			}()
 			err := w.Run(ctx)
 			if err != nil {
 				allErr[i] = errs.Wrapf(err, "pipeline worker failed: %T(%d)", w, i)

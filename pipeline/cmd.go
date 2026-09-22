@@ -53,27 +53,25 @@ func (c *cmdWorker) Run(ctx context.Context) (err error) {
 	err = cmd.Run()
 	if err == nil {
 		l.Info().Msg("cmd done")
+		return nil
+	}
+
+	isSignaled, isCoreDump, sig := cmds.IsSignaled(err)
+	exitCode := cmd.ProcessState.ExitCode()
+	if errors.Is(err, context.Canceled) {
+		l.Info().AnErr("err", err).Int("exit_code", exitCode).Bool("is_signaled", isSignaled).Bool("is_coredump", isCoreDump).Str("signal", sig.String()).Msg("cmd canceled")
+	} else if isSignaled {
+		l.Warn().AnErr("err", err).Int("exit_code", exitCode).Bool("is_signaled", isSignaled).Bool("is_coredump", isCoreDump).Str("signal", sig.String()).Msg("cmd signaled")
 	} else {
-		isSignaled, isCoreDump, sig := cmds.IsSignaled(err)
-		exitCode := cmd.ProcessState.ExitCode()
-		if errors.Is(err, context.Canceled) {
-			l.Info().AnErr("err", err).Int("exit_code", exitCode).Bool("is_signaled", isSignaled).Bool("is_coredump", isCoreDump).Str("signal", sig.String()).Msg("cmd canceled")
-		} else if isSignaled {
-			l.Warn().AnErr("err", err).Int("exit_code", exitCode).Bool("is_signaled", isSignaled).Bool("is_coredump", isCoreDump).Str("signal", sig.String()).Msg("cmd signaled")
-		} else {
-			l.Error().AnErr("err", err).Int("exit_code", exitCode).Bool("is_signaled", isSignaled).Bool("is_coredump", isCoreDump).Str("signal", sig.String()).Msg("cmd failed")
-		}
-
-		closeErr := c.Close(true)
-		if closeErr != nil {
-			err = errors.Join(err, errs.Wrap(closeErr, "close failed"))
-		}
-	}
-	if err != nil {
-		return errs.Wrap(err, "exec cmd failed")
+		l.Error().AnErr("err", err).Int("exit_code", exitCode).Bool("is_signaled", isSignaled).Bool("is_coredump", isCoreDump).Str("signal", sig.String()).Msg("cmd failed")
 	}
 
-	return nil
+	closeErr := c.Close(true)
+	if closeErr != nil {
+		err = errors.Join(err, errs.Wrap(closeErr, "close failed"))
+	}
+
+	return errs.Wrap(err, "exec cmd failed")
 }
 
 func (c *cmdWorker) SupportZeroCopy() bool {

@@ -20,6 +20,11 @@ func NewCopyWorker(bufSize int) Worker {
 	}
 }
 
+type forceCloseResult struct {
+	err    error
+	closed bool
+}
+
 func (c *copyWorker) Run(ctx context.Context) (err error) {
 	if c.bufSize <= 0 {
 		c.bufSize = 32 * 1024
@@ -27,34 +32,37 @@ func (c *copyWorker) Run(ctx context.Context) (err error) {
 	bs := make([]byte, c.bufSize)
 
 	done := make(chan struct{})
-	errCh := make(chan error, 1)
+	errCh := make(chan forceCloseResult, 1)
 	go func() {
 		defer close(errCh)
 
 		select {
 		case <-ctx.Done():
-			closeErr := c.Close(true)
-			if closeErr != nil {
-				errCh <- closeErr
-			}
+			errCh <- forceCloseResult{err: c.Close(true), closed: true}
 		case <-done:
+			errCh <- forceCloseResult{}
 		}
 	}()
 
 	defer func() {
 		close(done)
 
-		closeErr, ok := <-errCh
-		if !ok {
-			closeErr = c.Close(false)
-		}
-		if closeErr != nil {
-			err = errors.Join(err, errs.Wrap(closeErr, "close failed"))
+		res := <-errCh
+		if !res.closed {
+			closeErr := c.Close(false)
+			if closeErr != nil {
+				err = errors.Join(err, errs.Wrap(closeErr, "close failed"))
+			}
+		} else {
+			err = errors.Join(err, errs.Wrap(res.err, "close failed"))
 		}
 	}()
 
 	_, err = io.CopyBuffer(c.Writer(), c.Reader(), bs)
 	if err != nil {
+		if errors.Is(err, context.Canceled) {
+			return errs.Wrap(err, "copy canceled")
+		}
 		return errs.Wrap(err, "copy failed")
 	}
 
