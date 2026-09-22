@@ -1,6 +1,7 @@
 package raftd
 
 import (
+	"net"
 	"strconv"
 	"strings"
 
@@ -8,9 +9,9 @@ import (
 )
 
 type Node struct {
-	ID   string `json:"id"   yaml:"id"   validate:"required"`
-	Host string `json:"host" yaml:"host" validate:"required"`
-	Port uint16 `json:"port" yaml:"port" validate:"required"`
+	ID   string `json:"id"   yaml:"id"   validate:"required,hostname_rfc1123|ipv4"`
+	Host string `json:"host" yaml:"host" validate:"required,hostname_rfc1123|ipv4"`
+	Port uint16 `json:"port" yaml:"port" validate:"required,port"`
 }
 
 func (n *Node) UnmarshalFlag(value string) error {
@@ -44,5 +45,5 @@ func (n Node) MarshalFlag() (string, error) {
 }
 
 func (n Node) Addr() string {
-	return n.Host + ":" + strconv.FormatUint(uint64(n.Port), 10)
+	return net.JoinHostPort(n.Host, strconv.Itoa(int(n.Port)))
 }

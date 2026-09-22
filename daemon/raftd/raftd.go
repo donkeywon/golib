@@ -13,6 +13,7 @@ import (
 
 	"codeberg.org/donkeywon/golib/boot"
 	"codeberg.org/donkeywon/golib/errs"
+	"codeberg.org/donkeywon/golib/util/v"
 	"github.com/DeRuina/timberjack"
 	"github.com/hashicorp/raft"
 	raftboltdb "github.com/hashicorp/raft-boltdb/v2"
@@ -20,11 +21,9 @@ import (
 )
 
 var (
-	ErrEmptyNodeID     = errors.New("empty node id or addr")
-	ErrInvalidNodeID   = errors.New("invalid node id or addr")
-	ErrDuplicateNodeID = errors.New("duplicate node id or addr")
-	ErrNodeIDNotExists = errors.New("node id not exists")
-	ErrNotReady        = errors.New("not ready")
+	ErrDuplicateNode = errors.New("duplicate node id or addr")
+	ErrNodeNotExists = errors.New("node not exists")
+	ErrNotReady      = errors.New("not ready")
 )
 
 const DaemonTypeRaftd boot.DaemonType = "raftd"
@@ -54,6 +53,21 @@ func New() boot.Daemon {
 
 func (r *Raftd) Init(ctx context.Context) error {
 	var err error
+
+	err = v.StructCtx(ctx, &r.cfg)
+	if err != nil {
+		return errs.Wrap(err, "invalid config")
+	}
+	var selfFound bool
+	for _, node := range r.cfg.Nodes {
+		if r.cfg.NodeID == node.ID {
+			selfFound = true
+			break
+		}
+	}
+	if !selfFound {
+		return errs.Errorf("self node not found in config nodes: %v", r.cfg.Nodes)
+	}
 
 	r.l = zerolog.Ctx(ctx)
 
@@ -95,13 +109,14 @@ func (r *Raftd) Init(ctx context.Context) error {
 }
 
 func (r *Raftd) waitLeader(ctx context.Context) error {
-	t := time.NewTicker(time.Second)
+	t := time.NewTimer(0)
 	defer t.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-t.C:
+			t.Reset(time.Second)
 			_, leaderID := r.LeaderWithID()
 			if string(leaderID) != "" {
 				r.l.Info().Str("leader_id", string(leaderID)).Msg("wait raft leader done")
@@ -187,7 +202,7 @@ func (r *Raftd) Node(id string) (raft.Server, error) {
 			return nodes[i], nil
 		}
 	}
-	return raft.Server{}, ErrNodeIDNotExists
+	return raft.Server{}, ErrNodeNotExists
 }
 
 func (r *Raftd) OnFailedHeartbeat(f func(context.Context, string, time.Time)) {
@@ -206,22 +221,21 @@ func (r *Raftd) OnNodeAdded(f func(context.Context, string, string)) {
 	r.onNodeAdded = append(r.onNodeAdded, f)
 }
 
-func (r *Raftd) AddNode(nodeID string, nodeAddr string, timeout time.Duration) error {
-	if nodeAddr == "" || nodeID == "" {
-		return ErrEmptyNodeID
+func (r *Raftd) AddNode(node Node, timeout time.Duration) error {
+	err := v.Struct(&node)
+	if err != nil {
+		return errs.Wrap(err, "invalid node")
 	}
-	if strings.Contains(nodeID, ":") || !strings.Contains(nodeAddr, ":") {
-		return ErrInvalidNodeID
-	}
+
 	_, nodeIDs, nodeAddrs, err := r.Nodes()
 	if err != nil {
 		return errs.Wrap(err, "get nodes failed")
 	}
-	if slices.Contains(nodeIDs, nodeID) || slices.Contains(nodeAddrs, nodeAddr) {
-		return ErrDuplicateNodeID
+	if slices.Contains(nodeIDs, node.ID) || slices.Contains(nodeAddrs, node.Addr()) {
+		return ErrDuplicateNode
 	}
 
-	f := r.r.AddVoter(raft.ServerID(nodeID), raft.ServerAddress(nodeAddr), 0, timeout)
+	f := r.r.AddVoter(raft.ServerID(node.ID), raft.ServerAddress(node.Addr()), 0, timeout)
 	err = f.Error()
 	if err != nil {
 		return errs.Wrap(err, "add node failed")
@@ -229,22 +243,20 @@ func (r *Raftd) AddNode(nodeID string, nodeAddr string, timeout time.Duration) e
 	return nil
 }
 
-func (r *Raftd) DelNode(nodeID string, timeout time.Duration) error {
-	if nodeID == "" {
-		return ErrEmptyNodeID
+func (r *Raftd) DelNode(node Node, timeout time.Duration) error {
+	err := v.Struct(&node)
+	if err != nil {
+		return errs.Wrap(err, "invalid node")
 	}
-	if strings.Contains(nodeID, ":") {
-		return ErrInvalidNodeID
-	}
-	_, nodeIDs, _, err := r.Nodes()
+	_, nodeIDs, nodeAddrs, err := r.Nodes()
 	if err != nil {
 		return errs.Wrap(err, "get nodes failed")
 	}
-	if !slices.Contains(nodeIDs, nodeID) {
-		return ErrNodeIDNotExists
+	if !slices.Contains(nodeIDs, node.ID) || !slices.Contains(nodeAddrs, node.Addr()) {
+		return ErrNodeNotExists
 	}
 
-	f := r.r.RemoveServer(raft.ServerID(nodeID), 0, timeout)
+	f := r.r.RemoveServer(raft.ServerID(node.ID), 0, timeout)
 	err = f.Error()
 	if err != nil {
 		return errs.Wrap(err, "del node failed")
@@ -252,22 +264,20 @@ func (r *Raftd) DelNode(nodeID string, timeout time.Duration) error {
 	return nil
 }
 
-func (r *Raftd) TransferLeadershipTo(nodeID string, nodeAddr string) error {
-	if nodeAddr == "" || nodeID == "" {
-		return ErrEmptyNodeID
-	}
-	if strings.Contains(nodeID, ":") || !strings.Contains(nodeAddr, ":") {
-		return ErrInvalidNodeID
+func (r *Raftd) TransferLeadershipTo(node Node) error {
+	err := v.Struct(&node)
+	if err != nil {
+		return errs.Wrap(err, "invalid node")
 	}
 	_, nodeIDs, nodeAddrs, err := r.Nodes()
 	if err != nil {
 		return errs.Wrap(err, "get nodes failed")
 	}
-	if !slices.Contains(nodeIDs, nodeID) || !slices.Contains(nodeAddrs, nodeAddr) {
-		return ErrNodeIDNotExists
+	if !slices.Contains(nodeIDs, node.ID) || !slices.Contains(nodeAddrs, node.Addr()) {
+		return ErrNodeNotExists
 	}
 
-	f := r.r.LeadershipTransferToServer(raft.ServerID(nodeID), raft.ServerAddress(nodeAddr))
+	f := r.r.LeadershipTransferToServer(raft.ServerID(node.ID), raft.ServerAddress(node.Addr()))
 	err = f.Error()
 	if err != nil {
 		return errs.Wrap(err, "transfer leadership failed")
@@ -373,7 +383,7 @@ func (r *Raftd) observe(ctx context.Context) {
 					}
 				}
 			case raft.FailedHeartbeatObservation:
-				r.l.Info().Str("node_id", string(ob.PeerID)).Str("last_contact", ob.LastContact.Format("2006-01-02 15:04:05.000000")).Msg("failed heartbeat observed")
+				r.l.Warn().Str("node_id", string(ob.PeerID)).Str("last_contact", ob.LastContact.Format("2006-01-02 15:04:05.000000")).Msg("failed heartbeat observed")
 				for _, f := range r.onFailedHeartbeat {
 					select {
 					case <-ctx.Done():
@@ -396,6 +406,12 @@ func (r *Raftd) observe(ctx context.Context) {
 			case raft.ResumedHeartbeatObservation:
 				r.l.Info().Str("node_id", string(ob.PeerID)).Msg("resumed heartbeat observed")
 				for _, f := range r.onResumedHeartbeat {
+					select {
+					case <-ctx.Done():
+						return
+					default:
+					}
+
 					func() {
 						defer func() {
 							p := recover()
@@ -428,7 +444,6 @@ func newRaft(cfg *Cfg, fsm raft.FSM, logger io.Writer) (r *raft.Raft, err error)
 	rcfg.SnapshotThreshold = cfg.SnapshotThreshold
 	rcfg.LeaderLeaseTimeout = cfg.LeaderLeaseTimeout
 	rcfg.ShutdownOnRemove = false
-	rcfg.RestoreCommittedLogs = true
 	rcfg.NoSnapshotRestoreOnStart = cfg.NoSnapshotRestoreOnStart
 	rcfg.LogOutput = logger
 	rcfg.LogLevel = cfg.LogLevel
