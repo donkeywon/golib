@@ -83,6 +83,8 @@ func newTestTaskd(t *testing.T) *taskd {
 		l:   &l,
 		ctx: context.Background(),
 	}
+	// 按生命周期约定：先 Init（校验 cfg），再进入"已运行"状态
+	require.NoError(t, td.Init(context.Background()))
 	td.ready.Store(true)
 	td.pool = pond.NewPool(td.cfg.Size, pond.WithQueueSize(td.cfg.QueueSize))
 	return td
@@ -116,6 +118,13 @@ func waitTaskRemoved(t *testing.T, td *taskd, id string) {
 }
 
 // ---- Cfg ----
+
+// Init 失败后不得继续 Run（生命周期约定）；此处只断言 Init 返回错误。
+func TestInit_InvalidCfg(t *testing.T) {
+	td := &taskd{}
+	td.SetCfg(Cfg{}) // 零值：Size/QueueSize/ShutdownTimeout 均不合法
+	require.Error(t, td.Init(context.Background()))
+}
 
 func TestNewCfg(t *testing.T) {
 	c := NewCfg()
@@ -487,6 +496,8 @@ func TestCreateTask_Panic(t *testing.T) {
 
 func TestRun_Canceled(t *testing.T) {
 	td := &taskd{cfg: testCfg()}
+	// 生命周期约定：Run 之前必须先 Init 且 Init 成功
+	require.NoError(t, td.Init(context.Background()))
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
 	go func() { done <- td.Run(ctx) }()
@@ -504,6 +515,8 @@ func TestRun_Canceled(t *testing.T) {
 
 func TestRun_ShutdownTimeout(t *testing.T) {
 	td := &taskd{cfg: Cfg{Size: 1, QueueSize: 8, ShutdownTimeout: 100 * time.Millisecond}}
+	// 生命周期约定：Run 之前必须先 Init 且 Init 成功
+	require.NoError(t, td.Init(context.Background()))
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
 	go func() { done <- td.Run(ctx) }()
