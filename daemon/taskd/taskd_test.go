@@ -245,8 +245,9 @@ func TestSubmitTaskAndWait_CallerCtxCanceled(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
+	// 调用方 ctx 已取消 -> 任务被取消 -> AndWait 上报错误(不再静默成功)
 	_, err := td.SubmitTaskAndWait(ctx, newQuickTask(t, "w2").Cfg())
-	require.NoError(t, err)
+	require.ErrorIs(t, err, context.Canceled)
 	require.False(t, td.IsTaskExists("w2"))
 }
 

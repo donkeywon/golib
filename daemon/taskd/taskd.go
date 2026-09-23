@@ -95,6 +95,7 @@ type Taskd interface {
 	ListTaskIDs() []string
 	ListPendingTaskIDs() []string
 	ListRunningTaskIDs() []string
+	ListStoppingTaskIDs() []string
 	GetTaskState(taskID string) (TaskState, error)
 	GetTaskCfg(taskID string) (task.Cfg, error)
 	OnTaskCreate(hooks ...Hook)
@@ -124,6 +125,14 @@ type taskd struct {
 
 func New() boot.Daemon {
 	return &taskd{}
+}
+
+func (td *taskd) Init(ctx context.Context) error {
+	err := v.StructCtx(ctx, &td.cfg)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func (td *taskd) Run(ctx context.Context) error {
@@ -233,6 +242,10 @@ func (td *taskd) ListRunningTaskIDs() []string {
 	return td.listIDsByState(TaskStateRunning)
 }
 
+func (td *taskd) ListStoppingTaskIDs() []string {
+	return td.listIDsByState(TaskStateStopping)
+}
+
 func (td *taskd) OnTaskCreate(hooks ...Hook) {
 	td.createHooks = append(td.createHooks, hooks...)
 }
@@ -250,21 +263,21 @@ func (td *taskd) OnTaskDone(hooks ...Hook) {
 }
 
 func (td *taskd) submit(ti *taskInfo, wait bool) error {
-	f := func() {
+	f := func() error {
 		defer close(ti.done)
 		defer ti.cancel()
+		defer td.removeTaskInfo(ti.task.Cfg().ID)
 
 		oldState, success := ti.changeState(TaskStatePending, TaskStateRunning)
 		if !success {
 			td.l.Info().Str("task_id", ti.task.Cfg().ID).Str("task_state", oldState.String()).Msg("task state changed before running")
-			return
+			return nil
 		}
 
 		td.hookTask(ti.ctx, ti.task, nil, td.runHooks, "run", &HookExtraData{Wait: wait})
 		err := ti.task.Run(ti.ctx)
-		td.hookTask(td.ctx, ti.task, err, td.doneHooks, "done", &HookExtraData{Wait: wait})
-
-		td.removeTaskInfo(ti.task.Cfg().ID)
+		td.hookTask(context.WithoutCancel(td.ctx), ti.task, err, td.doneHooks, "done", &HookExtraData{Wait: wait})
+		return err
 	}
 
 	old, success := ti.changeState(TaskStateUnknown, TaskStatePending)
@@ -272,13 +285,16 @@ func (td *taskd) submit(ti *taskInfo, wait bool) error {
 		return errs.Errorf("task state changed before submit: %s", old.String())
 	}
 
-	pt := td.pool.Submit(f)
+	pt := td.pool.SubmitErr(f)
 	select {
 	case <-pt.Done():
-		// pool 已停止(pond 返回已完成的 future)或任务未执行成功,统一按未提交处理
-		if err := pt.Wait(); err != nil {
+		err := pt.Wait()
+		if err != nil {
 			td.removeTaskInfo(ti.task.Cfg().ID)
-			return ErrStopping
+			if errors.Is(err, pond.ErrPoolStopped) {
+				return ErrStopping
+			}
+			return errs.Wrapf(err, "run task failed: %s", ti.task.Cfg().ID)
 		}
 	case <-td.ctx.Done():
 		td.removeTaskInfo(ti.task.Cfg().ID)
@@ -288,7 +304,10 @@ func (td *taskd) submit(ti *taskInfo, wait bool) error {
 
 	td.hookTask(ti.ctx, ti.task, nil, td.submitHooks, "submit", &HookExtraData{Wait: wait})
 	if wait {
-		pt.Wait()
+		err := pt.Wait()
+		if err != nil {
+			return errs.Wrapf(err, "run task failed: %s", ti.task.Cfg().ID)
+		}
 	}
 	return nil
 }
