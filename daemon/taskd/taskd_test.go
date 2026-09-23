@@ -219,17 +219,15 @@ func TestSubmitTask_PoolStopped(t *testing.T) {
 
 func TestSubmitTask_Success(t *testing.T) {
 	td := newTestTaskd(t)
-	var runHook, doneHook, submitHook bool
+	var runHook, doneHook bool
 	td.OnTaskRun(func(ctx context.Context, t *task.Task, err error, extra *HookExtraData) { runHook = true })
 	td.OnTaskDone(func(ctx context.Context, t *task.Task, err error, extra *HookExtraData) { doneHook = true })
-	td.OnTaskSubmit(func(ctx context.Context, t *task.Task, err error, extra *HookExtraData) { submitHook = true })
 
 	_, err := td.SubmitTask(context.Background(), newQuickTask(t, "ok1").Cfg())
 	require.NoError(t, err)
 	waitTaskRemoved(t, td, "ok1")
 	require.True(t, runHook)
 	require.True(t, doneHook)
-	require.True(t, submitHook)
 }
 
 func TestSubmitTaskAndWait_Success(t *testing.T) {
@@ -405,7 +403,7 @@ func TestGetTaskState(t *testing.T) {
 
 	state, err := td.GetTaskState("nope")
 	require.ErrorIs(t, err, ErrTaskNotExists)
-	require.Equal(t, TaskStatePending, state)
+	require.Equal(t, TaskStateUnknown, state)
 
 	td.addTaskInfo("t1", newQuickTask(t, "t1"))
 	state, err = td.GetTaskState("t1")
@@ -450,12 +448,10 @@ func TestOnTaskHooks(t *testing.T) {
 	h := func(context.Context, *task.Task, error, *HookExtraData) {}
 
 	td.OnTaskCreate(h)
-	td.OnTaskSubmit(h)
 	td.OnTaskRun(h)
 	td.OnTaskDone(h)
 
 	require.Len(t, td.createHooks, 1)
-	require.Len(t, td.submitHooks, 1)
 	require.Len(t, td.runHooks, 1)
 	require.Len(t, td.doneHooks, 1)
 

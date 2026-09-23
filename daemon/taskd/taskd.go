@@ -20,11 +20,12 @@ import (
 const DaemonTypeTaskd boot.DaemonType = "taskd"
 
 var (
-	ErrNotReady            = errors.New("not ready")
-	ErrStopping            = errors.New("stopping, reject")
-	ErrTaskNotExists       = errors.New("task not exists")
-	ErrTaskAlreadyExists   = errors.New("task already exists")
-	ErrTaskAlreadyStopping = errors.New("task already stopping")
+	ErrNotReady                      = errors.New("not ready")
+	ErrStopping                      = errors.New("stopping, reject")
+	ErrTaskNotExists                 = errors.New("task not exists")
+	ErrTaskAlreadyExists             = errors.New("task already exists")
+	ErrTaskAlreadyStopping           = errors.New("task already stopping")
+	ErrTaskStateChangedBeforeRunning = errors.New("task state changed before running")
 )
 
 type TaskState uint32
@@ -38,6 +39,8 @@ func (ts TaskState) String() string {
 		s = "running"
 	case TaskStateStopping:
 		s = "stopping"
+	case TaskStateUnknown:
+		s = "unknown"
 	default:
 		s = "unknown"
 	}
@@ -99,7 +102,6 @@ type Taskd interface {
 	GetTaskState(taskID string) (TaskState, error)
 	GetTaskCfg(taskID string) (task.Cfg, error)
 	OnTaskCreate(hooks ...Hook)
-	OnTaskSubmit(hooks ...Hook)
 	OnTaskRun(hooks ...Hook)
 	OnTaskDone(hooks ...Hook)
 }
@@ -118,7 +120,6 @@ type taskd struct {
 	taskInfoMap sync.Map
 
 	createHooks []Hook
-	submitHooks []Hook
 	runHooks    []Hook
 	doneHooks   []Hook
 }
@@ -212,7 +213,7 @@ func (td *taskd) IsTaskExists(taskID string) bool {
 func (td *taskd) GetTaskState(taskID string) (TaskState, error) {
 	ti := td.getTaskInfo(taskID)
 	if ti == nil {
-		return TaskStatePending, ErrTaskNotExists
+		return TaskStateUnknown, ErrTaskNotExists
 	}
 	return ti.getState(), nil
 }
@@ -250,10 +251,6 @@ func (td *taskd) OnTaskCreate(hooks ...Hook) {
 	td.createHooks = append(td.createHooks, hooks...)
 }
 
-func (td *taskd) OnTaskSubmit(hooks ...Hook) {
-	td.submitHooks = append(td.submitHooks, hooks...)
-}
-
 func (td *taskd) OnTaskRun(hooks ...Hook) {
 	td.runHooks = append(td.runHooks, hooks...)
 }
@@ -263,21 +260,30 @@ func (td *taskd) OnTaskDone(hooks ...Hook) {
 }
 
 func (td *taskd) submit(ti *taskInfo, wait bool) error {
-	f := func() error {
+	f := func() (err error) {
 		defer close(ti.done)
 		defer ti.cancel()
 		defer td.removeTaskInfo(ti.task.Cfg().ID)
+		defer func() {
+			if p := recover(); p != nil {
+				pe := errs.PanicToErrWithMsg(p, "panic on running task")
+				if err != nil {
+					err = errors.Join(err, pe)
+				} else {
+					err = pe
+				}
+			}
+			td.hookTask(context.WithoutCancel(td.ctx), ti.task, err, td.doneHooks, "done", &HookExtraData{Wait: wait})
+		}()
 
 		oldState, success := ti.changeState(TaskStatePending, TaskStateRunning)
 		if !success {
 			td.l.Info().Str("task_id", ti.task.Cfg().ID).Str("task_state", oldState.String()).Msg("task state changed before running")
-			return nil
+			return errs.Wrapf(ErrTaskStateChangedBeforeRunning, "current state: %s", oldState.String())
 		}
 
 		td.hookTask(ti.ctx, ti.task, nil, td.runHooks, "run", &HookExtraData{Wait: wait})
-		err := ti.task.Run(ti.ctx)
-		td.hookTask(context.WithoutCancel(td.ctx), ti.task, err, td.doneHooks, "done", &HookExtraData{Wait: wait})
-		return err
+		return ti.task.Run(ti.ctx)
 	}
 
 	old, success := ti.changeState(TaskStateUnknown, TaskStatePending)
@@ -302,7 +308,6 @@ func (td *taskd) submit(ti *taskInfo, wait bool) error {
 	default:
 	}
 
-	td.hookTask(ti.ctx, ti.task, nil, td.submitHooks, "submit", &HookExtraData{Wait: wait})
 	if wait {
 		err := pt.Wait()
 		if err != nil {
