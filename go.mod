@@ -3,7 +3,7 @@ module codeberg.org/donkeywon/golib
 go 1.27.0
 
 require (
-	github.com/DeRuina/timberjack v1.4.7
+	github.com/DeRuina/timberjack v1.4.8
 	github.com/VictoriaMetrics/metrics v1.44.0
 	github.com/alitto/pond/v2 v2.7.1
 	github.com/arl/statsviz v0.8.2
