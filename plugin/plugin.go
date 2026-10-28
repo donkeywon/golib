@@ -122,7 +122,7 @@ func setCfgReflect(p any, cfg any) {
 			return
 		}
 	}
-	panic(fmt.Sprintf("plugin has no exported cfg field: %T has no %T field", p, cfg))
+	panic(fmt.Sprintf("plugin has no exported cfg field or SetCfg method: %T has no %T field or SetCfg method", p, cfg))
 }
 
 func SetCfg[C any](p any, cfg C) {

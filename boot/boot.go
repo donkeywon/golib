@@ -251,7 +251,7 @@ func createDaemons(ctx context.Context, cfgMap map[string]any, options *options,
 		dctx := l.With().Str("daemon", string(daemonType)).Logger().WithContext(ctx)
 		onCreated := options.onCreated[daemonType]
 		if onCreated != nil {
-			onCreated(dctx)
+			onCreated(dctx, d)
 		}
 	}
 	return nil

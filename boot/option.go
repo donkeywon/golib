@@ -9,7 +9,7 @@ import (
 	"github.com/rs/zerolog"
 )
 
-type OnCreatedFunc func(context.Context)
+type OnCreatedFunc func(context.Context, Daemon)
 
 type Option func(*options)
 

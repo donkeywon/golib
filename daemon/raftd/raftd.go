@@ -51,6 +51,10 @@ func New() boot.Daemon {
 	}
 }
 
+type initializer interface {
+	Init(context.Context) error
+}
+
 func (r *Raftd) Init(ctx context.Context) error {
 	var err error
 
@@ -73,6 +77,13 @@ func (r *Raftd) Init(ctx context.Context) error {
 
 	if r.fsm == nil {
 		panic("nil raft fsm")
+	}
+
+	if i, ok := r.fsm.(initializer); ok {
+		err = i.Init(ctx)
+		if err != nil {
+			return errs.Wrap(err, "failed to init raft fsm")
+		}
 	}
 
 	r.r, err = newRaft(&r.cfg, r.fsm, r.buildLogger())
@@ -296,7 +307,11 @@ func (r *Raftd) ApplyLog(p []byte) (any, error) {
 	}
 
 	resp := f.Response()
-	if err, ok := resp.(error); ok && err != nil {
+	if resp == nil {
+		return nil, nil
+	}
+
+	if err, ok := resp.(error); ok {
 		r.l.Error().Bytes("log", p).Err(err).Msg("failed to apply log to raft")
 		return nil, errs.Wrap(err, "failed to apply log to raft")
 	}

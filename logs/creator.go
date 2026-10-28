@@ -54,17 +54,17 @@ const (
 )
 
 type RotateLoggerCreator struct {
-	Level       zerolog.Level `env:"LEVEL"         long:"level"         yaml:"level"       description:"minimum enabled logging level"`
-	Filepath    string        `env:"FILEPATH"      long:"filepath"      yaml:"filepath"    description:"log file path"`
-	MaxFileSize int           `env:"MAX_FILE_SIZE" long:"max-file-size" yaml:"maxFileSize" description:"maximum size in megabytes of the log file before it gets rotated"`
-	MaxBackups  int           `env:"MAX_BACKUPS"   long:"max-backups"   yaml:"maxBackups"  description:"maximum number of old log files to retain"`
-	MaxAge      int           `env:"MAX_AGE"       long:"max-age"       yaml:"maxAge"      description:"maximum number of days to retain old log files based on the timestamp encoded in their filename"`
-	Compression string        `env:"COMPRESSION"   long:"compression"   yaml:"compression" description:"none,gzip,zstd"`
+	Level       string `env:"LEVEL"         long:"level"         yaml:"level"       description:"minimum enabled logging level"`
+	Filepath    string `env:"FILEPATH"      long:"filepath"      yaml:"filepath"    description:"log file path"`
+	MaxFileSize int    `env:"MAX_FILE_SIZE" long:"max-file-size" yaml:"maxFileSize" description:"maximum size in megabytes of the log file before it gets rotated"`
+	MaxBackups  int    `env:"MAX_BACKUPS"   long:"max-backups"   yaml:"maxBackups"  description:"maximum number of old log files to retain"`
+	MaxAge      int    `env:"MAX_AGE"       long:"max-age"       yaml:"maxAge"      description:"maximum number of days to retain old log files based on the timestamp encoded in their filename"`
+	Compression string `env:"COMPRESSION"   long:"compression"   yaml:"compression" description:"none,gzip,zstd"`
 }
 
 func NewRotateLoggerCreator() RotateLoggerCreator {
 	return RotateLoggerCreator{
-		Level:       zerolog.InfoLevel,
+		Level:       "info",
 		Filepath:    DefaultFilepath,
 		MaxFileSize: DefaultMaxFileSize,
 		MaxBackups:  DefaultMaxBackups,
@@ -81,9 +81,13 @@ func (r RotateLoggerCreator) Create() (zerolog.Logger, error) {
 	if len(outputs) == 0 {
 		return zerolog.Nop(), errs.Errorf("empty logger outputs")
 	}
+	lvl, err := zerolog.ParseLevel(r.Level)
+	if err != nil {
+		return zerolog.Nop(), errs.Wrapf(err, "invalid log level: %s", r.Level)
+	}
 
 	l := zerolog.New(zerolog.MultiLevelWriter(outputs...)).
-		With().Caller().Timestamp().Logger().Level(r.Level).
+		With().Caller().Timestamp().Logger().Level(lvl).
 		Hook(zerolog.HookFunc(func(e *zerolog.Event, level zerolog.Level, message string) {
 			e.Int64("goid", goid.Get())
 		}))
