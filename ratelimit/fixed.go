@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
-	"codeberg.org/donkeywon/golib/errs"
-	"codeberg.org/donkeywon/golib/plugin"
+	"github.com/donkeywon/golib/errs"
+	"github.com/donkeywon/golib/plugin"
 	"golang.org/x/time/rate"
 )
 

@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"sync"
 
-	"codeberg.org/donkeywon/golib/errs"
+	"github.com/donkeywon/golib/errs"
 )
 
 type Pipeline struct {

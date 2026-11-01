@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"codeberg.org/donkeywon/golib/errs"
-	"codeberg.org/donkeywon/golib/util/httpu"
+	"github.com/donkeywon/golib/errs"
+	"github.com/donkeywon/golib/util/httpu"
 )
 
 var obsURLRegex = regexp.MustCompile(`([a-z0-9\-\.]{3,63})\.obs\..+\.com(\/.*)`)

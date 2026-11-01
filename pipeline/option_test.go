@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"codeberg.org/donkeywon/golib/aio"
+	"github.com/donkeywon/golib/aio"
 
 	"github.com/stretchr/testify/require"
 )

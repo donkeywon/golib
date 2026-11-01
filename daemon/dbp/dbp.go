@@ -8,9 +8,9 @@ import (
 	"strconv"
 	"time"
 
-	"codeberg.org/donkeywon/golib/boot"
-	"codeberg.org/donkeywon/golib/daemon/metricsd"
-	"codeberg.org/donkeywon/golib/errs"
+	"github.com/donkeywon/golib/boot"
+	"github.com/donkeywon/golib/daemon/metricsd"
+	"github.com/donkeywon/golib/errs"
 	"github.com/rs/zerolog"
 )
 

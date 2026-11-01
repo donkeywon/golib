@@ -11,10 +11,10 @@ import (
 	"strconv"
 	"strings"
 
-	"codeberg.org/donkeywon/golib/errs"
-	"codeberg.org/donkeywon/golib/util/conv"
-	"codeberg.org/donkeywon/golib/util/httpu"
-	"codeberg.org/donkeywon/golib/util/iou"
+	"github.com/donkeywon/golib/errs"
+	"github.com/donkeywon/golib/util/conv"
+	"github.com/donkeywon/golib/util/httpu"
+	"github.com/donkeywon/golib/util/iou"
 )
 
 type StatusCodeError int

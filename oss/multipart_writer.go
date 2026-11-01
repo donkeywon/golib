@@ -11,11 +11,11 @@ import (
 	"slices"
 	"sync"
 
-	"codeberg.org/donkeywon/golib/errs"
-	"codeberg.org/donkeywon/golib/util/httpc"
-	"codeberg.org/donkeywon/golib/util/httpu"
-	"codeberg.org/donkeywon/golib/util/ossu"
 	"github.com/avast/retry-go/v4"
+	"github.com/donkeywon/golib/errs"
+	"github.com/donkeywon/golib/util/httpc"
+	"github.com/donkeywon/golib/util/httpu"
+	"github.com/donkeywon/golib/util/ossu"
 )
 
 type MultiPartWriter struct {

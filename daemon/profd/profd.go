@@ -8,10 +8,10 @@ import (
 	"sync"
 	"time"
 
-	"codeberg.org/donkeywon/golib/boot"
-	"codeberg.org/donkeywon/golib/daemon/httpd"
-	"codeberg.org/donkeywon/golib/errs"
 	"github.com/arl/statsviz"
+	"github.com/donkeywon/golib/boot"
+	"github.com/donkeywon/golib/daemon/httpd"
+	"github.com/donkeywon/golib/errs"
 	"github.com/felixge/fgprof"
 	"github.com/google/gops/agent"
 	"github.com/maruel/panicparse/v2/stack/webstack"

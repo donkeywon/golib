@@ -4,9 +4,9 @@ import (
 	"context"
 	"net/http"
 
-	"codeberg.org/donkeywon/golib/boot"
-	"codeberg.org/donkeywon/golib/daemon/httpd"
 	"github.com/VictoriaMetrics/metrics"
+	"github.com/donkeywon/golib/boot"
+	"github.com/donkeywon/golib/daemon/httpd"
 	"github.com/rs/zerolog"
 )
 

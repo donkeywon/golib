@@ -5,7 +5,7 @@ import (
 	"errors"
 	"net/http"
 
-	"codeberg.org/donkeywon/golib/boot"
+	"github.com/donkeywon/golib/boot"
 	"github.com/rs/zerolog"
 )
 

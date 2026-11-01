@@ -6,8 +6,8 @@ import (
 	"io"
 	"net/http"
 
-	"codeberg.org/donkeywon/golib/errs"
-	"codeberg.org/donkeywon/golib/util/conv"
+	"github.com/donkeywon/golib/errs"
+	"github.com/donkeywon/golib/util/conv"
 	"github.com/goccy/go-yaml"
 )
 

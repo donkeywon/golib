@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
-	"codeberg.org/donkeywon/golib/logs"
-	"codeberg.org/donkeywon/golib/util/reflects"
+	"github.com/donkeywon/golib/logs"
+	"github.com/donkeywon/golib/util/reflects"
 	"github.com/rs/zerolog"
 )
 

@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"strings"
 
-	"codeberg.org/donkeywon/golib/errs"
+	"github.com/donkeywon/golib/errs"
 )
 
 type Node struct {

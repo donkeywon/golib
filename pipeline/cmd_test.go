@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"codeberg.org/donkeywon/golib/util/cmds"
+	"github.com/donkeywon/golib/util/cmds"
 
 	"github.com/stretchr/testify/require"
 )

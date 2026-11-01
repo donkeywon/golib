@@ -7,11 +7,11 @@ import (
 	"testing"
 	"time"
 
-	"codeberg.org/donkeywon/golib/kvs"
-	"codeberg.org/donkeywon/golib/plugin"
-	"codeberg.org/donkeywon/golib/task"
-	"codeberg.org/donkeywon/golib/task/step"
 	"github.com/alitto/pond/v2"
+	"github.com/donkeywon/golib/kvs"
+	"github.com/donkeywon/golib/plugin"
+	"github.com/donkeywon/golib/task"
+	"github.com/donkeywon/golib/task/step"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
 )

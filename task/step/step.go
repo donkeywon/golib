@@ -5,9 +5,9 @@ import (
 	"context"
 	"encoding/json/v2"
 
-	"codeberg.org/donkeywon/golib/errs"
-	"codeberg.org/donkeywon/golib/kvs"
-	"codeberg.org/donkeywon/golib/plugin"
+	"github.com/donkeywon/golib/errs"
+	"github.com/donkeywon/golib/kvs"
+	"github.com/donkeywon/golib/plugin"
 	"github.com/goccy/go-yaml"
 	"github.com/goccy/go-yaml/ast"
 	"github.com/tidwall/gjson"

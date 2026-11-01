@@ -5,7 +5,7 @@ import (
 	"errors"
 	"io"
 
-	"codeberg.org/donkeywon/golib/errs"
+	"github.com/donkeywon/golib/errs"
 )
 
 type copyWorker struct {

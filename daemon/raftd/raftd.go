@@ -11,9 +11,9 @@ import (
 	"strings"
 	"time"
 
-	"codeberg.org/donkeywon/golib/boot"
-	"codeberg.org/donkeywon/golib/errs"
-	"codeberg.org/donkeywon/golib/util/v"
+	"github.com/donkeywon/golib/boot"
+	"github.com/donkeywon/golib/errs"
+	"github.com/donkeywon/golib/util/v"
 	"github.com/DeRuina/timberjack"
 	"github.com/hashicorp/raft"
 	raftboltdb "github.com/hashicorp/raft-boltdb/v2"

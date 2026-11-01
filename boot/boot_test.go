@@ -8,7 +8,7 @@ import (
 	"slices"
 	"testing"
 
-	"codeberg.org/donkeywon/golib/plugin"
+	"github.com/donkeywon/golib/plugin"
 	"github.com/stretchr/testify/require"
 )
 

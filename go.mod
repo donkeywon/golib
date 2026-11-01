@@ -1,4 +1,4 @@
-module codeberg.org/donkeywon/golib
+module github.com/donkeywon/golib
 
 go 1.27.0
 

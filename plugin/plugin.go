@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"reflect"
 
-	"codeberg.org/donkeywon/golib/util/reflects"
+	"github.com/donkeywon/golib/util/reflects"
 )
 
 type Creator[P Plugin] func() P

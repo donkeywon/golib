@@ -9,8 +9,8 @@ import (
 	"strings"
 	"syscall"
 
-	"codeberg.org/donkeywon/golib/errs"
-	"codeberg.org/donkeywon/golib/util/conv"
+	"github.com/donkeywon/golib/errs"
+	"github.com/donkeywon/golib/util/conv"
 	"github.com/shirou/gopsutil/v4/process"
 )
 

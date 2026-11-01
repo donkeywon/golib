@@ -8,12 +8,12 @@ import (
 	"syscall"
 	"time"
 
-	"codeberg.org/donkeywon/golib/consts"
-	"codeberg.org/donkeywon/golib/errs"
-	"codeberg.org/donkeywon/golib/kvs"
-	"codeberg.org/donkeywon/golib/plugin"
-	"codeberg.org/donkeywon/golib/util/cmds"
-	"codeberg.org/donkeywon/golib/util/v"
+	"github.com/donkeywon/golib/consts"
+	"github.com/donkeywon/golib/errs"
+	"github.com/donkeywon/golib/kvs"
+	"github.com/donkeywon/golib/plugin"
+	"github.com/donkeywon/golib/util/cmds"
+	"github.com/donkeywon/golib/util/v"
 	"github.com/rs/zerolog"
 )
 

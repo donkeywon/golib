@@ -7,8 +7,8 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"codeberg.org/donkeywon/golib/errs"
-	"codeberg.org/donkeywon/golib/util/paths"
+	"github.com/donkeywon/golib/errs"
+	"github.com/donkeywon/golib/util/paths"
 	"github.com/fsnotify/fsnotify"
 )
 
