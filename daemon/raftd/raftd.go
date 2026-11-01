@@ -11,10 +11,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/DeRuina/timberjack"
 	"github.com/donkeywon/golib/boot"
 	"github.com/donkeywon/golib/errs"
 	"github.com/donkeywon/golib/util/v"
-	"github.com/DeRuina/timberjack"
 	"github.com/hashicorp/raft"
 	raftboltdb "github.com/hashicorp/raft-boltdb/v2"
 	"github.com/rs/zerolog"
